@@ -9,6 +9,7 @@ import (
 	"failsafe/internal/util"
 )
 
+// Stats for a CircuitBreaker.
 type circuitStats interface {
 	getExecutionCount() uint
 	getFailureCount() uint
@@ -20,6 +21,7 @@ type circuitStats interface {
 	reset()
 }
 
+// A circuitStats implementation that counts execution results using a BitSet.
 type countingCircuitStats struct {
 	bitSet *bitset.BitSet
 	size   uint
@@ -137,6 +139,7 @@ func (c *countingCircuitStats) reset() {
 
 const defaultBucketCount = 10
 
+// A circuitStats implementation that counts execution results within a time period, and buckets results to minimize overhead.
 type timedCircuitStats struct {
 	clock      util.Clock
 	bucketSize time.Duration

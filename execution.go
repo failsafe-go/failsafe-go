@@ -5,24 +5,29 @@ import (
 	"time"
 )
 
+// ExecutionStats contains stats for an execution.
 type ExecutionStats[R any] struct {
 	Attempts   int
 	Executions int
 	StartTime  time.Time
 }
 
+// IsFirstAttempt returns true when Attempts is 1 meaning this is the first execution attempt.
 func (s *ExecutionStats[R]) IsFirstAttempt() bool {
 	return s.Attempts == 1
 }
 
+// IsRetry returns true when Attempts is > 1 meaning the execution is being retried.
 func (s *ExecutionStats[R]) IsRetry() bool {
 	return s.Attempts > 1
 }
 
+// GetElapsedTime returns the elapsed time since initial execution began.
 func (s *ExecutionStats[R]) GetElapsedTime() time.Duration {
 	return time.Since(s.StartTime)
 }
 
+// Execution contains contextual information about an execution.
 type Execution[R any] struct {
 	Context context.Context
 	ExecutionStats[R]
@@ -32,15 +37,16 @@ type Execution[R any] struct {
 	AttemptStartTime time.Time
 }
 
+// GetElapsedAttemptTime returns the elapsed time since the last execution attempt began.
 func (e *Execution[_]) GetElapsedAttemptTime() time.Duration {
 	return time.Since(e.AttemptStartTime)
 }
 
-func (e *Execution[R]) copy() *Execution[R] {
-	execCopy := *e
-	return &execCopy
-}
-
+// ExecutionResult represents the internal result of an execution attempt for zero or more policies, before or after the policy has handled
+// the result. If a policy is done handling a result or is no longer able to handle a result, such as when retries are exceeded, the
+// ExecutionResult should be marked as complete.
+//
+// Part of the Failsafe-go SPI.
 type ExecutionResult[R any] struct {
 	Result   R
 	Err      error
@@ -48,7 +54,7 @@ type ExecutionResult[R any] struct {
 	Success  bool
 }
 
-// WithComplete marks the ExecutionResult as Complete.
+// WithComplete returns a new ExecutionResult that is marked as Complete.
 func (er *ExecutionResult[R]) WithComplete(complete bool, success bool) *ExecutionResult[R] {
 	c := *er
 	c.Complete = complete
@@ -56,7 +62,7 @@ func (er *ExecutionResult[R]) WithComplete(complete bool, success bool) *Executi
 	return &c
 }
 
-// WithFailure marks the ExecutionResult as not complete or successful.
+// WithFailure returns a new ExecutionResult that is marked as not successful.
 func (er *ExecutionResult[R]) WithFailure() *ExecutionResult[R] {
 	c := *er
 	c.Complete = false
@@ -64,15 +70,12 @@ func (er *ExecutionResult[R]) WithFailure() *ExecutionResult[R] {
 	return &c
 }
 
+// ExecutionInternal contains internal execution APIs.
+//
+// Part of the Failsafe-go SPI.
 type ExecutionInternal[R any] struct {
 	Execution[R]
 }
-
-//func (e *ExecutionInternal[R]) Copy() *ExecutionInternal[R] {
-//	execCopy := *e
-//	execCopy.attemptRecorded = false
-//	return &execCopy
-//}
 
 // InitializeAttempt marks the beginning of an execution attempt.
 func (e *ExecutionInternal[R]) InitializeAttempt() {
@@ -87,10 +90,12 @@ func (e *ExecutionInternal[R]) recordAttempt(result *ExecutionResult[R]) {
 	e.LastErr = result.Err
 }
 
+// ExecutionAttemptedEvent indicates an execution was attempted.
 type ExecutionAttemptedEvent[R any] struct {
 	Execution[R]
 }
 
+// ExecutionScheduledEvent indicates an execution was scheduled.
 type ExecutionScheduledEvent[R any] struct {
 	Execution[R]
 	Delay time.Duration
@@ -101,6 +106,7 @@ func (e *ExecutionScheduledEvent[R]) GetDelay() time.Duration {
 	return e.Delay
 }
 
+// ExecutionCompletedEvent indicates an execution was completed.
 type ExecutionCompletedEvent[R any] struct {
 	Result R
 	Err    error

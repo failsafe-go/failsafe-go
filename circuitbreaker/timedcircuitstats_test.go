@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"failsafe/internal/testutil"
+	"failsafe/internal/common_testing"
 )
 
 func TestTimedStats(t *testing.T) {

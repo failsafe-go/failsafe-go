@@ -1,19 +1,38 @@
 package failsafe
 
-// ExecutionHandler returns a er for an execution.
+// ExecutionHandler returns an ExecutionResult for an ExecutionInternal.
+//
+// Part of the Failsafe-go SPI.
 type ExecutionHandler[R any] func(*ExecutionInternal[R]) *ExecutionResult[R]
 
-// PolicyExecutor performs pre and post execution handling according to a policy.
+// PolicyExecutor handles execution and execution results according to a policy. May contain pre-execution and post-execution behaviors.
+// Each PolicyExecutor makes its own determination about whether an execution result is a success or failure.
+//
+// Part of the Failsafe-go SPI.
 type PolicyExecutor[R any] interface {
+	// PreExecute is called before execution to return an alternative result or error, such as if execution is not allowed or needed.
 	PreExecute() *ExecutionResult[R]
+
+	// Apply performs an execution by calling PreExecute and returning any result, else calling the innerFn PostExecute.
 	Apply(innerFn ExecutionHandler[R]) ExecutionHandler[R]
+
+	// PostExecute performs synchronous post-execution handling for an execution result.
 	PostExecute(exec *ExecutionInternal[R], result *ExecutionResult[R]) *ExecutionResult[R]
+
+	// IsFailure returns whether the result is a failure according to the corresponding policy.
 	IsFailure(result *ExecutionResult[R]) bool
+
+	// OnSuccess performs post-execution handling for a result that is considered a success according to IsFailure.
 	OnSuccess(result *ExecutionResult[R])
+
+	// OnFailure performs post-execution handling for a result that is considered a failure according to IsFailure, possibly creating a new
+	// result, else returning the original result.
 	OnFailure(exec *Execution[R], result *ExecutionResult[R]) *ExecutionResult[R]
 }
 
-// BasePolicyExecutor provides bese behavior for policy execution.
+// BasePolicyExecutor provides base implementation of PolicyExecutor.
+//
+// Part of the Failsafe-go SPI.
 type BasePolicyExecutor[R any] struct {
 	PolicyExecutor[R]
 	*BaseListenablePolicy[R]

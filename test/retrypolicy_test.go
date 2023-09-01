@@ -7,7 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"failsafe"
-	"failsafe/internal/testutil"
+	"failsafe/internal/common_testing"
+	rptesting "failsafe/internal/retrypolicy_testing"
 	"failsafe/retrypolicy"
 )
 
@@ -60,7 +61,7 @@ func TestShouldNotRetryOnNonRetriableFailure(t *testing.T) {
 func TestShouldCompleteWhenMaxDurationExceeded(t *testing.T) {
 	// Given
 	stats := &testutil.Stats{}
-	rp := testutil.WithRetryStats(retrypolicy.BuilderForResult[bool]().
+	rp := rptesting.WithRetryStats(retrypolicy.BuilderForResult[bool]().
 		HandleResult(false).
 		WithMaxDuration(100*time.Millisecond), stats).
 		Build()

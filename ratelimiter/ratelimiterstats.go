@@ -11,6 +11,9 @@ type rateLimiterStats interface {
 	// returns -1 if the wait time would exceed the maxWaitTime. A maxWaitTime of -1 indicates no max wait.
 	acquirePermits(requestedPermits int, maxWaitTime time.Duration) time.Duration
 }
+
+// A rate limiter implementation that evenly distributes permits over time, based on the max permits per period. This
+// implementation focuses on the interval between permits, and tracks the next interval in which a permit is free.
 type smoothRateLimiterStats[R any] struct {
 	config    *rateLimiterConfig[R]
 	stopwatch util.Stopwatch
@@ -18,15 +21,6 @@ type smoothRateLimiterStats[R any] struct {
 	// The amount of time, relative to the start time, that the next permit will be free.
 	// Will be a multiple of the config.interval.
 	nextFreePermitTime time.Duration
-}
-
-type burstyRateLimiterStats[R any] struct {
-	config *rateLimiterConfig[R]
-	util.Stopwatch
-
-	// Available permits. Can be negative during a deficit.
-	availablePermits int
-	currentPeriod    int
 }
 
 func (s *smoothRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWaitTime time.Duration) time.Duration {
@@ -51,6 +45,19 @@ func (s *smoothRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWait
 
 	s.nextFreePermitTime = newNextFreePermitTime
 	return waitTime
+}
+
+// A rate limiter implementation that allows bursts of executions, up to the max permits per period. This implementation
+// tracks the current period and available permits, which can go into a deficit. A deficit of available permits will
+// cause wait times for callers that can be several periods long, depending on the size of the deficit and the number of
+// requested permits.
+type burstyRateLimiterStats[R any] struct {
+	config *rateLimiterConfig[R]
+	util.Stopwatch
+
+	// Available permits. Can be negative during a deficit.
+	availablePermits int
+	currentPeriod    int
 }
 
 func (s *burstyRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWaitTime time.Duration) time.Duration {
@@ -82,6 +89,7 @@ func (s *burstyRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWait
 			additionalPeriods -= 1
 		}
 
+		// The time to wait until the beginning of the next period that will have free permits
 		waitTime = timeToNextPeriod + (time.Duration(additionalPeriods) * s.config.period)
 		if exceedsMaxWaitTime(waitTime, maxWaitTime) {
 			return -1
@@ -92,6 +100,7 @@ func (s *burstyRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWait
 	return waitTime
 }
 
+// exceedsMaxWaitTime returns whether the waitTime would exceed the maxWaitTime, else false if maxWaitTime is -1.
 func exceedsMaxWaitTime(waitTime time.Duration, maxWaitTime time.Duration) bool {
 	if maxWaitTime != -1 && waitTime > maxWaitTime {
 		return true

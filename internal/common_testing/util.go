@@ -9,6 +9,18 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var NoopFn = func() error {
+	return nil
+}
+
+var GetFalseFn = func() (bool, error) {
+	return false, nil
+}
+
+var GetTrueFn = func() (bool, error) {
+	return true, nil
+}
+
 type TestClock struct {
 	CurrentTime int64
 }

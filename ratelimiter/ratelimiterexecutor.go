@@ -4,6 +4,7 @@ import (
 	"failsafe"
 )
 
+// rateLimiterExecutor is a failsafe.PolicyExecutor that handles failures according to a RateLimiter.
 type rateLimiterExecutor[R any] struct {
 	*failsafe.BasePolicyExecutor[R]
 	*rateLimiter[R]
