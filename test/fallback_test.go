@@ -5,12 +5,12 @@ import (
 
 	"failsafe"
 	"failsafe/fallback"
-	"failsafe/internal/testutil"
+	"failsafe/internal/common_testing"
 )
 
-// Tests Fallback.WithResult
+// Tests Fallback.OfResult
 func TestFallbackWithResult(t *testing.T) {
-	fb := fallback.WithResult[bool](true)
+	fb := fallback.OfResult[bool](true)
 
 	testutil.TestGetSuccess(t, failsafe.WithResult[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
@@ -19,9 +19,9 @@ func TestFallbackWithResult(t *testing.T) {
 		1, 1, true)
 }
 
-// Tests Fallback.WithError
+// Tests Fallback.OfError
 func TestShouldFallbackWithError(t *testing.T) {
-	fb := fallback.WithError[bool](testutil.InvalidArgumentError{})
+	fb := fallback.OfError[bool](testutil.InvalidArgumentError{})
 
 	testutil.TestGetFailure(t, failsafe.WithResult[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
@@ -30,9 +30,9 @@ func TestShouldFallbackWithError(t *testing.T) {
 		1, 1, testutil.InvalidArgumentError{})
 }
 
-// Tests Fallback.WithErrorFn
+// Tests Fallback.OfErrorFn
 func TestShouldFallbackWithErrorFn(t *testing.T) {
-	fb := fallback.WithErrorFn[bool](func(err error) error {
+	fb := fallback.OfErrorFn[bool](func(err error) error {
 		return testutil.InvalidArgumentError{
 			Cause: err,
 		}
@@ -49,7 +49,7 @@ func TestShouldFallbackWithErrorFn(t *testing.T) {
 
 // Tests a successful execution that does not fallback
 func TestShouldNotFallback(t *testing.T) {
-	testutil.TestGetSuccess(t, failsafe.WithResult[bool](fallback.WithResult[bool](true)),
+	testutil.TestGetSuccess(t, failsafe.WithResult[bool](fallback.OfResult[bool](true)),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, nil
 		},

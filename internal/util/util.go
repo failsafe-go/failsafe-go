@@ -18,6 +18,7 @@ func AppliesToAny[A any, B any](biPredicates []func(A, B) bool, value1 A, value2
 	return false
 }
 
+// Min returns the min of a and b.
 func Min[T number](a, b T) T {
 	if a < b {
 		return a
@@ -25,6 +26,7 @@ func Min[T number](a, b T) T {
 	return b
 }
 
+// Max returns the max of a and b.
 func Max[T number](a, b T) T {
 	if a > b {
 		return a
@@ -32,6 +34,7 @@ func Max[T number](a, b T) T {
 	return b
 }
 
+// RoundDown returns the input rounded down to the nearest interval.
 func RoundDown(input time.Duration, interval time.Duration) time.Duration {
 	return (input / interval) * interval
 }

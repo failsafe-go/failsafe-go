@@ -7,11 +7,10 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"failsafe"
-	"failsafe/retrypolicy"
 )
 
 type WhenGet[R any] func(execution failsafe.Execution[R]) (R, error)
-type WhenRun func(execution failsafe.Execution[any]) error
+type WhenRun[R any] func(execution failsafe.Execution[R]) error
 
 func TestGetSuccess[R any](t *testing.T, executor failsafe.Executor[R], when WhenGet[R], expectedAttempts int, expectedExecutions int, expectedResult R) {
 	testGet(t, executor, when, expectedAttempts, expectedExecutions, expectedResult, nil)
@@ -21,11 +20,11 @@ func TestGetFailure[R any](t *testing.T, executor failsafe.Executor[R], when Whe
 	testGet(t, executor, when, expectedAttempts, expectedExecutions, *(new(R)), expectedError)
 }
 
-func TestRunSuccess(t *testing.T, executor failsafe.Executor[any], when WhenRun, expectedAttempts int, expectedExecutions int) {
+func TestRunSuccess[R any](t *testing.T, executor failsafe.Executor[R], when WhenRun[R], expectedAttempts int, expectedExecutions int) {
 	testRun(t, executor, when, expectedAttempts, expectedExecutions, nil)
 }
 
-func TestRunFailure(t *testing.T, executor failsafe.Executor[any], when WhenRun, expectedAttempts int, expectedExecutions int, expectedError error) {
+func TestRunFailure[R any](t *testing.T, executor failsafe.Executor[R], when WhenRun[R], expectedAttempts int, expectedExecutions int, expectedError error) {
 	testRun(t, executor, when, expectedAttempts, expectedExecutions, expectedError)
 }
 
@@ -40,9 +39,9 @@ func testGet[R any](t *testing.T, executor failsafe.Executor[R], when WhenGet[R]
 	assert.ErrorIs(t, expectedError, err)
 }
 
-func testRun(t *testing.T, executor failsafe.Executor[any], when WhenRun, expectedAttempts int, expectedExecutions int, expectedError error) {
-	var completedEvent *failsafe.ExecutionCompletedEvent[any]
-	err := executor.OnComplete(func(e failsafe.ExecutionCompletedEvent[any]) {
+func testRun[R any](t *testing.T, executor failsafe.Executor[R], when WhenRun[R], expectedAttempts int, expectedExecutions int, expectedError error) {
+	var completedEvent *failsafe.ExecutionCompletedEvent[R]
+	err := executor.OnComplete(func(e failsafe.ExecutionCompletedEvent[R]) {
 		completedEvent = &e
 	}).RunWithExecution(when)
 	assert.Equal(t, expectedAttempts, completedEvent.Attempts)
@@ -68,38 +67,6 @@ func (s *Stats) Reset() {
 	s.RetryCount = 0
 	s.RetrieExceededCount = 0
 	s.AbortCount = 0
-}
-
-func WithRetryStats[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *Stats) retrypolicy.RetryPolicyBuilder[R] {
-	return WithRetryStatsAndLogs(rp, stats, false)
-}
-
-func WithRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *Stats, withLogging bool) retrypolicy.RetryPolicyBuilder[R] {
-	rp.OnFailedAttempt(func(e failsafe.ExecutionAttemptedEvent[R]) {
-		stats.ExecutionCount++
-		stats.FailedAttemptCount++
-		if withLogging {
-			fmt.Println(fmt.Sprintf("RetryPolicy %s failed attempt [Result: %v, failure: %s, attempts: %d, executions: %d]",
-				rp, e.LastResult, e.LastErr, e.Attempts, e.Executions))
-		}
-	}).OnRetry(func(e failsafe.ExecutionAttemptedEvent[R]) {
-		stats.RetryCount++
-		if withLogging {
-			fmt.Println(fmt.Sprintf("RetryPolicy %s retrying [Result: %v, failure: %s]", rp, e.LastResult, e.LastErr))
-		}
-	}).OnRetriesExceeded(func(e failsafe.ExecutionCompletedEvent[R]) {
-		stats.RetrieExceededCount++
-		if withLogging {
-			fmt.Println(fmt.Sprintf("RetryPolicy %s retries exceeded", rp))
-		}
-	}).OnAbort(func(e failsafe.ExecutionCompletedEvent[R]) {
-		stats.AbortCount++
-		if withLogging {
-			fmt.Println(fmt.Sprintf("RetryPolicy %s abort", rp))
-		}
-	})
-	WithStatsAndLogs[retrypolicy.RetryPolicyBuilder[R], R](rp, stats, withLogging)
-	return rp
 }
 
 func WithStatsAndLogs[P any, R any](policy failsafe.ListenablePolicyBuilder[P, R], stats *Stats, withLogging bool) {

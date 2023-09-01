@@ -4,6 +4,7 @@ import (
 	"failsafe"
 )
 
+// circuitBreakerExecutor is a failsafe.PolicyExecutor that handles failures according to a CircuitBreaker.
 type circuitBreakerExecutor[R any] struct {
 	*failsafe.BasePolicyExecutor[R]
 	*circuitBreaker[R]
@@ -11,7 +12,7 @@ type circuitBreakerExecutor[R any] struct {
 
 var _ failsafe.PolicyExecutor[any] = &circuitBreakerExecutor[any]{}
 
-func (cbe *circuitBreakerExecutor[R]) preExecute() *failsafe.ExecutionResult[R] {
+func (cbe *circuitBreakerExecutor[R]) PreExecute() *failsafe.ExecutionResult[R] {
 	if !cbe.circuitBreaker.TryAcquirePermit() {
 		return &failsafe.ExecutionResult[R]{
 			Err: ErrCircuitBreakerOpen,

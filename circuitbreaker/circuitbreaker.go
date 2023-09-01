@@ -6,73 +6,122 @@ import (
 	"time"
 
 	"failsafe"
-	"failsafe/internal/util"
 )
 
 var ErrCircuitBreakerOpen = errors.New("circuit breaker open")
 
+// State of a CircuitBreaker.
 type State int
 
 const (
+	// ClosedState indicates the circuit is closed and fully functional, allowing executions to occur.
 	ClosedState State = iota
+
+	// OpenState indicates the circuit is opened and not allowing executions to occur.
 	OpenState
+
+	// HalfOpenState indicates the circuit is temporarily allowing executions to occur.
 	HalfOpenState
 )
 
+/*
+CircuitBreaker is a policy that temporarily blocks execution when a configured number of failures are exceeded.
+Circuit breakers have three states: closed, open, and half-open. When a circuit breaker is in the closed (initial) state, executions are
+allowed. If a configurable number of failures occur, optionally over some time period, the circuit breaker transitions to the open state.
+In the open state a circuit breaker will fail executions with ErrCircuitBreakerOpen. After a configurable delay, the circuit breaker will
+transition to a half-open state. In the half-open state a configurable number of trial executions will be allowed, after which the circuit
+breaker will transition back to closed or open depending on how many were successful.
+
+A circuit breaker can be count based or time based:
+
+  - Count based circuit breakers will transition between states when recent execution results exceed a threshold.
+  - Time based circuit breakers will transition between states when recent execution results exceed a threshold within a time period.
+    A minimum number of executions must be performed in order for a state transition to occur. Time based circuit breakers use a sliding
+    window to aggregate execution results. The window is divided into 10 time slices, each representing 1/10th of the
+    failureThresholdingPeriod. As time progresses, statistics for old time slices are gradually discarded, which smoothes the calculation
+    of success and failure rates.
+
+This type is concurrency safe.
+*/
 type CircuitBreaker[R any] interface {
 	failsafe.Policy[R]
-
+	// Open opens the CircuitBreaker.
 	Open()
+
+	// Close closes the CircuitBreaker.
 	Close()
+
+	// HalfOpen half-opens the CircuitBreaker.
 	HalfOpen()
+
+	// IsClosed returns whether the CircuitBreaker is closed.
 	IsClosed() bool
+
+	// IsOpen returns whether the CircuitBreaker is open.
 	IsOpen() bool
+
+	// IsHalfOpen returns whether the CircuitBreaker is half-open.
 	IsHalfOpen() bool
+
+	// GetState returns the State of the CircuitBreaker.
 	GetState() State
 
+	// TryAcquirePermit tries to acquire a permit to use the circuit breaker and returns whether a permit was acquired. Permission will
+	// be automatically released when a result or failure is recorded.
 	TryAcquirePermit() bool
+
+	// RecordResult records an execution result as a success or failure based on the failure handling configuration.
 	RecordResult(result R)
+
+	// RecordError records an error as a success or failure based on the failure handling configuration.
 	RecordError(err error)
+
+	// RecordSuccess records an execution success.
 	RecordSuccess()
+
+	// RecordFailure records an execution failure.
 	RecordFailure()
 
+	// GetExecutionCount returns the number of executions recorded in the current state when the state is ClosedState or HalfOpenState.
+	// When the state is OpenState, this returns the executions recorded during the previous ClosedState.
+	//
+	// For count based thresholding, the max number of executions is limited to the execution threshold. For time based thresholds, the
+	// number of executions may vary within the thresholding period.
 	GetExecutionCount() uint
+
+	// GetRemainingDelay returns the remaining delay until the circuit is half-opened and allows another execution, when in the OpenState,
+	// else returns 0 when in other states.
 	GetRemainingDelay() time.Duration
+
+	// GetFailureCount returns the number of failures recorded in the current state when in a ClosedState or HalfOpenState. When in
+	// OpenState, this returns the failures recorded during the previous ClosedState.
+	//
+	// For count based thresholds, the max number of failures is based on the failure threshold. For time based thresholds, the number of
+	// failures may vary within the failure thresholding period.
 	GetFailureCount() uint
+
+	// GetFailureRate returns the percentage rate of failed executions, from 0 to 100, in the current state when in a ClosedState or
+	// HalfOpenState. When in OpenState, this returns the rate recorded during the previous ClosedState.
+	//
+	// The rate is based on the configured failure thresholding capacity.
 	GetFailureRate() uint
+
+	// GetSuccessCount returns the number of successes recorded in the current state when in a ClosedState or HalfOpenState. When in
+	// OpenState, this returns the successes recorded during the previous ClosedState.
+	//
+	// The max number of successes is based on the success threshold.
 	GetSuccessCount() uint
+
+	// GetSuccessRate returns percentage rate of successful executions, from 0 to 100, in the current state when in a ClosedState or
+	// HalfOpenState. When in OpenState, this returns the successes recorded during the previous ClosedState.
+	//
+	// The rate is based on the configured success thresholding capacity.
 	GetSuccessRate() uint
 }
 
+// StateChangedEvent indicates a CircuitBreaker's state has changed.
 type StateChangedEvent struct {
 	PreviousState State
-}
-
-type circuitBreakerConfig[R any] struct {
-	*failsafe.BaseListenablePolicy[R]
-	*failsafe.BaseFailurePolicy[R]
-	*failsafe.BaseDelayablePolicy[R]
-	clock            util.Clock
-	openListener     func(StateChangedEvent)
-	halfOpenListener func(StateChangedEvent)
-	closeListener    func(StateChangedEvent)
-
-	failureThresholdConfig ThresholdConfig
-	successThresholdConfig ThresholdConfig
-
-	// Success config
-	successThreshold            uint
-	successThresholdingCapacity uint
-}
-
-var _ CircuitBreakerBuilder[any] = &circuitBreakerConfig[any]{}
-
-type ThresholdConfig struct {
-	threshold            uint
-	rateThreshold        uint
-	thresholdingCapacity uint
-	executionThreshold   uint
-	thresholdingPeriod   time.Duration
 }
 
 type circuitBreaker[R any] struct {
@@ -81,8 +130,6 @@ type circuitBreaker[R any] struct {
 	// Guarded by mtx
 	state circuitState[R]
 }
-
-var _ CircuitBreaker[any] = &circuitBreaker[any]{}
 
 func (cb *circuitBreaker[R]) ToExecutor() failsafe.PolicyExecutor[R] {
 	rpe := circuitBreakerExecutor[R]{
@@ -135,7 +182,8 @@ func (cb *circuitBreaker[R]) IsOpen() bool {
 }
 
 func (cb *circuitBreaker[R]) IsHalfOpen() bool {
-	return cb.GetState() == HalfOpenState
+	s := cb.GetState()
+	return s == HalfOpenState
 }
 
 func (cb *circuitBreaker[R]) GetExecutionCount() uint {
@@ -198,11 +246,12 @@ func (cb *circuitBreaker[R]) RecordSuccess() {
 	cb.recordSuccess()
 }
 
+// Transitions to the newState if not already in that state and calls listener after transitioning.
 // Requires locking externally
 func (cb *circuitBreaker[R]) transitionTo(newState State, exec *failsafe.Execution[R], listener func(StateChangedEvent)) {
 	transitioned := false
 	currentState := cb.state.getState()
-	if cb.GetState() != newState {
+	if currentState != newState {
 		switch newState {
 		case ClosedState:
 			cb.state = newClosedState(cb)
@@ -230,9 +279,11 @@ func (cb *circuitBreaker[R]) tryAcquirePermit() bool {
 	return cb.state.tryAcquirePermit()
 }
 
+// Opens the circuit breaker and considers the execution when computing the delay before the circuit breaker
+// will transition to half open.
 // Requires external locking
-func (cb *circuitBreaker[R]) open(exec *failsafe.Execution[R]) {
-	cb.transitionTo(OpenState, exec, cb.config.openListener)
+func (cb *circuitBreaker[R]) open(execution *failsafe.Execution[R]) {
+	cb.transitionTo(OpenState, execution, cb.config.openListener)
 }
 
 // Requires external locking

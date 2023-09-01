@@ -8,6 +8,7 @@ import (
 	"failsafe/internal/util"
 )
 
+// retryPolicyExecutor is a failsafe.PolicyExecutor that handles failures according to a RetryPolicy.
 type retryPolicyExecutor[R any] struct {
 	*failsafe.BasePolicyExecutor[R]
 	*retryPolicy[R]

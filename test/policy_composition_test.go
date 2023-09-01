@@ -7,14 +7,14 @@ import (
 
 	"failsafe"
 	"failsafe/fallback"
-	"failsafe/internal/testutil"
+	"failsafe/internal/common_testing"
 	"failsafe/retrypolicy"
 )
 
 // Fallback -> RetryPolicy
 func TestFallbackRetryPolicy(t *testing.T) {
 	// Given
-	fb := fallback.WithResult[bool](true)
+	fb := fallback.OfResult[bool](true)
 	rp := retrypolicy.OfDefaults[bool]()
 
 	// When / Then
@@ -25,7 +25,7 @@ func TestFallbackRetryPolicy(t *testing.T) {
 		3, 3, true)
 
 	// Given
-	fb = fallback.WithGetFn[bool](func(e failsafe.ExecutionAttemptedEvent[bool]) (bool, error) {
+	fb = fallback.OfGetFn[bool](func(e failsafe.ExecutionAttemptedEvent[bool]) (bool, error) {
 		assert.False(t, e.LastResult)
 		assert.ErrorIs(t, testutil.InvalidStateError{}, e.LastErr)
 		return true, nil

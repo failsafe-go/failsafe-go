@@ -4,6 +4,7 @@ import (
 	"failsafe"
 )
 
+// fallbackExecutor is a failsafe.PolicyExecutor that handles failures according to a Fallback.
 type fallbackExecutor[R any] struct {
 	*failsafe.BasePolicyExecutor[R]
 	*fallback[R]
