@@ -12,7 +12,7 @@ import (
 func TestFallbackWithResult(t *testing.T) {
 	fb := fallback.OfResult[bool](true)
 
-	testutil.TestGetSuccess(t, failsafe.WithResult[bool](fb),
+	testutil.TestGetSuccess(t, failsafe.With[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.InvalidArgumentError{}
 		},
@@ -23,7 +23,7 @@ func TestFallbackWithResult(t *testing.T) {
 func TestShouldFallbackWithError(t *testing.T) {
 	fb := fallback.OfError[bool](testutil.InvalidArgumentError{})
 
-	testutil.TestGetFailure(t, failsafe.WithResult[bool](fb),
+	testutil.TestGetFailure(t, failsafe.With[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.InvalidArgumentError{}
 		},
@@ -38,7 +38,7 @@ func TestShouldFallbackWithErrorFn(t *testing.T) {
 		}
 	})
 
-	testutil.TestGetFailure(t, failsafe.WithResult[bool](fb),
+	testutil.TestGetFailure(t, failsafe.With[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.ConnectionError{}
 		},
@@ -49,7 +49,7 @@ func TestShouldFallbackWithErrorFn(t *testing.T) {
 
 // Tests a successful execution that does not fallback
 func TestShouldNotFallback(t *testing.T) {
-	testutil.TestGetSuccess(t, failsafe.WithResult[bool](fallback.OfResult[bool](true)),
+	testutil.TestGetSuccess(t, failsafe.With[bool](fallback.OfResult[bool](true)),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, nil
 		},
@@ -63,14 +63,14 @@ func TestShouldFallbackWithFailureConditions(t *testing.T) {
 		Build()
 
 	// Fallback should not handle
-	testutil.TestGetFailure(t, failsafe.WithResult[bool](fb),
+	testutil.TestGetFailure(t, failsafe.With[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.InvalidArgumentError{}
 		},
 		1, 1, testutil.InvalidArgumentError{})
 
 	// Fallback should handle
-	testutil.TestGetSuccess(t, failsafe.WithResult[bool](fb),
+	testutil.TestGetSuccess(t, failsafe.With[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.InvalidStateError{}
 		},

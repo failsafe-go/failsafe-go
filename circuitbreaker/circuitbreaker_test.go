@@ -16,7 +16,7 @@ func TestShouldDefaultDelay(t *testing.T) {
 
 func TestGetSuccessAndFailureStats(t *testing.T) {
 	// Given
-	breaker := Builder().
+	breaker := Builder[any]().
 		WithFailureThreshold(NewCountBasedThreshold(5, 10)).
 		WithSuccessThreshold(15, 20).
 		Build()
