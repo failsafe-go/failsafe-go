@@ -47,8 +47,8 @@ type executor[R any] struct {
 }
 
 /*
-With creates and returns a new Executor instance that will handle failures according to the given policies. The policies are composed around
-an execution and will handle execution results in reverse, with the last policy being applied first. For example, consider:
+With creates and returns a new Executor for result type R that will handle failures according to the given policies. The policies are
+composed around an execution and will handle execution results in reverse, with the last policy being applied first. For example, consider:
 
 	failsafe.With(fallback, retryPolicy, circuitBreaker).Get(func)
 
@@ -59,8 +59,6 @@ This is equivalent to composition using the Compose method:
 These result in the following internal composition when executing a func and handling its result:
 
 	Fallback(RetryPolicy(CircuitBreaker(func)))
-
-Type parameter R specifies the execution result type.
 */
 func With[R any](outerPolicy Policy[R], policies ...Policy[R]) Executor[R] {
 	policies = append([]Policy[R]{outerPolicy}, policies...)

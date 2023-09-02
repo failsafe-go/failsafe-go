@@ -139,9 +139,9 @@ type rateLimiterConfig[R any] struct {
 var _ RateLimiterBuilder[any] = &rateLimiterConfig[any]{}
 
 /*
-SmoothBuilder returns a smooth RateLimiterBuilder for the maxExecutions and period, which control how frequently an execution is permitted.
-The individual execution rate is computed as period / maxExecutions. For example, with maxExecutions of 100 and a period of 1000 millis,
-individual executions will be permitted at a max rate of one every 10 millis.
+SmoothBuilder returns a smooth RateLimiterBuilder for execution result type R and the maxExecutions and period, which control how frequently
+an execution is permitted. The individual execution rate is computed as period / maxExecutions. For example, with maxExecutions of 100 and
+a period of 1000 millis, individual executions will be permitted at a max rate of one every 10 millis.
 
 By default, the returned RateLimiterBuilder will have a max wait time of 0.
 
@@ -156,8 +156,8 @@ func SmoothBuilder[R any](maxExecutions int64, period time.Duration) RateLimiter
 }
 
 /*
-SmoothBuilderForMaxRate returns a smooth RateLimiterBuilder for the maxRate, which controls how frequently an execution is permitted.
-For example, a maxRate of 10 millis would allow up to one execution every 10 millis.
+SmoothBuilderForMaxRate returns a smooth RateLimiterBuilder for execution result type R and the maxRate, which controls how frequently an
+execution is permitted. For example, a maxRate of 10 millis would allow up to one execution every 10 millis.
 
 By default, the returned RateLimiterBuilder will have a max wait time of 0.
 
@@ -172,8 +172,8 @@ func SmoothBuilderForMaxRate[R any](maxRate time.Duration) RateLimiterBuilder[R]
 }
 
 /*
-BurstyBuilder returns a bursty RateLimiterBuilder for the maxExecutions per period. For example, a maxExecutions value of 100 with a period
-of 1 second would allow up to 100 executions every 1 second.
+BurstyBuilder returns a bursty RateLimiterBuilder for execution result type R and the maxExecutions per period. For example, a maxExecutions
+value of 100 with a period of 1 second would allow up to 100 executions every 1 second.
 
 By default, the returned RateLimiterBuilder will have a max wait time of 0.
 

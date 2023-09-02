@@ -47,71 +47,57 @@ type fallback[R any] struct {
 	config *fallbackConfig[R]
 }
 
-// OfResult returns a Fallback that returns the result when an execution fails.
-//
-// Type parameter R represents the execution result type.
+// OfResult returns a Fallback for execution result type R that returns the result when an execution fails.
 func OfResult[R any](result R) Fallback[R] {
 	return BuilderWithResult[R](result).Build()
 }
 
-// OfError returns a Fallback that returns the err when an execution fails.
-//
-// Type parameter R represents the execution result type.
+// OfError returns a Fallback for execution result type R that returns the err when an execution fails.
 func OfError[R any](err error) Fallback[R] {
 	return BuilderWithError[R](err).Build()
 }
 
-// OfErrorFn returns a Fallback that uses errorFn to handle a failed execution.
-//
-// Type parameter R represents the execution result type.
+// OfErrorFn returns a Fallback for execution result type R that uses errorFn to handle a failed execution.
 func OfErrorFn[R any](errorFn func(error) error) Fallback[R] {
 	return BuilderWithErrorFn[R](errorFn).Build()
 }
 
-// OfRunFn returns a Fallback that uses fallbackFn to handle a failed execution.
-//
-// Type parameter R represents the execution result type.
+// OfRunFn returns a Fallback for execution result type R that uses fallbackFn to handle a failed execution.
 func OfRunFn[R any](fallbackFn func(event failsafe.ExecutionAttemptedEvent[R]) error) Fallback[R] {
 	return BuilderWithRunFn(fallbackFn).Build()
 }
 
-// OfGetFn returns a Fallback that uses fallbackFn to handle a failed execution.
-//
-// Type parameter R represents the execution result type.
+// OfGetFn returns a Fallback for execution result type R that uses fallbackFn to handle a failed execution.
 func OfGetFn[R any](fallbackFn func(event failsafe.ExecutionAttemptedEvent[R]) (R, error)) Fallback[R] {
 	return BuilderWithGetFn(fallbackFn).Build()
 }
 
-// BuilderWithResult returns a FallbackBuilder which builds Fallbacks that return the result when an execution fails.
-//
-// Type parameter R represents the execution result type.
+// BuilderWithResult returns a FallbackBuilder for execution result type R which builds Fallbacks that return the result when an execution
+// fails.
 func BuilderWithResult[R any](result R) FallbackBuilder[R] {
 	return BuilderWithGetFn(func(event failsafe.ExecutionAttemptedEvent[R]) (R, error) {
 		return result, nil
 	})
 }
 
-// BuilderWithError returns a FallbackBuilder which builds Fallbacks that return the error when an execution fails.
-//
-// Type parameter R represents the execution result type.
+// BuilderWithError returns a FallbackBuilder for execution result type R which builds Fallbacks that return the error when an execution
+// fails.
 func BuilderWithError[R any](err error) FallbackBuilder[R] {
 	return BuilderWithGetFn(func(event failsafe.ExecutionAttemptedEvent[R]) (R, error) {
 		return *(new(R)), err
 	})
 }
 
-// BuilderWithErrorFn returns a FallbackBuilder which builds Fallbacks that use the errorFn to handle failed executions.
-//
-// Type parameter R represents the execution result type.
+// BuilderWithErrorFn returns a FallbackBuilder for execution result type R which builds Fallbacks that use the errorFn to handle failed
+// executions.
 func BuilderWithErrorFn[R any](errorFn func(error) error) FallbackBuilder[R] {
 	return BuilderWithGetFn(func(event failsafe.ExecutionAttemptedEvent[R]) (R, error) {
 		return *(new(R)), errorFn(event.LastErr)
 	})
 }
 
-// BuilderWithRunFn returns a FallbackBuilder which builds Fallbacks that use the fallbackFn to handle failed executions.
-//
-// Type parameter R represents the execution result type.
+// BuilderWithRunFn returns a FallbackBuilder for execution result type R which builds Fallbacks that use the fallbackFn to handle failed
+// executions.
 func BuilderWithRunFn[R any](fallbackFn func(event failsafe.ExecutionAttemptedEvent[R]) error) FallbackBuilder[R] {
 	return &fallbackConfig[R]{
 		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
@@ -123,9 +109,8 @@ func BuilderWithRunFn[R any](fallbackFn func(event failsafe.ExecutionAttemptedEv
 	}
 }
 
-// BuilderWithGetFn returns a FallbackBuilder which builds Fallbacks that use the fallbackFn to handle failed executions.
-//
-// Type parameter R represents the execution result type.
+// BuilderWithGetFn returns a FallbackBuilder for execution result type R which builds Fallbacks that use the fallbackFn to handle failed
+// executions.
 func BuilderWithGetFn[R any](fallbackFn func(event failsafe.ExecutionAttemptedEvent[R]) (R, error)) FallbackBuilder[R] {
 	return &fallbackConfig[R]{
 		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
