@@ -1,7 +1,7 @@
 package cbtesting
 
 import (
-	"failsafe/internal/common_testing"
+	"failsafe/internal/testutil"
 
 	"failsafe/circuitbreaker"
 )

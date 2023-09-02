@@ -5,7 +5,7 @@ import (
 
 	"failsafe"
 	"failsafe/fallback"
-	"failsafe/internal/common_testing"
+	"failsafe/internal/testutil"
 )
 
 // Tests Fallback.OfResult
