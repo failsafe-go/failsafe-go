@@ -2,6 +2,7 @@ package fallback
 
 import (
 	"failsafe"
+	"failsafe/spi"
 )
 
 // Fallback is a Policy that handles failures using a fallback function, result, or error.
@@ -34,8 +35,8 @@ type FallbackBuilder[R any] interface {
 }
 
 type fallbackConfig[R any] struct {
-	*failsafe.BaseListenablePolicy[R]
-	*failsafe.BaseFailurePolicy[R]
+	*spi.BaseListenablePolicy[R]
+	*spi.BaseFailurePolicy[R]
 	fn                    func(event failsafe.ExecutionAttemptedEvent[R]) (R, error)
 	failedAttemptListener func(failsafe.ExecutionAttemptedEvent[R])
 }
@@ -95,8 +96,8 @@ func BuilderWithErrorFn[R any](errorFn func(error) error) FallbackBuilder[R] {
 // BuilderWithRunFn returns a FallbackBuilder which builds Fallbacks that use the fallbackFn to handle failed executions.
 func BuilderWithRunFn(fallbackFn func(event failsafe.ExecutionAttemptedEvent[any]) error) FallbackBuilder[any] {
 	return &fallbackConfig[any]{
-		BaseListenablePolicy: &failsafe.BaseListenablePolicy[any]{},
-		BaseFailurePolicy:    &failsafe.BaseFailurePolicy[any]{},
+		BaseListenablePolicy: &spi.BaseListenablePolicy[any]{},
+		BaseFailurePolicy:    &spi.BaseFailurePolicy[any]{},
 		fn: func(event failsafe.ExecutionAttemptedEvent[any]) (any, error) {
 			err := fallbackFn(event)
 			return *(new(any)), err
@@ -107,8 +108,8 @@ func BuilderWithRunFn(fallbackFn func(event failsafe.ExecutionAttemptedEvent[any
 // BuilderWithGetFn returns a FallbackBuilder which builds Fallbacks that use the fallbackFn to handle failed executions.
 func BuilderWithGetFn[R any](fallbackFn func(event failsafe.ExecutionAttemptedEvent[R]) (R, error)) FallbackBuilder[R] {
 	return &fallbackConfig[R]{
-		BaseListenablePolicy: &failsafe.BaseListenablePolicy[R]{},
-		BaseFailurePolicy:    &failsafe.BaseFailurePolicy[R]{},
+		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
+		BaseFailurePolicy:    &spi.BaseFailurePolicy[R]{},
 		fn:                   fallbackFn,
 	}
 }
@@ -163,7 +164,7 @@ func (c *fallbackConfig[R]) Build() Fallback[R] {
 
 func (fb *fallback[R]) ToExecutor() failsafe.PolicyExecutor[R] {
 	rpe := fallbackExecutor[R]{
-		BasePolicyExecutor: &failsafe.BasePolicyExecutor[R]{
+		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
 			BaseListenablePolicy: fb.config.BaseListenablePolicy,
 			BaseFailurePolicy:    fb.config.BaseFailurePolicy,
 		},

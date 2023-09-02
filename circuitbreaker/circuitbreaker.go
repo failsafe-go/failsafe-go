@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"failsafe"
+	"failsafe/spi"
 )
 
 var ErrCircuitBreakerOpen = errors.New("circuit breaker open")
@@ -133,7 +134,7 @@ type circuitBreaker[R any] struct {
 
 func (cb *circuitBreaker[R]) ToExecutor() failsafe.PolicyExecutor[R] {
 	rpe := circuitBreakerExecutor[R]{
-		BasePolicyExecutor: &failsafe.BasePolicyExecutor[R]{
+		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
 			BaseListenablePolicy: cb.config.BaseListenablePolicy,
 			BaseFailurePolicy:    cb.config.BaseFailurePolicy,
 		},

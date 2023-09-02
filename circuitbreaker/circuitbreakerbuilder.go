@@ -5,6 +5,7 @@ import (
 
 	"failsafe"
 	"failsafe/internal/util"
+	"failsafe/spi"
 )
 
 /*
@@ -47,9 +48,9 @@ type CircuitBreakerBuilder[R any] interface {
 }
 
 type circuitBreakerConfig[R any] struct {
-	*failsafe.BaseListenablePolicy[R]
-	*failsafe.BaseFailurePolicy[R]
-	*failsafe.BaseDelayablePolicy[R]
+	*spi.BaseListenablePolicy[R]
+	*spi.BaseFailurePolicy[R]
+	*spi.BaseDelayablePolicy[R]
 	clock                  util.Clock
 	openListener           func(StateChangedEvent)
 	halfOpenListener       func(StateChangedEvent)
@@ -125,9 +126,9 @@ func Builder() CircuitBreakerBuilder[any] {
 // opens after a single failure, closes after a single success, and has a 1 minute delay, unless configured otherwise.
 func BuilderForResult[R any]() CircuitBreakerBuilder[R] {
 	return &circuitBreakerConfig[R]{
-		BaseListenablePolicy: &failsafe.BaseListenablePolicy[R]{},
-		BaseFailurePolicy:    &failsafe.BaseFailurePolicy[R]{},
-		BaseDelayablePolicy: &failsafe.BaseDelayablePolicy[R]{
+		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
+		BaseFailurePolicy:    &spi.BaseFailurePolicy[R]{},
+		BaseDelayablePolicy: &spi.BaseDelayablePolicy[R]{
 			Delay: 1 * time.Minute,
 		},
 		clock: util.NewClock(),

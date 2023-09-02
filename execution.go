@@ -42,54 +42,6 @@ func (e *Execution[_]) GetElapsedAttemptTime() time.Duration {
 	return time.Since(e.AttemptStartTime)
 }
 
-// ExecutionResult represents the internal result of an execution attempt for zero or more policies, before or after the policy has handled
-// the result. If a policy is done handling a result or is no longer able to handle a result, such as when retries are exceeded, the
-// ExecutionResult should be marked as complete.
-//
-// Part of the Failsafe-go SPI.
-type ExecutionResult[R any] struct {
-	Result   R
-	Err      error
-	Complete bool
-	Success  bool
-}
-
-// WithComplete returns a new ExecutionResult that is marked as Complete.
-func (er *ExecutionResult[R]) WithComplete(complete bool, success bool) *ExecutionResult[R] {
-	c := *er
-	c.Complete = complete
-	c.Success = success
-	return &c
-}
-
-// WithFailure returns a new ExecutionResult that is marked as not successful.
-func (er *ExecutionResult[R]) WithFailure() *ExecutionResult[R] {
-	c := *er
-	c.Complete = false
-	c.Success = false
-	return &c
-}
-
-// ExecutionInternal contains internal execution APIs.
-//
-// Part of the Failsafe-go SPI.
-type ExecutionInternal[R any] struct {
-	Execution[R]
-}
-
-// InitializeAttempt marks the beginning of an execution attempt.
-func (e *ExecutionInternal[R]) InitializeAttempt() {
-	e.Attempts++
-	e.AttemptStartTime = time.Now()
-}
-
-// recordAttempt records the result of an execution attempt.
-func (e *ExecutionInternal[R]) recordAttempt(result *ExecutionResult[R]) {
-	e.Executions++
-	e.LastResult = result.Result
-	e.LastErr = result.Err
-}
-
 // ExecutionAttemptedEvent indicates an execution was attempted.
 type ExecutionAttemptedEvent[R any] struct {
 	Execution[R]

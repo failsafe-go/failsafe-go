@@ -11,3 +11,7 @@ build: ## Build Failsafe-go
 .PHONY: test
 test: ## Test Failsafe-go
 	go test ./...
+
+.PHONY: fmt
+fmt:  ## Format Failsafe-go
+	go fmt ./...
