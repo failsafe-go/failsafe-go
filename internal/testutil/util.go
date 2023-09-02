@@ -7,19 +7,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"failsafe"
 )
-
-var NoopFn = func() error {
-	return nil
-}
-
-var GetFalseFn = func() (bool, error) {
-	return false, nil
-}
-
-var GetTrueFn = func() (bool, error) {
-	return true, nil
-}
 
 type TestClock struct {
 	CurrentTime int64
@@ -88,12 +78,12 @@ func GetType(myvar interface{}) string {
 	}
 }
 
-func FailNTimesThenReturn[T any](failTimes int, err error, result T) func() (T, error) {
+func ErrorNTimesThenReturn[R any](err error, errorTimes int, result R) func(exec failsafe.Execution[R]) (R, error) {
 	counter := 0
-	return func() (T, error) {
-		if counter < failTimes {
+	return func(exec failsafe.Execution[R]) (R, error) {
+		if counter < errorTimes {
 			counter++
-			defaultResult := *(new(T))
+			defaultResult := *(new(R))
 			return defaultResult, err
 		}
 		return result, nil

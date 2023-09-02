@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"failsafe"
+	"failsafe/internal"
 	"failsafe/internal/util"
 	"failsafe/spi"
 )
@@ -41,7 +42,7 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) f
 			delay := rpe.getDelay(&exec.Execution)
 			if rpe.config.retryScheduledListener != nil {
 				rpe.config.retryScheduledListener(failsafe.ExecutionScheduledEvent[R]{
-					Execution: exec.Execution,
+					Execution: internal.NewExecutionForResult(result, &exec.Execution),
 					Delay:     delay,
 				})
 			}
@@ -58,7 +59,7 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) f
 			// Call retry listener
 			if rpe.config.retryListener != nil {
 				rpe.config.retryListener(failsafe.ExecutionAttemptedEvent[R]{
-					Execution: exec.Execution,
+					Execution: internal.NewExecutionForResult(result, &exec.Execution),
 				})
 			}
 
@@ -94,7 +95,7 @@ func (rpe *retryPolicyExecutor[R]) OnFailure(exec *failsafe.Execution[R], result
 	// Call listeners
 	if rpe.config.failedAttemptListener != nil {
 		rpe.config.failedAttemptListener(failsafe.ExecutionAttemptedEvent[R]{
-			Execution: *exec,
+			Execution: internal.NewExecutionForResult(result, exec),
 		})
 	}
 	if isAbortable && rpe.config.abortListener != nil {

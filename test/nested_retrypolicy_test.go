@@ -21,15 +21,12 @@ func TestNestedRetryPoliciesWhereInnerIsExceeded(t *testing.T) {
 	// Given
 	outerRetryStats := &testutil.Stats{}
 	innerRetryStats := &testutil.Stats{}
-	outerRetryPolicy := rptesting.WithRetryStats(retrypolicy.Builder[any]().WithMaxRetries(10), outerRetryStats).Build()
-	innerRetryPolicy := rptesting.WithRetryStats(retrypolicy.Builder[any]().WithMaxRetries(1), innerRetryStats).Build()
-	stubFn := testutil.FailNTimesThenReturn[bool](5, testutil.ConnectionError{}, true)
+	outerRetryPolicy := rptesting.WithRetryStats(retrypolicy.Builder[bool]().WithMaxRetries(10), outerRetryStats).Build()
+	innerRetryPolicy := rptesting.WithRetryStats(retrypolicy.Builder[bool]().WithMaxRetries(1), innerRetryStats).Build()
 
 	// When / Then
-	testutil.TestGetSuccess(t, failsafe.With[any](outerRetryPolicy, innerRetryPolicy),
-		func(exec failsafe.Execution[any]) (any, error) {
-			return stubFn()
-		},
+	testutil.TestGetSuccess(t, failsafe.With[bool](outerRetryPolicy, innerRetryPolicy),
+		testutil.ErrorNTimesThenReturn[bool](testutil.ConnectionError{}, 5, true),
 		6, 6, true)
 	assert.Equal(t, 4, outerRetryStats.FailedAttemptCount)
 	assert.Equal(t, 0, outerRetryStats.FailureCount)
