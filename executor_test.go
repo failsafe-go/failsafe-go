@@ -1,56 +1,46 @@
 package failsafe_test
 
 import (
-	"context"
-	"errors"
-	"fmt"
 	"testing"
-	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"failsafe"
+	"failsafe/fallback"
+	"failsafe/internal/testutil"
 	"failsafe/retrypolicy"
 )
 
-var testErr = errors.New("test")
-
-func TestRun(t *testing.T) {
-	rp := retrypolicy.Builder[any]().
-		WithDelay(1 * time.Second).
-		Handle(testErr).
-		OnRetry(func(e failsafe.ExecutionAttemptedEvent[any]) {
-			fmt.Printf("retrying %v, %v\n", e.LastResult, e.LastErr)
-		}).
-		Build()
-
-	err := failsafe.With[any](rp).RunWithExecution(func(exec failsafe.Execution[any]) error {
-		return testErr
+func TestGetWithSuccess(t *testing.T) {
+	rp := retrypolicy.OfDefaults[string]()
+	result, err := failsafe.With[string](rp).Get(func() (string, error) {
+		return "test", nil
 	})
-
-	fmt.Printf("er: %v\n", err)
+	assert.Equal(t, "test", result)
+	assert.Nil(t, err)
 }
 
-// might not be a good idea to assume people will want/need a variant that doesn't return results
-func TestGet(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		time.Sleep(2 * time.Second)
-		cancel()
-	}()
-
-	rp := retrypolicy.Builder[string]().
-		HandleAllIf(func(result string, err error) bool {
-			return result == "foo"
-		}).
-		WithDelay(1 * time.Second).
-		WithMaxRetries(5).
-		OnRetry(func(e failsafe.ExecutionAttemptedEvent[string]) {
-			fmt.Printf("retrying %v, %v\n", e.LastResult, e.LastErr)
-		}).
-		Build()
-
-	result, err := failsafe.With[string](rp).WithContext(ctx).Get(func() (string, error) {
-		return "asdf", errors.New("test")
+func TestGetWithFailure(t *testing.T) {
+	rp := retrypolicy.OfDefaults[string]()
+	result, err := failsafe.With[string](rp).Get(func() (string, error) {
+		return "", testutil.InvalidArgumentError{}
 	})
+	assert.Empty(t, result)
+	assert.ErrorIs(t, err, testutil.InvalidArgumentError{})
+}
 
-	fmt.Printf("er: %v, %v\n", result, err)
+func TestGetWithExecution(t *testing.T) {
+	rp := retrypolicy.OfDefaults[string]()
+	fb := fallback.OfResult[string]("fallback")
+	var lasteExec failsafe.Execution[string]
+	result, err := failsafe.With[string](fb, rp).GetWithExecution(func(exec failsafe.Execution[string]) (string, error) {
+		lasteExec = exec
+		return "", testutil.InvalidArgumentError{}
+	})
+	assert.Equal(t, "fallback", result)
+	assert.Nil(t, err)
+	assert.Equal(t, lasteExec.Attempts, 3)
+	assert.Equal(t, lasteExec.Executions, 2)
+	assert.Equal(t, lasteExec.LastResult, "")
+	assert.Equal(t, lasteExec.LastErr, testutil.InvalidArgumentError{})
 }

@@ -2,6 +2,7 @@ package fallback
 
 import (
 	"failsafe"
+	"failsafe/internal"
 	"failsafe/spi"
 )
 
@@ -20,7 +21,7 @@ func (e *fallbackExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsa
 		result := innerFn(exec)
 		if e.IsFailure(result) {
 			event := failsafe.ExecutionAttemptedEvent[R]{
-				Execution: exec.Execution,
+				Execution: internal.NewExecutionForResult(result, &exec.Execution),
 			}
 			if e.config.failedAttemptListener != nil {
 				e.config.failedAttemptListener(event)

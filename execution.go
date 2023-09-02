@@ -7,7 +7,8 @@ import (
 
 // ExecutionStats contains stats for an execution.
 type ExecutionStats struct {
-	// The number of execution attempts, including attempts that are blocked before being executed, such as by a CircuitBreaker or RateLimiter.
+	// The number of execution attempts, including attempts that are currently in progress and attempts that were blocked before being
+	// executed, such as by a CircuitBreaker or RateLimiter.
 	Attempts int
 	// The number of completed executions. Executions that are blocked, such as when a CircuitBreaker is open, are not counted.
 	Executions int
