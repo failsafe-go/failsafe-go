@@ -18,7 +18,7 @@ func TestFallbackRetryPolicy(t *testing.T) {
 	rp := retrypolicy.OfDefaults[bool]()
 
 	// When / Then
-	testutil.TestGetSuccess[bool](t, failsafe.WithResult[bool](fb, rp),
+	testutil.TestGetSuccess[bool](t, failsafe.With[bool](fb, rp),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.InvalidArgumentError{}
 		},
@@ -32,7 +32,7 @@ func TestFallbackRetryPolicy(t *testing.T) {
 	})
 
 	// When / Then
-	testutil.TestGetSuccess[bool](t, failsafe.WithResult[bool](fb, rp),
+	testutil.TestGetSuccess[bool](t, failsafe.With[bool](fb, rp),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.InvalidStateError{}
 		},

@@ -22,7 +22,7 @@ func TestRun(t *testing.T) {
 		}).
 		Build()
 
-	err := failsafe.With(rp).RunWithExecution(func(exec failsafe.Execution[any]) error {
+	err := failsafe.With[any](rp).RunWithExecution(func(exec failsafe.Execution[any]) error {
 		return testErr
 	})
 
@@ -48,7 +48,7 @@ func TestGet(t *testing.T) {
 		}).
 		Build()
 
-	result, err := failsafe.WithResult[string](rp).WithContext(ctx).Get(func() (string, error) {
+	result, err := failsafe.With[string](rp).WithContext(ctx).Get(func() (string, error) {
 		return "asdf", errors.New("test")
 	})
 

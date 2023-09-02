@@ -18,7 +18,7 @@ func TestShouldRetryOnFailure(t *testing.T) {
 	rp := retrypolicy.OfDefaults[bool]()
 
 	// When / Then
-	testutil.TestGetFailure(t, failsafe.WithResult[bool](rp),
+	testutil.TestGetFailure(t, failsafe.With[bool](rp),
 		func(exec failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.ConnectionError{}
 		},
@@ -31,7 +31,7 @@ func TestShouldNotRetryOnSuccess(t *testing.T) {
 	rp := retrypolicy.OfDefaults[bool]()
 
 	// When / Then
-	testutil.TestGetSuccess(t, failsafe.WithResult[bool](rp),
+	testutil.TestGetSuccess(t, failsafe.With[bool](rp),
 		func(exec failsafe.Execution[bool]) (bool, error) {
 			return false, nil
 		},
@@ -47,7 +47,7 @@ func TestShouldNotRetryOnNonRetriableFailure(t *testing.T) {
 		Build()
 
 	// When / Then
-	testutil.TestRunFailure(t, failsafe.With(rp),
+	testutil.TestRunFailure(t, failsafe.With[any](rp),
 		func(exec failsafe.Execution[any]) error {
 			if exec.Attempts <= 2 {
 				return testutil.ConnectionError{}
@@ -67,7 +67,7 @@ func TestShouldCompleteWhenMaxDurationExceeded(t *testing.T) {
 		Build()
 
 	// When / Then
-	testutil.TestGetSuccess(t, failsafe.WithResult[bool](rp),
+	testutil.TestGetSuccess(t, failsafe.With[bool](rp),
 		func(exec failsafe.Execution[bool]) (bool, error) {
 			time.Sleep(120 * time.Millisecond)
 			return false, nil
@@ -87,7 +87,7 @@ func TestScheduledRetryDelay(t *testing.T) {
 		Build()
 
 	// When / Then
-	failsafe.With(rp).Run(func() error {
+	failsafe.With[any](rp).Run(func() error {
 		return testutil.ConnectionError{}
 	})
 }

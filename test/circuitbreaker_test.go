@@ -21,7 +21,7 @@ func TestShouldRejectInitialExecutionWhenCircuitOpen(t *testing.T) {
 	cb.Open()
 
 	// When / Then
-	testutil.TestRunFailure(t, failsafe.With(cb),
+	testutil.TestRunFailure(t, failsafe.With[any](cb),
 		func(execution failsafe.Execution[any]) error {
 			return testutil.InvalidArgumentError{}
 		},
@@ -32,13 +32,13 @@ func TestShouldRejectInitialExecutionWhenCircuitOpen(t *testing.T) {
 // Should return ErrCircuitBreakerOpen when max half-open executions are occurring.
 func TestShouldRejectExcessiveAttemptsWhenBreakerHalfOpen(t *testing.T) {
 	// Given
-	cb := circuitbreaker.Builder().WithSuccessThreshold(3, 3).Build()
+	cb := circuitbreaker.Builder[any]().WithSuccessThreshold(3, 3).Build()
 	cb.HalfOpen()
 	waiter := testutil.NewWaiter()
 
 	for i := 0; i < 3; i++ {
 		go func() {
-			failsafe.With(cb).Run(func() error {
+			failsafe.With[any](cb).Run(func() error {
 				waiter.Resume()
 				time.Sleep(1 * time.Minute)
 				return nil
@@ -49,17 +49,17 @@ func TestShouldRejectExcessiveAttemptsWhenBreakerHalfOpen(t *testing.T) {
 	// Assert that the breaker does not allow any more executions at the moment
 	waiter.AwaitWithTimeout(3, 10*time.Second)
 	for i := 0; i < 5; i++ {
-		assert.ErrorIs(t, circuitbreaker.ErrCircuitBreakerOpen, failsafe.With(cb).Run(testutil.NoopFn))
+		assert.ErrorIs(t, circuitbreaker.ErrCircuitBreakerOpen, failsafe.With[any](cb).Run(testutil.NoopFn))
 	}
 }
 
 // Tests the handling of a circuit breaker with no failure conditions.
 func TestCircuitBreakerWithoutConditions(t *testing.T) {
 	// Given
-	cb := circuitbreaker.BuilderForResult[bool]().WithDelay(0).Build()
+	cb := circuitbreaker.Builder[bool]().WithDelay(0).Build()
 
 	// When / Then
-	testutil.TestRunFailure(t, failsafe.WithResult[bool](cb),
+	testutil.TestRunFailure(t, failsafe.With[bool](cb),
 		func(execution failsafe.Execution[bool]) error {
 			return testutil.InvalidArgumentError{}
 		},
@@ -71,7 +71,7 @@ func TestCircuitBreakerWithoutConditions(t *testing.T) {
 	counter := 0
 
 	// When / Then
-	testutil.TestGetSuccess[bool](t, failsafe.WithResult[bool](retryPolicy, cb),
+	testutil.TestGetSuccess[bool](t, failsafe.With[bool](retryPolicy, cb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			counter++
 			if counter < 3 {
@@ -85,18 +85,18 @@ func TestCircuitBreakerWithoutConditions(t *testing.T) {
 
 func TestShouldReturnErrCircuitBreakerOpenAfterFailuresExceeded(t *testing.T) {
 	// Given
-	cb := circuitbreaker.BuilderForResult[bool]().
+	cb := circuitbreaker.Builder[bool]().
 		WithFailureThreshold(circuitbreaker.NewCountBasedThreshold(2, 2)).
 		HandleResult(false).
 		WithDelay(10 * time.Second).
 		Build()
 
 	// When
-	failsafe.WithResult[bool](cb).Get(testutil.GetFalseFn)
-	failsafe.WithResult[bool](cb).Get(testutil.GetFalseFn)
+	failsafe.With[bool](cb).Get(testutil.GetFalseFn)
+	failsafe.With[bool](cb).Get(testutil.GetFalseFn)
 
 	// Then
-	testutil.TestGetFailure[bool](t, failsafe.WithResult[bool](cb),
+	testutil.TestGetFailure[bool](t, failsafe.With[bool](cb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return true, nil
 		},
@@ -109,11 +109,11 @@ func TestRejectedWithRetries(t *testing.T) {
 	rpStats := &testutil.Stats{}
 	cbStats := &testutil.Stats{}
 	rp := rptesting.WithRetryStats(retrypolicy.Builder().WithMaxAttempts(7), rpStats).Build()
-	cb := cbtesting.WithBreakerStats(circuitbreaker.Builder().
+	cb := cbtesting.WithBreakerStats(circuitbreaker.Builder[any]().
 		WithFailureThreshold(circuitbreaker.NewCountBasedThreshold(3, 3)), cbStats).
 		Build()
 
-	testutil.TestRunFailure(t, failsafe.With(rp, cb),
+	testutil.TestRunFailure(t, failsafe.With[any](rp, cb),
 		func(execution failsafe.Execution[any]) error {
 			fmt.Println("Executing")
 			return testutil.InvalidArgumentError{}
@@ -128,12 +128,12 @@ func TestRejectedWithRetries(t *testing.T) {
 // Tests circuit breaker time based failure thresholding state transitions.
 func TestSthouldSupportTimeBasedFailureThresholding(t *testing.T) {
 	// Given
-	cb := circuitbreaker.BuilderForResult[bool]().
+	cb := circuitbreaker.Builder[bool]().
 		WithFailureThreshold(circuitbreaker.NewTimeBasedThreshold(2, 200*time.Millisecond).WithExecutionThreshold(3)).
 		WithDelay(0).
 		HandleResult(false).
 		Build()
-	executor := failsafe.WithResult[bool](cb)
+	executor := failsafe.With[bool](cb)
 
 	// When / Then
 	executor.Get(testutil.GetFalseFn)
@@ -162,12 +162,12 @@ func TestSthouldSupportTimeBasedFailureThresholding(t *testing.T) {
 // Tests circuit breaker time based failure rate thresholding state transitions.
 func TestShouldSupportTimeBasedFailureRateThresholding(t *testing.T) {
 	// Given
-	cb := circuitbreaker.BuilderForResult[bool]().
+	cb := circuitbreaker.Builder[bool]().
 		WithFailureThreshold(circuitbreaker.NewRateBasedThreshold(50, 3, 200*time.Millisecond)).
 		WithDelay(0).
 		HandleResult(false).
 		Build()
-	executor := failsafe.WithResult[bool](cb)
+	executor := failsafe.With[bool](cb)
 
 	// When / Then
 	executor.Get(testutil.GetFalseFn)

@@ -59,18 +59,10 @@ This is equivalent to composition using the Compose method:
 These result in the following internal composition when executing a func and handling its result:
 
 	Fallback(RetryPolicy(CircuitBreaker(func)))
-*/
-func With(outerPolicy Policy[any], policies ...Policy[any]) Executor[any] {
-	policies = append([]Policy[any]{outerPolicy}, policies...)
-	return &executor[any]{
-		policies: policies,
-	}
-}
 
-// WithResult creates and returns a new Executor that will handle failures according to the outerPolicy and policies.
-//
-// Type parameter R specifies the execution result type.
-func WithResult[R any](outerPolicy Policy[R], policies ...Policy[R]) Executor[R] {
+Type parameter R specifies the execution result type.
+*/
+func With[R any](outerPolicy Policy[R], policies ...Policy[R]) Executor[R] {
 	policies = append([]Policy[R]{outerPolicy}, policies...)
 	return &executor[R]{
 		policies: policies,
