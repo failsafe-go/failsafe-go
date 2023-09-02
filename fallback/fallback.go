@@ -48,31 +48,43 @@ type fallback[R any] struct {
 }
 
 // OfResult returns a Fallback that returns the result when an execution fails.
+//
+// Type parameter R represents the execution result type.
 func OfResult[R any](result R) Fallback[R] {
 	return BuilderWithResult[R](result).Build()
 }
 
 // OfError returns a Fallback that returns the err when an execution fails.
+//
+// Type parameter R represents the execution result type.
 func OfError[R any](err error) Fallback[R] {
 	return BuilderWithError[R](err).Build()
 }
 
 // OfErrorFn returns a Fallback that uses errorFn to handle a failed execution.
+//
+// Type parameter R represents the execution result type.
 func OfErrorFn[R any](errorFn func(error) error) Fallback[R] {
 	return BuilderWithErrorFn[R](errorFn).Build()
 }
 
 // OfRunFn returns a Fallback that uses fallbackFn to handle a failed execution.
-func OfRunFn(fallbackFn func(event failsafe.ExecutionAttemptedEvent[any]) error) Fallback[any] {
+//
+// Type parameter R represents the execution result type.
+func OfRunFn[R any](fallbackFn func(event failsafe.ExecutionAttemptedEvent[R]) error) Fallback[R] {
 	return BuilderWithRunFn(fallbackFn).Build()
 }
 
 // OfGetFn returns a Fallback that uses fallbackFn to handle a failed execution.
+//
+// Type parameter R represents the execution result type.
 func OfGetFn[R any](fallbackFn func(event failsafe.ExecutionAttemptedEvent[R]) (R, error)) Fallback[R] {
 	return BuilderWithGetFn(fallbackFn).Build()
 }
 
 // BuilderWithResult returns a FallbackBuilder which builds Fallbacks that return the result when an execution fails.
+//
+// Type parameter R represents the execution result type.
 func BuilderWithResult[R any](result R) FallbackBuilder[R] {
 	return BuilderWithGetFn(func(event failsafe.ExecutionAttemptedEvent[R]) (R, error) {
 		return result, nil
@@ -80,6 +92,8 @@ func BuilderWithResult[R any](result R) FallbackBuilder[R] {
 }
 
 // BuilderWithError returns a FallbackBuilder which builds Fallbacks that return the error when an execution fails.
+//
+// Type parameter R represents the execution result type.
 func BuilderWithError[R any](err error) FallbackBuilder[R] {
 	return BuilderWithGetFn(func(event failsafe.ExecutionAttemptedEvent[R]) (R, error) {
 		return *(new(R)), err
@@ -87,6 +101,8 @@ func BuilderWithError[R any](err error) FallbackBuilder[R] {
 }
 
 // BuilderWithErrorFn returns a FallbackBuilder which builds Fallbacks that use the errorFn to handle failed executions.
+//
+// Type parameter R represents the execution result type.
 func BuilderWithErrorFn[R any](errorFn func(error) error) FallbackBuilder[R] {
 	return BuilderWithGetFn(func(event failsafe.ExecutionAttemptedEvent[R]) (R, error) {
 		return *(new(R)), errorFn(event.LastErr)
@@ -94,18 +110,22 @@ func BuilderWithErrorFn[R any](errorFn func(error) error) FallbackBuilder[R] {
 }
 
 // BuilderWithRunFn returns a FallbackBuilder which builds Fallbacks that use the fallbackFn to handle failed executions.
-func BuilderWithRunFn(fallbackFn func(event failsafe.ExecutionAttemptedEvent[any]) error) FallbackBuilder[any] {
-	return &fallbackConfig[any]{
-		BaseListenablePolicy: &spi.BaseListenablePolicy[any]{},
-		BaseFailurePolicy:    &spi.BaseFailurePolicy[any]{},
-		fn: func(event failsafe.ExecutionAttemptedEvent[any]) (any, error) {
+//
+// Type parameter R represents the execution result type.
+func BuilderWithRunFn[R any](fallbackFn func(event failsafe.ExecutionAttemptedEvent[R]) error) FallbackBuilder[R] {
+	return &fallbackConfig[R]{
+		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
+		BaseFailurePolicy:    &spi.BaseFailurePolicy[R]{},
+		fn: func(event failsafe.ExecutionAttemptedEvent[R]) (R, error) {
 			err := fallbackFn(event)
-			return *(new(any)), err
+			return *(new(R)), err
 		},
 	}
 }
 
 // BuilderWithGetFn returns a FallbackBuilder which builds Fallbacks that use the fallbackFn to handle failed executions.
+//
+// Type parameter R represents the execution result type.
 func BuilderWithGetFn[R any](fallbackFn func(event failsafe.ExecutionAttemptedEvent[R]) (R, error)) FallbackBuilder[R] {
 	return &fallbackConfig[R]{
 		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},

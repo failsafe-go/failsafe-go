@@ -68,6 +68,8 @@ func With(outerPolicy Policy[any], policies ...Policy[any]) Executor[any] {
 }
 
 // WithResult creates and returns a new Executor that will handle failures according to the outerPolicy and policies.
+//
+// Type parameter R specifies the execution result type.
 func WithResult[R any](outerPolicy Policy[R], policies ...Policy[R]) Executor[R] {
 	policies = append([]Policy[R]{outerPolicy}, policies...)
 	return &executor[R]{

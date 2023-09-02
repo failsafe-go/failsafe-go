@@ -9,9 +9,9 @@ import (
 
 	"failsafe"
 	"failsafe/circuitbreaker"
-	cbtesting "failsafe/internal/circuitbreaker_testing"
-	"failsafe/internal/common_testing"
-	rptesting "failsafe/internal/retrypolicy_testing"
+	cbtesting "failsafe/internal/circuitbreaker_testutil"
+	rptesting "failsafe/internal/retrypolicy_testutil"
+	"failsafe/internal/testutil"
 	"failsafe/retrypolicy"
 )
 

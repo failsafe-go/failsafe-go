@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"failsafe"
-	"failsafe/internal/common_testing"
-	rptesting "failsafe/internal/retrypolicy_testing"
+	rptesting "failsafe/internal/retrypolicy_testutil"
+	"failsafe/internal/testutil"
 	"failsafe/retrypolicy"
 )
 

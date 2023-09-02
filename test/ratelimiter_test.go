@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"failsafe"
-	"failsafe/internal/common_testing"
+	"failsafe/internal/testutil"
 	"failsafe/ratelimiter"
 )
 

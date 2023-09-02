@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"failsafe/internal/common_testing"
+	"failsafe/internal/testutil"
 )
 
 // Asserts that wait times and available permits are expected, over time, when calling acquirePermits.
