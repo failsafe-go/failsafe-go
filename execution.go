@@ -6,31 +6,31 @@ import (
 )
 
 // ExecutionStats contains stats for an execution.
-type ExecutionStats[R any] struct {
+type ExecutionStats struct {
 	Attempts   int
 	Executions int
 	StartTime  time.Time
 }
 
 // IsFirstAttempt returns true when Attempts is 1 meaning this is the first execution attempt.
-func (s *ExecutionStats[R]) IsFirstAttempt() bool {
+func (s *ExecutionStats) IsFirstAttempt() bool {
 	return s.Attempts == 1
 }
 
 // IsRetry returns true when Attempts is > 1 meaning the execution is being retried.
-func (s *ExecutionStats[R]) IsRetry() bool {
+func (s *ExecutionStats) IsRetry() bool {
 	return s.Attempts > 1
 }
 
 // GetElapsedTime returns the elapsed time since initial execution began.
-func (s *ExecutionStats[R]) GetElapsedTime() time.Duration {
+func (s *ExecutionStats) GetElapsedTime() time.Duration {
 	return time.Since(s.StartTime)
 }
 
 // Execution contains contextual information about an execution.
 type Execution[R any] struct {
 	Context context.Context
-	ExecutionStats[R]
+	ExecutionStats
 
 	LastResult       R
 	LastErr          error
@@ -62,5 +62,5 @@ func (e *ExecutionScheduledEvent[R]) GetDelay() time.Duration {
 type ExecutionCompletedEvent[R any] struct {
 	Result R
 	Err    error
-	ExecutionStats[R]
+	ExecutionStats
 }

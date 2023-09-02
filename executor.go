@@ -129,7 +129,7 @@ func (e *executor[R]) GetWithExecution(fn func(exec Execution[R]) (R, error)) (R
 	execInternal := &ExecutionInternal[R]{
 		Execution: Execution[R]{
 			Context:        e.ctx,
-			ExecutionStats: ExecutionStats[R]{},
+			ExecutionStats: ExecutionStats{},
 		},
 	}
 
