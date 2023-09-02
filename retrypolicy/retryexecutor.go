@@ -6,11 +6,12 @@ import (
 
 	"failsafe"
 	"failsafe/internal/util"
+	"failsafe/spi"
 )
 
 // retryPolicyExecutor is a failsafe.PolicyExecutor that handles failures according to a RetryPolicy.
 type retryPolicyExecutor[R any] struct {
-	*failsafe.BasePolicyExecutor[R]
+	*spi.BasePolicyExecutor[R]
 	*retryPolicy[R]
 
 	// Mutable state

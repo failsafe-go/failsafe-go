@@ -2,11 +2,12 @@ package fallback
 
 import (
 	"failsafe"
+	"failsafe/spi"
 )
 
 // fallbackExecutor is a failsafe.PolicyExecutor that handles failures according to a Fallback.
 type fallbackExecutor[R any] struct {
-	*failsafe.BasePolicyExecutor[R]
+	*spi.BasePolicyExecutor[R]
 	*fallback[R]
 }
 

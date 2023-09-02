@@ -7,6 +7,7 @@ import (
 
 	"failsafe"
 	"failsafe/internal/util"
+	"failsafe/spi"
 )
 
 const defaultMaxRetries = 2
@@ -97,9 +98,9 @@ type RetryPolicyBuilder[R any] interface {
 }
 
 type retryPolicyConfig[R any] struct {
-	*failsafe.BaseListenablePolicy[R]
-	*failsafe.BaseFailurePolicy[R]
-	*failsafe.BaseDelayablePolicy[R]
+	*spi.BaseListenablePolicy[R]
+	*spi.BaseFailurePolicy[R]
+	*spi.BaseDelayablePolicy[R]
 
 	delayMin     time.Duration
 	delayMax     time.Duration
@@ -135,9 +136,9 @@ func Builder() RetryPolicyBuilder[any] {
 
 func BuilderForResult[R any]() RetryPolicyBuilder[R] {
 	return &retryPolicyConfig[R]{
-		BaseListenablePolicy: &failsafe.BaseListenablePolicy[R]{},
-		BaseFailurePolicy:    &failsafe.BaseFailurePolicy[R]{},
-		BaseDelayablePolicy:  &failsafe.BaseDelayablePolicy[R]{},
+		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
+		BaseFailurePolicy:    &spi.BaseFailurePolicy[R]{},
+		BaseDelayablePolicy:  &spi.BaseDelayablePolicy[R]{},
 		maxRetries:           defaultMaxRetries,
 	}
 }
@@ -301,7 +302,7 @@ func (c *retryPolicyConfig[R]) isAbortable(result R, err error) bool {
 
 func (rp *retryPolicy[R]) ToExecutor() failsafe.PolicyExecutor[R] {
 	rpe := retryPolicyExecutor[R]{
-		BasePolicyExecutor: &failsafe.BasePolicyExecutor[R]{
+		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
 			BaseListenablePolicy: rp.config.BaseListenablePolicy,
 			BaseFailurePolicy:    rp.config.BaseFailurePolicy,
 		},

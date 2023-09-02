@@ -2,11 +2,12 @@ package ratelimiter
 
 import (
 	"failsafe"
+	"failsafe/spi"
 )
 
 // rateLimiterExecutor is a failsafe.PolicyExecutor that handles failures according to a RateLimiter.
 type rateLimiterExecutor[R any] struct {
-	*failsafe.BasePolicyExecutor[R]
+	*spi.BasePolicyExecutor[R]
 	*rateLimiter[R]
 }
 

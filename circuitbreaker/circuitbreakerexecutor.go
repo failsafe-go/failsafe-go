@@ -2,11 +2,12 @@ package circuitbreaker
 
 import (
 	"failsafe"
+	"failsafe/spi"
 )
 
 // circuitBreakerExecutor is a failsafe.PolicyExecutor that handles failures according to a CircuitBreaker.
 type circuitBreakerExecutor[R any] struct {
-	*failsafe.BasePolicyExecutor[R]
+	*spi.BasePolicyExecutor[R]
 	*circuitBreaker[R]
 }
 

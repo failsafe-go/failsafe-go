@@ -6,6 +6,7 @@ import (
 
 	"failsafe"
 	"failsafe/internal/util"
+	"failsafe/spi"
 )
 
 var ErrRateLimitExceeded = errors.New("rate limit exceeded")
@@ -122,7 +123,7 @@ type RateLimiterBuilder[R any] interface {
 }
 
 type rateLimiterConfig[R any] struct {
-	*failsafe.BaseListenablePolicy[R]
+	*spi.BaseListenablePolicy[R]
 
 	// Smooth
 	interval time.Duration
@@ -149,7 +150,7 @@ until the max wait time is exceeded.
 */
 func SmoothBuilder[R any](maxExecutions int64, period time.Duration) RateLimiterBuilder[R] {
 	return &rateLimiterConfig[R]{
-		BaseListenablePolicy: &failsafe.BaseListenablePolicy[R]{},
+		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
 		interval:             period / time.Duration(maxExecutions),
 	}
 }
@@ -165,7 +166,7 @@ until the max wait time is exceeded.
 */
 func SmoothBuilderForMaxRate[R any](maxRate time.Duration) RateLimiterBuilder[R] {
 	return &rateLimiterConfig[R]{
-		BaseListenablePolicy: &failsafe.BaseListenablePolicy[R]{},
+		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
 		interval:             maxRate,
 	}
 }
@@ -181,7 +182,7 @@ rejected or will block and wait until the max wait time is exceeded.
 */
 func BurstyBuilder[R any](maxExecutions int, period time.Duration) RateLimiterBuilder[R] {
 	return &rateLimiterConfig[R]{
-		BaseListenablePolicy: &failsafe.BaseListenablePolicy[R]{},
+		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
 		periodPermits:        maxExecutions,
 		period:               period,
 	}
@@ -287,7 +288,7 @@ func (r *rateLimiter[R]) TryReservePermits(requestedPermits int, maxWaitTime tim
 
 func (r *rateLimiter[R]) ToExecutor() failsafe.PolicyExecutor[R] {
 	rle := rateLimiterExecutor[R]{
-		BasePolicyExecutor: &failsafe.BasePolicyExecutor[R]{
+		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
 			BaseListenablePolicy: r.config.BaseListenablePolicy,
 		},
 		rateLimiter: r,
