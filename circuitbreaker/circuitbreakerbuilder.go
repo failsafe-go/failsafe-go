@@ -110,18 +110,14 @@ func NewRateBasedThreshold(rateThreshold uint, executionThreshold uint, threshol
 	}
 }
 
-// OfDefaults creates a count based CircuitBreaker that opens after a single failure, closes after a single success, and has a 1 minute
-// delay by default. To configure additional options on a CircuitBreaker, use Builder() instead.
-//
-// Type parameter R represents the execution result type.
+// OfDefaults creates a count based CircuitBreaker for execution result type R that opens after a single failure, closes after a single
+// success, and has a 1 minute delay by default. To configure additional options on a CircuitBreaker, use Builder() instead.
 func OfDefaults[R any]() CircuitBreaker[R] {
 	return Builder[R]().Build()
 }
 
-// Builder creates a CircuitBreakerBuilder which by default will build a count based circuit breaker that opens after a single failure,
-// closes after a single success, and has a 1 minute delay, unless configured otherwise.
-//
-// Type parameter R represents the execution result type.
+// Builder creates a CircuitBreakerBuilder for execution result type R which by default will build a count based circuit breaker that opens
+// after a single failure, closes after a single success, and has a 1 minute delay, unless configured otherwise.
 func Builder[R any]() CircuitBreakerBuilder[R] {
 	return &circuitBreakerConfig[R]{
 		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
