@@ -7,33 +7,38 @@ import (
 
 // ExecutionStats contains stats for an execution.
 type ExecutionStats struct {
-	Attempts   int
+	// The number of execution attempts, including attempts that are blocked before being executed, such as by a CircuitBreaker or RateLimiter.
+	Attempts int
+	// The number of completed executions. Executions that are blocked, such as when a CircuitBreaker is open, are not counted.
 	Executions int
-	StartTime  time.Time
+	// The time that the initial execution attempt started at.
+	StartTime time.Time
 }
 
-// IsFirstAttempt returns true when Attempts is 1 meaning this is the first execution attempt.
+// IsFirstAttempt returns true when Attempts is 1, meaning this is the first execution attempt.
 func (s *ExecutionStats) IsFirstAttempt() bool {
 	return s.Attempts == 1
 }
 
-// IsRetry returns true when Attempts is > 1 meaning the execution is being retried.
+// IsRetry returns true when Attempts is > 1, meaning the execution is being retried.
 func (s *ExecutionStats) IsRetry() bool {
 	return s.Attempts > 1
 }
 
-// GetElapsedTime returns the elapsed time since initial execution began.
+// GetElapsedTime returns the elapsed time since initial execution attempt began.
 func (s *ExecutionStats) GetElapsedTime() time.Duration {
 	return time.Since(s.StartTime)
 }
 
 // Execution contains contextual information about an execution.
 type Execution[R any] struct {
-	Context context.Context
+	Context context.Context // TODO leave this?
 	ExecutionStats
-
-	LastResult       R
-	LastErr          error
+	// The last error that occurred, else the zero value for R.
+	LastResult R
+	// The last error that occurred, else nil.
+	LastErr error
+	// The time that the most recent execution attempt started at.
 	AttemptStartTime time.Time
 }
 
@@ -50,6 +55,7 @@ type ExecutionAttemptedEvent[R any] struct {
 // ExecutionScheduledEvent indicates an execution was scheduled.
 type ExecutionScheduledEvent[R any] struct {
 	Execution[R]
+	// The delay before the next execution attempt.
 	Delay time.Duration
 }
 
@@ -60,7 +66,9 @@ func (e *ExecutionScheduledEvent[R]) GetDelay() time.Duration {
 
 // ExecutionCompletedEvent indicates an execution was completed.
 type ExecutionCompletedEvent[R any] struct {
+	// The execution result, else the zero value for R
 	Result R
-	Err    error
+	// The execution error, else nil
+	Err error
 	ExecutionStats
 }
