@@ -108,7 +108,7 @@ func TestShouldReturnErrCircuitBreakerOpenAfterFailuresExceeded(t *testing.T) {
 func TestRejectedWithRetries(t *testing.T) {
 	rpStats := &testutil.Stats{}
 	cbStats := &testutil.Stats{}
-	rp := rptesting.WithRetryStats(retrypolicy.Builder().WithMaxAttempts(7), rpStats).Build()
+	rp := rptesting.WithRetryStats(retrypolicy.Builder[any]().WithMaxAttempts(7), rpStats).Build()
 	cb := cbtesting.WithBreakerStats(circuitbreaker.Builder[any]().
 		WithFailureThreshold(circuitbreaker.NewCountBasedThreshold(3, 3)), cbStats).
 		Build()

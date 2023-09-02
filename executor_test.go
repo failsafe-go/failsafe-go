@@ -14,7 +14,7 @@ import (
 var testErr = errors.New("test")
 
 func TestRun(t *testing.T) {
-	rp := retrypolicy.Builder().
+	rp := retrypolicy.Builder[any]().
 		WithDelay(1 * time.Second).
 		Handle(testErr).
 		OnRetry(func(e failsafe.ExecutionAttemptedEvent[any]) {
@@ -37,7 +37,7 @@ func TestGet(t *testing.T) {
 		cancel()
 	}()
 
-	rp := retrypolicy.BuilderForResult[string]().
+	rp := retrypolicy.Builder[string]().
 		HandleAllIf(func(result string, err error) bool {
 			return result == "foo"
 		}).

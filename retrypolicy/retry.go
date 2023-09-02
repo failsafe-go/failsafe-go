@@ -126,15 +126,15 @@ type retryPolicy[R any] struct {
 	config *retryPolicyConfig[R]
 }
 
+// OfDefaults creates a RetryPolicy for execution result type R that allows 3 execution attempts max with no delay. To configure additional
+// options on a RetryPolicy, use Builder instead.
 func OfDefaults[R any]() RetryPolicy[R] {
-	return BuilderForResult[R]().Build()
+	return Builder[R]().Build()
 }
 
-func Builder() RetryPolicyBuilder[any] {
-	return BuilderForResult[any]()
-}
-
-func BuilderForResult[R any]() RetryPolicyBuilder[R] {
+// Builder creates a RetryPolicyBuilder for execution result type R, which by default will build a RetryPolicy that allows 3 execution
+// attempts max with no delay, unless configured otherwise.
+func Builder[R any]() RetryPolicyBuilder[R] {
 	return &retryPolicyConfig[R]{
 		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
 		BaseFailurePolicy:    &spi.BaseFailurePolicy[R]{},
