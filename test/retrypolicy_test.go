@@ -41,7 +41,7 @@ func TestShouldNotRetryOnSuccess(t *testing.T) {
 // Asserts that a non-handled error does not trigger retries.
 func TestShouldNotRetryOnNonRetriableFailure(t *testing.T) {
 	// Given
-	rp := retrypolicy.Builder().
+	rp := retrypolicy.Builder[any]().
 		WithMaxRetries(-1).
 		Handle(testutil.ConnectionError{}).
 		Build()
@@ -61,7 +61,7 @@ func TestShouldNotRetryOnNonRetriableFailure(t *testing.T) {
 func TestShouldCompleteWhenMaxDurationExceeded(t *testing.T) {
 	// Given
 	stats := &testutil.Stats{}
-	rp := rptesting.WithRetryStats(retrypolicy.BuilderForResult[bool]().
+	rp := rptesting.WithRetryStats(retrypolicy.Builder[bool]().
 		HandleResult(false).
 		WithMaxDuration(100*time.Millisecond), stats).
 		Build()
@@ -79,7 +79,7 @@ func TestShouldCompleteWhenMaxDurationExceeded(t *testing.T) {
 func TestScheduledRetryDelay(t *testing.T) {
 	// Given
 	delay := 10 * time.Millisecond
-	rp := retrypolicy.Builder().
+	rp := retrypolicy.Builder[any]().
 		WithDelay(delay).
 		OnRetryScheduled(func(e failsafe.ExecutionScheduledEvent[any]) {
 			assert.Equal(t, delay, e.GetDelay())
