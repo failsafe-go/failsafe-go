@@ -9,6 +9,8 @@ import (
 	"failsafe/internal/testutil"
 )
 
+var _ circuitStats = &timedCircuitStats{}
+
 func TestTimedStats(t *testing.T) {
 	clock := &testutil.TestClock{}
 

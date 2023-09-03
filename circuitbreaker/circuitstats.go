@@ -33,8 +33,6 @@ type countingCircuitStats struct {
 	failures     uint
 }
 
-var _ circuitStats = &countingCircuitStats{}
-
 func newStats[R any](config *circuitBreakerConfig[R], supportsTimeBased bool, capacity uint) circuitStats {
 	if supportsTimeBased && config.failureThresholdConfig.thresholdingPeriod != 0 {
 		return newTimedCircuitStats(defaultBucketCount, config.failureThresholdConfig.thresholdingPeriod, config.clock)
@@ -150,8 +148,6 @@ type timedCircuitStats struct {
 	summary      stat
 	currentIndex int
 }
-
-var _ circuitStats = &timedCircuitStats{}
 
 type bucket struct {
 	*stat

@@ -6,6 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var _ circuitState[any] = &halfOpenState[any]{}
+
 // Asserts that  the circuit is opened after a single failure.
 func TestHalfOpenStateFailureWithDefaultConfig(t *testing.T) {
 	// Given

@@ -9,6 +9,8 @@ import (
 	"failsafe"
 )
 
+var _ circuitState[any] = &openState[any]{}
+
 func TestTryAcquirePermit(t *testing.T) {
 	breaker := Builder[any]().WithDelayFn(func(exec *failsafe.Execution[any]) time.Duration {
 		return 100 * time.Millisecond

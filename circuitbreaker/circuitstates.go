@@ -21,8 +21,6 @@ type closedState[R any] struct {
 	stats   circuitStats
 }
 
-var _ circuitState[any] = &closedState[any]{}
-
 func newClosedState[R any](breaker *circuitBreaker[R]) *closedState[R] {
 	var capacity uint
 	if breaker.config.failureThresholdConfig.executionThreshold != 0 {
@@ -72,8 +70,6 @@ type openState[R any] struct {
 	delay     time.Duration
 }
 
-var _ circuitState[any] = &openState[any]{}
-
 func newOpenState[R any](breaker *circuitBreaker[R], previousState circuitState[R], delay time.Duration) *openState[R] {
 	return &openState[R]{
 		breaker:   breaker,
@@ -112,8 +108,6 @@ type halfOpenState[R any] struct {
 	stats               circuitStats
 	permittedExecutions uint
 }
-
-var _ circuitState[any] = &halfOpenState[any]{}
 
 func newHalfOpenState[R any](breaker *circuitBreaker[R]) *halfOpenState[R] {
 	capacity := breaker.config.successThresholdingCapacity
