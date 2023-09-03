@@ -32,7 +32,7 @@ func TestShouldRejectInitialExecutionWhenCircuitOpen(t *testing.T) {
 // Should return ErrCircuitBreakerOpen when max half-open executions are occurring.
 func TestShouldRejectExcessiveAttemptsWhenBreakerHalfOpen(t *testing.T) {
 	// Given
-	cb := circuitbreaker.Builder[any]().WithSuccessThreshold(3, 3).Build()
+	cb := circuitbreaker.Builder[any]().WithSuccessThreshold(3).Build()
 	cb.HalfOpen()
 	waiter := testutil.NewWaiter()
 
@@ -86,7 +86,7 @@ func TestCircuitBreakerWithoutConditions(t *testing.T) {
 func TestShouldReturnErrCircuitBreakerOpenAfterFailuresExceeded(t *testing.T) {
 	// Given
 	cb := circuitbreaker.Builder[bool]().
-		WithFailureThreshold(circuitbreaker.NewCountBasedThreshold(2, 2)).
+		WithFailureThreshold(2).
 		HandleResult(false).
 		WithDelay(10 * time.Second).
 		Build()
@@ -110,7 +110,7 @@ func TestRejectedWithRetries(t *testing.T) {
 	cbStats := &testutil.Stats{}
 	rp := rptesting.WithRetryStats(retrypolicy.Builder[any]().WithMaxAttempts(7), rpStats).Build()
 	cb := cbtesting.WithBreakerStats(circuitbreaker.Builder[any]().
-		WithFailureThreshold(circuitbreaker.NewCountBasedThreshold(3, 3)), cbStats).
+		WithFailureThreshold(3), cbStats).
 		Build()
 
 	testutil.TestRunFailure(t, failsafe.With[any](rp, cb),
@@ -129,7 +129,8 @@ func TestRejectedWithRetries(t *testing.T) {
 func TestSthouldSupportTimeBasedFailureThresholding(t *testing.T) {
 	// Given
 	cb := circuitbreaker.Builder[bool]().
-		WithFailureThreshold(circuitbreaker.NewTimeBasedThreshold(2, 200*time.Millisecond).WithExecutionThreshold(3)).
+		WithFailureThresholdPeriod(2, 200*time.Millisecond).
+		WithFailureExecutionThreshold(3).
 		WithDelay(0).
 		HandleResult(false).
 		Build()
@@ -163,7 +164,7 @@ func TestSthouldSupportTimeBasedFailureThresholding(t *testing.T) {
 func TestShouldSupportTimeBasedFailureRateThresholding(t *testing.T) {
 	// Given
 	cb := circuitbreaker.Builder[bool]().
-		WithFailureThreshold(circuitbreaker.NewRateBasedThreshold(50, 3, 200*time.Millisecond)).
+		WithFailureRateThreshold(50, 3, 200*time.Millisecond).
 		WithDelay(0).
 		HandleResult(false).
 		Build()

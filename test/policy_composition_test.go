@@ -21,7 +21,7 @@ import (
 func TestRetryPolicyCircuitBreaker(t *testing.T) {
 	rp := retrypolicy.Builder[bool]().WithMaxRetries(-1).Build()
 	cb := circuitbreaker.Builder[bool]().
-		WithFailureThreshold(circuitbreaker.NewCountBasedThreshold(3, 3)).
+		WithFailureThreshold(3).
 		WithDelay(10 * time.Minute).
 		Build()
 
@@ -48,7 +48,7 @@ func TestRetryPolicyCircuitBreakerOpen(t *testing.T) {
 // CircuitBreaker -> RetryPolicy
 func TestCircuitBreakerRetryPolicy(t *testing.T) {
 	rp := retrypolicy.OfDefaults[any]()
-	cb := circuitbreaker.Builder[any]().WithFailureThreshold(circuitbreaker.NewCountBasedThreshold(3, 3)).Build()
+	cb := circuitbreaker.Builder[any]().WithFailureThreshold(3).Build()
 
 	testutil.TestRunFailure(t, failsafe.With[any](cb).Compose(rp),
 		func(execution failsafe.Execution[any]) error {
@@ -111,7 +111,7 @@ func TestFallbackCircuitBreaker(t *testing.T) {
 		assert.ErrorIs(t, testutil.InvalidStateError{}, e.LastErr)
 		return true, nil
 	})
-	cb := circuitbreaker.Builder[bool]().WithSuccessThreshold(3, 3).Build()
+	cb := circuitbreaker.Builder[bool]().WithSuccessThreshold(3).Build()
 
 	// When / Then
 	testutil.TestGetSuccess(t, failsafe.With[bool](fb, cb),
@@ -129,7 +129,7 @@ func TestFallbackCircuitBreakerOpen(t *testing.T) {
 		assert.ErrorIs(t, circuitbreaker.ErrCircuitBreakerOpen, e.LastErr)
 		return false, nil
 	})
-	cb := circuitbreaker.Builder[bool]().WithSuccessThreshold(3, 3).Build()
+	cb := circuitbreaker.Builder[bool]().WithSuccessThreshold(3).Build()
 
 	// When / Then
 	cb.Open()
@@ -154,7 +154,7 @@ func TestRetryPolicyRateLimiter(t *testing.T) {
 // Fallback -> RetryPolicy -> CircuitBreaker
 func TestFallbackRetryPolicyCircuitBreaker(t *testing.T) {
 	rp := retrypolicy.OfDefaults[string]()
-	cb := circuitbreaker.Builder[string]().WithFailureThreshold(circuitbreaker.NewCountBasedThreshold(5, 5)).Build()
+	cb := circuitbreaker.Builder[string]().WithFailureThreshold(5).Build()
 	fb := fallback.OfResult[string]("test")
 
 	testutil.TestGetSuccess(t, failsafe.With[string](fb).Compose(rp).Compose(cb),

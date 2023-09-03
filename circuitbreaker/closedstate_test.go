@@ -25,7 +25,7 @@ func TestClosedStateFailureWithDefaultConfig(t *testing.T) {
 // Asserts that the circuit is opened after the failure threshold is met.
 func TestClosedStateFailureWithFailureThreshold(t *testing.T) {
 	// Given
-	breaker := Builder[any]().WithFailureThreshold(NewCountBasedThreshold(3, 3)).Build()
+	breaker := Builder[any]().WithFailureThreshold(3).Build()
 	breaker.Close()
 
 	// When
@@ -43,7 +43,7 @@ func TestClosedStateFailureWithFailureThreshold(t *testing.T) {
 // Asserts that the circuit is opened after the failure ratio is met.
 func TestClosedStateFailureWithFailureRatio(t *testing.T) {
 	// Given
-	breaker := Builder[any]().WithFailureThreshold(NewCountBasedThreshold(2, 3)).Build()
+	breaker := Builder[any]().WithFailureThresholdRatio(2, 3).Build()
 	breaker.Close()
 
 	// When
@@ -73,7 +73,7 @@ func TestClosedStateSuccessWithDefaultConfig(t *testing.T) {
 // Asserts that the circuit stays closed after the failure ratio fails to be met.
 func TestClosedStateSuccessWithFailureRatio(t *testing.T) {
 	// Given
-	breaker := Builder[any]().WithFailureThreshold(NewCountBasedThreshold(3, 4)).Build()
+	breaker := Builder[any]().WithFailureThresholdRatio(3, 4).Build()
 	breaker.Close()
 	assert.True(t, breaker.IsClosed())
 
@@ -88,7 +88,7 @@ func TestClosedStateSuccessWithFailureRatio(t *testing.T) {
 // Asserts that the circuit stays closed after the failure ratio fails to be met.
 func TestClosedStateSuccessWithFailureThreshold(t *testing.T) {
 	// Given
-	breaker := Builder[any]().WithFailureThreshold(NewCountBasedThreshold(2, 2)).Build()
+	breaker := Builder[any]().WithFailureThreshold(2).Build()
 	breaker.Close()
 	assert.True(t, breaker.IsClosed())
 
