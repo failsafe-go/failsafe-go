@@ -56,15 +56,15 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) f
 				time.Sleep(delay)
 			}
 
+			// Prepare for next iteration
+			exec.InitializeAttempt()
+
 			// Call retry listener
 			if rpe.config.retryListener != nil {
 				rpe.config.retryListener(failsafe.ExecutionAttemptedEvent[R]{
 					Execution: internal.NewExecutionForResult(result, &exec.Execution),
 				})
 			}
-
-			// Prepare for next iteration
-			exec.InitializeAttempt()
 		}
 	}
 }
@@ -92,7 +92,7 @@ func (rpe *retryPolicyExecutor[R]) OnFailure(exec *failsafe.Execution[R], result
 			ExecutionStats: exec.ExecutionStats,
 		})
 	}
-	if rpe.retriesExceeded && rpe.config.retriesExceededListener != nil {
+	if rpe.retriesExceeded && !isAbortable && rpe.config.retriesExceededListener != nil {
 		rpe.config.retriesExceededListener(failsafe.ExecutionCompletedEvent[R]{
 			Result:         exec.LastResult,
 			Err:            exec.LastErr,
