@@ -15,7 +15,7 @@ import (
 // Tests a simple execution that retries.
 func TestShouldRetryOnFailure(t *testing.T) {
 	// Given
-	rp := retrypolicy.OfDefaults[bool]()
+	rp := retrypolicy.WithDefaults[bool]()
 
 	// When / Then
 	testutil.TestGetFailure(t, failsafe.With[bool](rp),
@@ -28,7 +28,7 @@ func TestShouldRetryOnFailure(t *testing.T) {
 // Tests a simple execution that does not retry.
 func TestShouldNotRetryOnSuccess(t *testing.T) {
 	// Given
-	rp := retrypolicy.OfDefaults[bool]()
+	rp := retrypolicy.WithDefaults[bool]()
 
 	// When / Then
 	testutil.TestGetSuccess(t, failsafe.With[bool](rp),

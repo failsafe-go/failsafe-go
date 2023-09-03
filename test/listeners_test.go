@@ -19,7 +19,7 @@ func TestListenersOnSuccess(t *testing.T) {
 	stub := testutil.ErrorNTimesThenReturn[bool](testutil.InvalidStateError{}, 2, false, false, true)
 	rpBuilder := retrypolicy.Builder[bool]().HandleResult(false).WithMaxAttempts(10)
 	cbBuilder := circuitbreaker.Builder[bool]().HandleResult(false).WithDelay(0)
-	fbBuilder := fallback.BuilderOfResult(false)
+	fbBuilder := fallback.BuilderWithResult(false)
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
@@ -165,7 +165,7 @@ func TestListenersForFailingRetryPolicy(t *testing.T) {
 	rpBuilder := retrypolicy.Builder[bool]()
 	// And successful CircuitBreaker and Fallback
 	cbBuilder := circuitbreaker.Builder[bool]().HandleErrors(testutil.InvalidArgumentError{}).WithDelay(0)
-	fbBuilder := fallback.BuilderOfResult[bool](true).HandleErrors(testutil.InvalidArgumentError{})
+	fbBuilder := fallback.BuilderWithResult[bool](true).HandleErrors(testutil.InvalidArgumentError{})
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
@@ -200,7 +200,7 @@ func TestListenersForFailingCircuitBreaker(t *testing.T) {
 	// And failing CircuitBreaker
 	cbBuilder := circuitbreaker.Builder[bool]().WithDelay(0)
 	// And successful Fallback
-	fbBuilder := fallback.BuilderOfResult[bool](true).HandleErrors(testutil.InvalidArgumentError{})
+	fbBuilder := fallback.BuilderWithResult[bool](true).HandleErrors(testutil.InvalidArgumentError{})
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
@@ -234,7 +234,7 @@ func TestListenersForFailingFallback(t *testing.T) {
 	rpBuilder := retrypolicy.Builder[bool]().HandleErrors(testutil.InvalidArgumentError{})
 	cbBuilder := circuitbreaker.Builder[bool]().HandleErrors(testutil.InvalidArgumentError{}).WithDelay(0)
 	// And failing Fallback
-	fbBuilder := fallback.BuilderOfError[bool](testutil.ConnectionError{})
+	fbBuilder := fallback.BuilderWithError[bool](testutil.ConnectionError{})
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)

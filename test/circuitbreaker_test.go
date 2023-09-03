@@ -17,7 +17,7 @@ import (
 
 func TestShouldRejectInitialExecutionWhenCircuitOpen(t *testing.T) {
 	// Given
-	cb := circuitbreaker.OfDefaults[any]()
+	cb := circuitbreaker.WithDefaults[any]()
 	cb.Open()
 
 	// When / Then
@@ -67,7 +67,7 @@ func TestCircuitBreakerWithoutConditions(t *testing.T) {
 	assert.True(t, cb.IsOpen())
 
 	// Given
-	retryPolicy := retrypolicy.OfDefaults[bool]()
+	retryPolicy := retrypolicy.WithDefaults[bool]()
 	counter := 0
 
 	// When / Then

@@ -11,7 +11,7 @@ var _ circuitState[any] = &closedState[any]{}
 // Asserts that the circuit is opened after a single failure.
 func TestClosedStateFailureWithDefaultConfig(t *testing.T) {
 	// Given
-	breaker := OfDefaults[any]().(*circuitBreaker[any])
+	breaker := WithDefaults[any]().(*circuitBreaker[any])
 	breaker.Close()
 	assert.True(t, breaker.IsClosed())
 
@@ -59,7 +59,7 @@ func TestClosedStateFailureWithFailureRatio(t *testing.T) {
 // Asserts that the circuit is still closed after a single success.
 func TestClosedStateSuccessWithDefaultConfig(t *testing.T) {
 	// Given
-	breaker := OfDefaults[any]()
+	breaker := WithDefaults[any]()
 	breaker.Close()
 	assert.True(t, breaker.IsClosed())
 

@@ -12,7 +12,7 @@ import (
 )
 
 func TestGetWithSuccess(t *testing.T) {
-	rp := retrypolicy.OfDefaults[string]()
+	rp := retrypolicy.WithDefaults[string]()
 	result, err := failsafe.With[string](rp).Get(func() (string, error) {
 		return "test", nil
 	})
@@ -21,7 +21,7 @@ func TestGetWithSuccess(t *testing.T) {
 }
 
 func TestGetWithFailure(t *testing.T) {
-	rp := retrypolicy.OfDefaults[string]()
+	rp := retrypolicy.WithDefaults[string]()
 	result, err := failsafe.With[string](rp).Get(func() (string, error) {
 		return "", testutil.InvalidArgumentError{}
 	})
@@ -30,8 +30,8 @@ func TestGetWithFailure(t *testing.T) {
 }
 
 func TestGetWithExecution(t *testing.T) {
-	rp := retrypolicy.OfDefaults[string]()
-	fb := fallback.OfResult[string]("fallback")
+	rp := retrypolicy.WithDefaults[string]()
+	fb := fallback.WithResult[string]("fallback")
 	var lasteExec failsafe.Execution[string]
 	result, err := failsafe.With[string](fb, rp).GetWithExecution(func(exec failsafe.Execution[string]) (string, error) {
 		lasteExec = exec

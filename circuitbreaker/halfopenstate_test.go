@@ -11,7 +11,7 @@ var _ circuitState[any] = &halfOpenState[any]{}
 // Asserts that  the circuit is opened after a single failure.
 func TestHalfOpenStateFailureWithDefaultConfig(t *testing.T) {
 	// Given
-	breaker := OfDefaults[any]()
+	breaker := WithDefaults[any]()
 	breaker.HalfOpen()
 	assert.False(t, breaker.IsOpen())
 	assert.False(t, breaker.IsClosed())
@@ -175,7 +175,7 @@ func TestHalfOpenFailureWithSuccessThresholdAndFailureRatio(t *testing.T) {
 // Asserts that the circuit is closed after a single success.
 func TestHalfOpenSuccessWithDefaultConfig(t *testing.T) {
 	// Given
-	breaker := OfDefaults[any]()
+	breaker := WithDefaults[any]()
 	breaker.HalfOpen()
 	assert.False(t, breaker.IsOpen())
 	assert.False(t, breaker.IsClosed())

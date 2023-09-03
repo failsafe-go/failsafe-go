@@ -135,9 +135,9 @@ type retryPolicy[R any] struct {
 	config *retryPolicyConfig[R]
 }
 
-// OfDefaults creates a RetryPolicy for execution result type R that allows 3 execution attempts max with no delay. To configure additional
+// WithDefaults creates a RetryPolicy for execution result type R that allows 3 execution attempts max with no delay. To configure additional
 // options on a RetryPolicy, use Builder instead.
-func OfDefaults[R any]() RetryPolicy[R] {
+func WithDefaults[R any]() RetryPolicy[R] {
 	return Builder[R]().Build()
 }
 
