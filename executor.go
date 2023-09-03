@@ -127,8 +127,11 @@ func (e *executor[R]) GetWithExecution(fn func(exec Execution[R]) (R, error)) (R
 	outerFn := func(execInternal *ExecutionInternal[R]) *ExecutionResult[R] {
 		result, err := fn(execInternal.Execution)
 		er := &ExecutionResult[R]{
-			Result: result,
-			Err:    err,
+			Result:     result,
+			Err:        err,
+			Complete:   true,
+			Success:    true,
+			SuccessAll: true,
 		}
 		execInternal.recordAttempt(er)
 		return er

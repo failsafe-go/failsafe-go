@@ -31,6 +31,7 @@ func (e *fallbackExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsa
 			result = &failsafe.ExecutionResult[R]{
 				Result:     fallbackResult,
 				Err:        err,
+				Complete:   true,
 				Success:    true,
 				SuccessAll: result.SuccessAll,
 			}

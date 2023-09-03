@@ -24,7 +24,8 @@ func (bpe *BasePolicyExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) fa
 			return result
 		}
 
-		return bpe.PostExecute(execInternal, innerFn(execInternal))
+		result = innerFn(execInternal)
+		return bpe.PostExecute(execInternal, result)
 	}
 }
 

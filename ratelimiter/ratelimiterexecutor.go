@@ -16,7 +16,8 @@ var _ failsafe.PolicyExecutor[any] = &rateLimiterExecutor[any]{}
 func (rle *rateLimiterExecutor[R]) PreExecute() *failsafe.ExecutionResult[R] {
 	if !rle.rateLimiter.TryAcquirePermitWithMaxWait(rle.rateLimiter.config.maxWaitTime) {
 		return &failsafe.ExecutionResult[R]{
-			Err: ErrRateLimitExceeded,
+			Err:      ErrRateLimitExceeded,
+			Complete: true,
 		}
 	}
 	return nil

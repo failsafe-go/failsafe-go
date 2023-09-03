@@ -17,7 +17,7 @@ type ExecutionResult[R any] struct {
 	SuccessAll bool
 }
 
-// WithComplete returns a new ExecutionResult that is marked as Complete.
+// WithComplete returns a new ExecutionResult for the complete and success values.
 func (er *ExecutionResult[R]) WithComplete(complete bool, success bool) *ExecutionResult[R] {
 	c := *er
 	c.Complete = complete
@@ -29,7 +29,6 @@ func (er *ExecutionResult[R]) WithComplete(complete bool, success bool) *Executi
 // WithFailure returns a new ExecutionResult that is marked as not successful.
 func (er *ExecutionResult[R]) WithFailure() *ExecutionResult[R] {
 	c := *er
-	c.Complete = false
 	c.Success = false
 	c.SuccessAll = false
 	return &c
