@@ -23,10 +23,10 @@ type closedState[R any] struct {
 
 func newClosedState[R any](breaker *circuitBreaker[R]) *closedState[R] {
 	var capacity uint
-	if breaker.config.failureThresholdConfig.executionThreshold != 0 {
-		capacity = breaker.config.failureThresholdConfig.executionThreshold
+	if breaker.config.failureExecutionThreshold != 0 {
+		capacity = breaker.config.failureExecutionThreshold
 	} else {
-		capacity = breaker.config.failureThresholdConfig.thresholdingCapacity
+		capacity = breaker.config.failureThresholdingCapacity
 	}
 	return &closedState[R]{
 		breaker: breaker,
@@ -53,11 +53,11 @@ func (s *closedState[R]) tryAcquirePermit() bool {
 // Checks to see if the executions and failure thresholds have been exceeded, opening the circuit if so.
 func (s *closedState[R]) checkThresholdAndReleasePermit(exec *failsafe.Execution[R]) {
 	// Execution threshold can only be set for time based thresholding
-	if s.stats.getExecutionCount() >= s.breaker.config.failureThresholdConfig.executionThreshold {
+	if s.stats.getExecutionCount() >= s.breaker.config.failureExecutionThreshold {
 		// Failure rate threshold can only be set for time based thresholding
-		failureRateThreshold := s.breaker.config.failureThresholdConfig.rateThreshold
+		failureRateThreshold := s.breaker.config.failureRateThreshold
 		if (failureRateThreshold != 0 && s.stats.getFailureRate() >= failureRateThreshold) ||
-			(failureRateThreshold == 0 && s.stats.getFailureCount() >= s.breaker.config.failureThresholdConfig.threshold) {
+			(failureRateThreshold == 0 && s.stats.getFailureCount() >= s.breaker.config.failureThreshold) {
 			s.breaker.open(exec)
 		}
 	}
@@ -112,10 +112,10 @@ type halfOpenState[R any] struct {
 func newHalfOpenState[R any](breaker *circuitBreaker[R]) *halfOpenState[R] {
 	capacity := breaker.config.successThresholdingCapacity
 	if capacity == 0 {
-		capacity = breaker.config.failureThresholdConfig.executionThreshold
+		capacity = breaker.config.failureExecutionThreshold
 	}
 	if capacity == 0 {
-		capacity = breaker.config.failureThresholdConfig.thresholdingCapacity
+		capacity = breaker.config.failureThresholdingCapacity
 	}
 	return &halfOpenState[R]{
 		breaker:             breaker,
@@ -161,15 +161,15 @@ func (s *halfOpenState[R]) checkThresholdAndReleasePermit(exec *failsafe.Executi
 		failuresExceeded = s.stats.getFailureCount() > successThresholdingCapacity-successThreshold
 	} else {
 		// Failure rate threshold can only be set for time based thresholding
-		failureRateThreshold := s.breaker.config.failureThresholdConfig.rateThreshold
+		failureRateThreshold := s.breaker.config.failureRateThreshold
 		if failureRateThreshold != 0 {
 			// Execution threshold can only be set for time based thresholding
-			executionThresholdExceeded := s.stats.getExecutionCount() >= s.breaker.config.failureThresholdConfig.executionThreshold
+			executionThresholdExceeded := s.stats.getExecutionCount() >= s.breaker.config.failureExecutionThreshold
 			failuresExceeded = executionThresholdExceeded && s.stats.getFailureRate() >= failureRateThreshold
 			successesExceeded = executionThresholdExceeded && s.stats.getSuccessRate() > 100-failureRateThreshold
 		} else {
-			failureThresholdingCapacity := s.breaker.config.failureThresholdConfig.thresholdingCapacity
-			failureThreshold := s.breaker.config.failureThresholdConfig.threshold
+			failureThresholdingCapacity := s.breaker.config.failureThresholdingCapacity
+			failureThreshold := s.breaker.config.failureThreshold
 			failuresExceeded = s.stats.getFailureCount() >= failureThreshold
 			successesExceeded = s.stats.getSuccessCount() > failureThresholdingCapacity-failureThreshold
 		}
