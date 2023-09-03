@@ -9,6 +9,9 @@ import (
 	"failsafe/internal/testutil"
 )
 
+var _ rateLimiterStats = &smoothRateLimiterStats[any]{}
+var _ rateLimiterStats = &burstyRateLimiterStats[any]{}
+
 // Asserts that wait times and available permits are expected, over time, when calling acquirePermits.
 func TestSmoothAcquirePermits(t *testing.T) {
 	// Given 1 permit every 500ns

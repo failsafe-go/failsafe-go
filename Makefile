@@ -13,5 +13,5 @@ test: ## Test Failsafe-go
 	go test ./...
 
 .PHONY: fmt
-fmt:  ## Format Failsafe-go
+fmt: ## Format Failsafe-go
 	go fmt ./...

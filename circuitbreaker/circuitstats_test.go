@@ -10,6 +10,7 @@ import (
 )
 
 var _ circuitStats = &countingCircuitStats{}
+var _ circuitStats = &timedCircuitStats{}
 
 func TestCountingStatsShouldReturnUninitializedValues(t *testing.T) {
 	stats := newCountingCircuitStats(100)
