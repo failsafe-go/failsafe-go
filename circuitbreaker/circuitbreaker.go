@@ -132,6 +132,8 @@ type circuitBreaker[R any] struct {
 	state circuitState[R]
 }
 
+var _ CircuitBreaker[any] = &circuitBreaker[any]{}
+
 func (cb *circuitBreaker[R]) ToExecutor() failsafe.PolicyExecutor[R] {
 	rpe := circuitBreakerExecutor[R]{
 		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
