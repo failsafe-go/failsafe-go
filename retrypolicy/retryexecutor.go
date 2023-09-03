@@ -69,18 +69,6 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) f
 	}
 }
 
-func (rpe *retryPolicyExecutor[R]) PostExecute(exec *failsafe.ExecutionInternal[R], result *failsafe.ExecutionResult[R]) *failsafe.ExecutionResult[R] {
-	return rpe.BasePolicyExecutor.PostExecute(exec, result)
-}
-
-func (rpe *retryPolicyExecutor[R]) IsFailure(result *failsafe.ExecutionResult[R]) bool {
-	return rpe.BasePolicyExecutor.IsFailure(result)
-}
-
-func (rpe *retryPolicyExecutor[R]) OnSuccess(result *failsafe.ExecutionResult[R]) {
-	rpe.BasePolicyExecutor.OnSuccess(result)
-}
-
 // OnFailure updates failedAttempts and retriesExceeded, and calls event listeners
 func (rpe *retryPolicyExecutor[R]) OnFailure(exec *failsafe.Execution[R], result *failsafe.ExecutionResult[R]) *failsafe.ExecutionResult[R] {
 	rpe.failedAttempts++
@@ -88,9 +76,8 @@ func (rpe *retryPolicyExecutor[R]) OnFailure(exec *failsafe.Execution[R], result
 	maxDurationExceeded := rpe.config.maxDuration != 0 && exec.GetElapsedTime() > rpe.config.maxDuration
 	rpe.retriesExceeded = maxRetriesExceeded || maxDurationExceeded
 	isAbortable := rpe.config.isAbortable(result.Result, result.Err)
-	shouldRetry := !result.Success && !isAbortable && !rpe.retriesExceeded && rpe.config.allowsRetries()
+	shouldRetry := !isAbortable && !rpe.retriesExceeded && rpe.config.allowsRetries()
 	completed := isAbortable || !shouldRetry
-	success := completed && result.Success && !isAbortable
 
 	// Call listeners
 	if rpe.config.failedAttemptListener != nil {
@@ -105,14 +92,14 @@ func (rpe *retryPolicyExecutor[R]) OnFailure(exec *failsafe.Execution[R], result
 			ExecutionStats: exec.ExecutionStats,
 		})
 	}
-	if !success && rpe.retriesExceeded && rpe.config.retriesExceededListener != nil {
+	if rpe.retriesExceeded && rpe.config.retriesExceededListener != nil {
 		rpe.config.retriesExceededListener(failsafe.ExecutionCompletedEvent[R]{
 			Result:         exec.LastResult,
 			Err:            exec.LastErr,
 			ExecutionStats: exec.ExecutionStats,
 		})
 	}
-	return result.WithComplete(completed, success)
+	return result.WithComplete(completed, false)
 }
 
 // getDelay updates lastDelay and returns the new delay
