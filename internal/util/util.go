@@ -8,24 +8,6 @@ type number interface {
 	int | int64 | time.Duration
 }
 
-func PredicateForResult[R any](predicate func(R) bool) func(r R, err error) bool {
-	return func(r R, err error) bool {
-		if err != nil {
-			return false
-		}
-		return predicate(r)
-	}
-}
-
-func PredicateForError[R any](predicate func(error) bool) func(r R, err error) bool {
-	return func(r R, err error) bool {
-		if err == nil {
-			return false
-		}
-		return predicate(err)
-	}
-}
-
 // AppliesToAny returns true if any of the biPredicates evaluate to true for the values.
 func AppliesToAny[A any, B any](biPredicates []func(A, B) bool, value1 A, value2 B) bool {
 	for _, p := range biPredicates {

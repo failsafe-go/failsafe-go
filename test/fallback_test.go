@@ -59,7 +59,7 @@ func TestShouldNotFallback(t *testing.T) {
 // Tests a fallback with failure conditions
 func TestShouldFallbackWithFailureConditions(t *testing.T) {
 	fb := fallback.BuilderWithResult[bool](true).
-		Handle(testutil.InvalidStateError{}).
+		HandleErrors(testutil.InvalidStateError{}).
 		Build()
 
 	// Fallback should not handle

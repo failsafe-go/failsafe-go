@@ -15,9 +15,8 @@ type Fallback[R any] interface {
 /*
 FallbackBuilder builds Fallback instances.
   - By default, any error is considered a failure and will be handled by the policy. You can override this by specifying your own handle
-    conditions. The default error handling condition will only be overridden by another condition that handles errors such as Handle
-    or HandleIf. Specifying a condition that only handles results, such as HandleResult or HandleResultIf will not replace the default
-    error handling condition.
+    conditions. The default error handling condition will only be overridden by another condition that handles errors such as HandleErrors
+    or HandleIf. Specifying a condition that only handles results, such as HandleResult will not replace the default error handling condition.
   - If multiple handle conditions are specified, any condition that matches an execution result or error will trigger policy handling.
 
 This type is not concurrency safe.
@@ -119,13 +118,8 @@ func BuilderWithGetFn[R any](fallbackFn func(event failsafe.ExecutionAttemptedEv
 	}
 }
 
-func (c *fallbackConfig[R]) Handle(errs ...error) FallbackBuilder[R] {
-	c.BaseFailurePolicy.Handle(errs)
-	return c
-}
-
-func (c *fallbackConfig[R]) HandleIf(predicate func(error) bool) FallbackBuilder[R] {
-	c.BaseFailurePolicy.HandleIf(predicate)
+func (c *fallbackConfig[R]) HandleErrors(errs ...error) FallbackBuilder[R] {
+	c.BaseFailurePolicy.HandleErrors(errs...)
 	return c
 }
 
@@ -134,17 +128,11 @@ func (c *fallbackConfig[R]) HandleResult(result R) FallbackBuilder[R] {
 	return c
 }
 
-func (c *fallbackConfig[R]) HandleResultIf(resultPredicate func(R) bool) FallbackBuilder[R] {
-	c.BaseFailurePolicy.HandleResultIf(resultPredicate)
+func (c *fallbackConfig[R]) HandleIf(predicate func(R, error) bool) FallbackBuilder[R] {
+	c.BaseFailurePolicy.HandleIf(predicate)
 	return c
 }
 
-func (c *fallbackConfig[R]) HandleAllIf(predicate func(R, error) bool) FallbackBuilder[R] {
-	c.BaseFailurePolicy.HandleAllIf(predicate)
-	return c
-}
-
-// OnFailedAttempt registers the listener to be called when an execution attempt fails.
 func (c *fallbackConfig[R]) OnFailedAttempt(listener func(failsafe.ExecutionAttemptedEvent[R])) FallbackBuilder[R] {
 	c.failedAttemptListener = listener
 	return c

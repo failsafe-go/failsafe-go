@@ -24,11 +24,11 @@ RetryPolicyBuilder builds RetryPolicy instances.
 
   - By default, a RetryPolicy will retry up to 2 times when any error is returned, with no delay between retry attempts.
   - You can change the default number of retry attempts and delay between retries by using the with configuration methods.
-  - By default, any error is considered a failure and will be handled by the policy. You can override this by specifying your own Handle
-    conditions. The default error handling condition will only be overridden by another condition that handles error such as Handle or
+  - By default, any error is considered a failure and will be handled by the policy. You can override this by specifying your own HandleErrors
+    conditions. The default error handling condition will only be overridden by another condition that handles error such as HandleErrors or
     HandleIf. Specifying a condition that only handles results, such as HandleResult or HandleResultIf will not replace the default error
     handling condition.
-  - If multiple Handle conditions are specified, any condition that matches an execution result or error will trigger policy handling.
+  - If multiple HandleErrors conditions are specified, any condition that matches an execution result or error will trigger policy handling.
   - The AbortOn, AbortWhen and AbortIf methods describe when retries should be aborted.
 
 This class extends failsafe.ListenablePolicyBuilder, failsafe.FailurePolicyBuilder and failsafe.DelayablePolicyBuilder which offer
@@ -41,22 +41,14 @@ type RetryPolicyBuilder[R any] interface {
 	failsafe.FailurePolicyBuilder[RetryPolicyBuilder[R], R]
 	failsafe.DelayablePolicyBuilder[RetryPolicyBuilder[R], R]
 
-	// Abort specifies that retries should be aborted if the execution error matches any of the errs using errors.Is.
-	Abort(errs ...error) RetryPolicyBuilder[R]
+	// AbortOnErrors specifies that retries should be aborted if the execution error matches any of the errs using errors.Is.
+	AbortOnErrors(errs ...error) RetryPolicyBuilder[R]
 
-	// AbortIf specifies that retries should be aborted if the predicate matches the error. errorPredicate is not invoked when no error
-	// was returned from the execution.
-	AbortIf(errorPredicate func(error) bool) RetryPolicyBuilder[R]
+	// AbortOnResult wpecifies that retries should be aborted if the execution result matches the result using reflect.DeepEqual.
+	AbortOnResult(result R) RetryPolicyBuilder[R]
 
-	// AbortResult wpecifies that retries should be aborted if the execution result matches the result using reflect.DeepEqual.
-	AbortResult(result R) RetryPolicyBuilder[R]
-
-	// AbortResultIf specifies that retries should be aborted if the predicate matches the result. resultPredicate is not invoked when an
-	// error is returned from the execution.
-	AbortResultIf(resultPredicate func(R) bool) RetryPolicyBuilder[R]
-
-	// AbortAllIf specifies that retries should be aborted if the predicate matches the result or error.
-	AbortAllIf(predicate func(R, error) bool) RetryPolicyBuilder[R]
+	// AbortIf specifies that retries should be aborted if the predicate matches the result or error.
+	AbortIf(predicate func(R, error) bool) RetryPolicyBuilder[R]
 
 	// WithMaxAttempts sets the max number of execution attempts to perform. -1 indicates no limit. This method has the same effect as
 	// setting 1 more than WithMaxRetries. For example, 2 retries equal 3 attempts.
@@ -167,7 +159,7 @@ func (c *retryPolicyConfig[R]) Build() RetryPolicy[R] {
 	}
 }
 
-func (c *retryPolicyConfig[R]) Abort(errs ...error) RetryPolicyBuilder[R] {
+func (c *retryPolicyConfig[R]) AbortOnErrors(errs ...error) RetryPolicyBuilder[R] {
 	for _, target := range errs {
 		c.abortConditions = append(c.abortConditions, func(result R, actualErr error) bool {
 			return errors.Is(actualErr, target)
@@ -176,37 +168,22 @@ func (c *retryPolicyConfig[R]) Abort(errs ...error) RetryPolicyBuilder[R] {
 	return c
 }
 
-func (c *retryPolicyConfig[R]) AbortIf(errorPredicate func(error) bool) RetryPolicyBuilder[R] {
-	c.abortConditions = append(c.abortConditions, util.PredicateForError[R](errorPredicate))
-	return c
-}
-
-func (c *retryPolicyConfig[R]) AbortResult(result R) RetryPolicyBuilder[R] {
+func (c *retryPolicyConfig[R]) AbortOnResult(result R) RetryPolicyBuilder[R] {
 	c.abortConditions = append(c.abortConditions, func(r R, err error) bool {
 		return reflect.DeepEqual(r, result)
 	})
 	return c
 }
 
-func (c *retryPolicyConfig[R]) AbortResultIf(resultPredicate func(R) bool) RetryPolicyBuilder[R] {
-	c.abortConditions = append(c.abortConditions, util.PredicateForResult(resultPredicate))
-	return c
-}
-
-func (c *retryPolicyConfig[R]) AbortAllIf(predicate func(R, error) bool) RetryPolicyBuilder[R] {
+func (c *retryPolicyConfig[R]) AbortIf(predicate func(R, error) bool) RetryPolicyBuilder[R] {
 	c.abortConditions = append(c.abortConditions, func(result R, err error) bool {
 		return predicate(result, err)
 	})
 	return c
 }
 
-func (c *retryPolicyConfig[R]) Handle(errs ...error) RetryPolicyBuilder[R] {
-	c.BaseFailurePolicy.Handle(errs)
-	return c
-}
-
-func (c *retryPolicyConfig[R]) HandleIf(predicate func(error) bool) RetryPolicyBuilder[R] {
-	c.BaseFailurePolicy.HandleIf(predicate)
+func (c *retryPolicyConfig[R]) HandleErrors(errs ...error) RetryPolicyBuilder[R] {
+	c.BaseFailurePolicy.HandleErrors(errs...)
 	return c
 }
 
@@ -215,13 +192,8 @@ func (c *retryPolicyConfig[R]) HandleResult(result R) RetryPolicyBuilder[R] {
 	return c
 }
 
-func (c *retryPolicyConfig[R]) HandleResultIf(resultPredicate func(R) bool) RetryPolicyBuilder[R] {
-	c.BaseFailurePolicy.HandleResultIf(resultPredicate)
-	return c
-}
-
-func (c *retryPolicyConfig[R]) HandleAllIf(predicate func(R, error) bool) RetryPolicyBuilder[R] {
-	c.BaseFailurePolicy.HandleAllIf(predicate)
+func (c *retryPolicyConfig[R]) HandleIf(predicate func(R, error) bool) RetryPolicyBuilder[R] {
+	c.BaseFailurePolicy.HandleIf(predicate)
 	return c
 }
 
@@ -230,7 +202,6 @@ func (c *retryPolicyConfig[R]) WithMaxAttempts(maxAttempts int) RetryPolicyBuild
 	return c
 }
 
-// WithMaxRetries configures the max number of retries to perform. A non-positive maxRetries will disable retries.
 func (c *retryPolicyConfig[R]) WithMaxRetries(maxRetries int) RetryPolicyBuilder[R] {
 	c.maxRetries = maxRetries
 	return c
@@ -241,7 +212,6 @@ func (c *retryPolicyConfig[R]) WithMaxDuration(maxDuration time.Duration) RetryP
 	return c
 }
 
-// WithDelay configures the time to delay between execution attempts.
 func (c *retryPolicyConfig[R]) WithDelay(delay time.Duration) RetryPolicyBuilder[R] {
 	c.BaseDelayablePolicy.WithDelay(delay)
 	return c
@@ -286,31 +256,26 @@ func (c *retryPolicyConfig[R]) OnFailure(listener func(event failsafe.ExecutionC
 	return c
 }
 
-// OnAbort is called when reties are aborted.
 func (c *retryPolicyConfig[R]) OnAbort(listener func(failsafe.ExecutionCompletedEvent[R])) RetryPolicyBuilder[R] {
 	c.abortListener = listener
 	return c
 }
 
-// OnFailedAttempt registers the listener to be called when an execution attempt fails.
 func (c *retryPolicyConfig[R]) OnFailedAttempt(listener func(failsafe.ExecutionAttemptedEvent[R])) RetryPolicyBuilder[R] {
 	c.failedAttemptListener = listener
 	return c
 }
 
-// OnRetriesExceeded registers the listener to be called when an execution attempt fails and all retries have been exceeded.
 func (c *retryPolicyConfig[R]) OnRetriesExceeded(listener func(failsafe.ExecutionCompletedEvent[R])) RetryPolicyBuilder[R] {
 	c.retriesExceededListener = listener
 	return c
 }
 
-// OnRetry registers the listener to be called when a retry is about to be attempted.
 func (c *retryPolicyConfig[R]) OnRetry(listener func(failsafe.ExecutionAttemptedEvent[R])) RetryPolicyBuilder[R] {
 	c.retryListener = listener
 	return c
 }
 
-// OnRetryScheduled registers the listener to be called when a retry is scheduled for execution.
 func (c *retryPolicyConfig[R]) OnRetryScheduled(listener func(failsafe.ExecutionScheduledEvent[R])) RetryPolicyBuilder[R] {
 	c.retryScheduledListener = listener
 	return c

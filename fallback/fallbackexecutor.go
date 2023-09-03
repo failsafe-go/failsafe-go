@@ -29,8 +29,10 @@ func (e *fallbackExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsa
 
 			fallbackResult, err := e.fallback.config.fn(event)
 			result = &failsafe.ExecutionResult[R]{
-				Result: fallbackResult,
-				Err:    err,
+				Result:     fallbackResult,
+				Err:        err,
+				Success:    true,
+				SuccessAll: result.SuccessAll,
 			}
 		}
 		return e.PostExecute(exec, result)

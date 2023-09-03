@@ -10,10 +10,11 @@ import (
 //
 // Part of the Failsafe-go SPI.
 type ExecutionResult[R any] struct {
-	Result   R
-	Err      error
-	Complete bool
-	Success  bool
+	Result     R
+	Err        error
+	Complete   bool
+	Success    bool
+	SuccessAll bool
 }
 
 // WithComplete returns a new ExecutionResult that is marked as Complete.
@@ -21,6 +22,7 @@ func (er *ExecutionResult[R]) WithComplete(complete bool, success bool) *Executi
 	c := *er
 	c.Complete = complete
 	c.Success = success
+	c.SuccessAll = success && c.SuccessAll
 	return &c
 }
 
@@ -29,6 +31,7 @@ func (er *ExecutionResult[R]) WithFailure() *ExecutionResult[R] {
 	c := *er
 	c.Complete = false
 	c.Success = false
+	c.SuccessAll = false
 	return &c
 }
 
