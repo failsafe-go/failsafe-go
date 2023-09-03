@@ -25,6 +25,15 @@ type Executor[R any] interface {
 	// OnComplete registers the listener to be called when an execution is complete.
 	OnComplete(listener func(ExecutionCompletedEvent[R])) Executor[R]
 
+	// OnSuccess registers the listener to be called when an execution is successful. If multiple policies, are configured, this handler is
+	// called when execution is complete and all policies succeed. If all policies do not succeed, then the OnFailure registered listener is
+	// called instead.
+	OnSuccess(listener func(ExecutionCompletedEvent[R])) Executor[R]
+
+	// OnFailure registers the listener to be called when an execution fails. This occurs when the execution fails according to some policy,
+	// and all policies have been exceeded.
+	OnFailure(listener func(ExecutionCompletedEvent[R])) Executor[R]
+
 	// Run executes the runnable until successful or until the configured policies are exceeded.
 	Run(fn func() error) (err error)
 
@@ -44,6 +53,8 @@ type executor[R any] struct {
 	policies   []Policy[R]
 	ctx        context.Context
 	onComplete func(ExecutionCompletedEvent[R])
+	onSuccess  func(ExecutionCompletedEvent[R])
+	onFailure  func(ExecutionCompletedEvent[R])
 }
 
 /*
@@ -79,6 +90,16 @@ func (e *executor[R]) WithContext(ctx context.Context) Executor[R] {
 
 func (e *executor[R]) OnComplete(listener func(ExecutionCompletedEvent[R])) Executor[R] {
 	e.onComplete = listener
+	return e
+}
+
+func (e *executor[R]) OnSuccess(listener func(ExecutionCompletedEvent[R])) Executor[R] {
+	e.onSuccess = listener
+	return e
+}
+
+func (e *executor[R]) OnFailure(listener func(ExecutionCompletedEvent[R])) Executor[R] {
+	e.onFailure = listener
 	return e
 }
 
@@ -124,15 +145,15 @@ func (e *executor[R]) GetWithExecution(fn func(exec Execution[R]) (R, error)) (R
 			ExecutionStats: ExecutionStats{},
 		},
 	}
-
 	execInternal.InitializeAttempt()
 	er := outerFn(execInternal)
+	if e.onSuccess != nil && er.SuccessAll {
+		e.onSuccess(*newExecutionCompletedEvent(er, &execInternal.ExecutionStats))
+	} else if e.onFailure != nil && !er.SuccessAll {
+		e.onFailure(*newExecutionCompletedEvent(er, &execInternal.ExecutionStats))
+	}
 	if e.onComplete != nil {
-		e.onComplete(ExecutionCompletedEvent[R]{
-			Result:         er.Result,
-			Err:            er.Err,
-			ExecutionStats: execInternal.ExecutionStats,
-		})
+		e.onComplete(*newExecutionCompletedEvent(er, &execInternal.ExecutionStats))
 	}
 	return er.Result, er.Err
 }

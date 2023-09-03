@@ -31,17 +31,12 @@ type BaseFailurePolicy[R any] struct {
 	failureConditions []func(result R, err error) bool
 }
 
-func (p *BaseFailurePolicy[R]) Handle(errs []error) {
+func (p *BaseFailurePolicy[R]) HandleErrors(errs ...error) {
 	for _, target := range errs {
 		p.failureConditions = append(p.failureConditions, func(r R, actualErr error) bool {
 			return errors.Is(actualErr, target)
 		})
 	}
-	p.errorsChecked = true
-}
-
-func (p *BaseFailurePolicy[R]) HandleIf(predicate func(error) bool) {
-	p.failureConditions = append(p.failureConditions, util.PredicateForError[R](predicate))
 	p.errorsChecked = true
 }
 
@@ -51,11 +46,7 @@ func (p *BaseFailurePolicy[R]) HandleResult(result R) {
 	})
 }
 
-func (p *BaseFailurePolicy[R]) HandleResultIf(resultPredicate func(R) bool) {
-	p.failureConditions = append(p.failureConditions, util.PredicateForResult(resultPredicate))
-}
-
-func (p *BaseFailurePolicy[R]) HandleAllIf(predicate func(R, error) bool) {
+func (p *BaseFailurePolicy[R]) HandleIf(predicate func(R, error) bool) {
 	p.failureConditions = append(p.failureConditions, predicate)
 	p.errorsChecked = true
 }

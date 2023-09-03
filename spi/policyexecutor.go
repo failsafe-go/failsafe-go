@@ -39,8 +39,8 @@ func (bpe *BasePolicyExecutor[R]) PostExecute(execInternal *failsafe.ExecutionIn
 			})
 		}
 	} else {
-		bpe.PolicyExecutor.OnSuccess(er)
 		er = er.WithComplete(true, true)
+		bpe.PolicyExecutor.OnSuccess(er)
 		if er.Complete && bpe.BaseListenablePolicy.successListener != nil {
 			bpe.BaseListenablePolicy.successListener(failsafe.ExecutionCompletedEvent[R]{
 				Result:         er.Result,

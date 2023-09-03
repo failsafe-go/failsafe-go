@@ -136,8 +136,6 @@ type rateLimiterConfig[R any] struct {
 	maxWaitTime time.Duration
 }
 
-var _ RateLimiterBuilder[any] = &rateLimiterConfig[any]{}
-
 /*
 SmoothBuilder returns a smooth RateLimiterBuilder for execution result type R and the maxExecutions and period, which control how frequently
 an execution is permitted. The individual execution rate is computed as period / maxExecutions. For example, with maxExecutions of 100 and

@@ -73,3 +73,11 @@ type ExecutionCompletedEvent[R any] struct {
 	Err error
 	ExecutionStats
 }
+
+func newExecutionCompletedEvent[R any](er *ExecutionResult[R], stats *ExecutionStats) *ExecutionCompletedEvent[R] {
+	return &ExecutionCompletedEvent[R]{
+		Result:         er.Result,
+		Err:            er.Err,
+		ExecutionStats: *stats,
+	}
+}

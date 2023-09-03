@@ -43,7 +43,7 @@ func TestShouldNotRetryOnNonRetriableFailure(t *testing.T) {
 	// Given
 	rp := retrypolicy.Builder[any]().
 		WithMaxRetries(-1).
-		Handle(testutil.ConnectionError{}).
+		HandleErrors(testutil.ConnectionError{}).
 		Build()
 
 	// When / Then

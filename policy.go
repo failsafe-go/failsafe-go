@@ -25,28 +25,20 @@ type ListenablePolicyBuilder[S any, R any] interface {
 FailurePolicyBuilder builds a Policy that allows configurable conditions to determine whether an execution is a failure.
   - By default, any error is considered a failure and will be handled by the policy. You can override this by specifying your own handle
     conditions. The default error handling condition will only be overridden by another condition that handles errors such as Handle
-    or HandleIf. Specifying a condition that only handles results, such as HandleResult or HandleResultIf will not replace the default
-    error handling condition.
+    or HandleIf. Specifying a condition that only handles results, such as HandleResult will not replace the default error handling condition.
   - If multiple handle conditions are specified, any condition that matches an execution result or error will trigger policy handling.
 */
 type FailurePolicyBuilder[S any, R any] interface {
-	// Handle specifies the errors to handle as failures. Any errors that evaluate to true for errors.Is and the execution error will be handled.
-	Handle(errors ...error) S
-
-	// HandleIf specifies that a failure has occurred if the failurePredicate matches the error.
-	HandleIf(errorPredicate func(error) bool) S
+	// HandleErrors specifies the errors to handle as failures. Any errors that evaluate to true for errors.Is and the execution error will
+	// be handled.
+	HandleErrors(errors ...error) S
 
 	// HandleResult specifies the results to handle as failures. Any result that evaluates to true for reflect.DeepEqual and the execution
 	// result will be handled. This method is only considered when a result is returned from an execution, not when an error is returned.
 	HandleResult(result R) S
 
-	// HandleResultIf specifies that a failure has occurred if the resultPredicate matches the execution result. This method is only
-	// considered when a result is returned from an execution, not when an error is returned. To handle results or errors with the same
-	// condition, use HandleAllIf.
-	HandleResultIf(resultPredicate func(R) bool) S
-
-	// HandleAllIf specifies that a failure has occurred if the predicate matches the execution result.
-	HandleAllIf(predicate func(R, error) bool) S
+	// HandleIf specifies that a failure has occurred if the predicate matches the execution result or error.
+	HandleIf(predicate func(R, error) bool) S
 }
 
 // DelayFunction returns a duration to delay for, given an Execution.

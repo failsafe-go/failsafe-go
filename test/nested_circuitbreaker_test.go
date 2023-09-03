@@ -12,8 +12,8 @@ import (
 
 // Tests that multiple circuit breakers handle failures as expected, regardless of order.
 func TestNestedCircuitBreakers(t *testing.T) {
-	innerCb := circuitbreaker.Builder[any]().Handle(testutil.InvalidArgumentError{}).Build()
-	outerCb := circuitbreaker.Builder[any]().Handle(testutil.InvalidStateError{}).Build()
+	innerCb := circuitbreaker.Builder[any]().HandleErrors(testutil.InvalidArgumentError{}).Build()
+	outerCb := circuitbreaker.Builder[any]().HandleErrors(testutil.InvalidStateError{}).Build()
 
 	failsafe.With[any](outerCb, innerCb).Run(testutil.RunFn(testutil.InvalidArgumentError{}))
 	assert.True(t, innerCb.IsOpen())
@@ -28,8 +28,8 @@ func TestNestedCircuitBreakers(t *testing.T) {
 // CircuitBreaker -> CircuitBreaker
 func TestCircuitBreakerCircuitBreaker(t *testing.T) {
 	// Given
-	cb1 := circuitbreaker.Builder[any]().Handle(testutil.InvalidStateError{}).Build()
-	cb2 := circuitbreaker.Builder[any]().Handle(testutil.InvalidArgumentError{}).Build()
+	cb1 := circuitbreaker.Builder[any]().HandleErrors(testutil.InvalidStateError{}).Build()
+	cb2 := circuitbreaker.Builder[any]().HandleErrors(testutil.InvalidArgumentError{}).Build()
 
 	testutil.TestRunFailure[any](t, failsafe.With[any](cb2, cb1),
 		func(execution failsafe.Execution[any]) error {

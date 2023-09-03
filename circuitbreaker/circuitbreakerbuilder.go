@@ -13,7 +13,7 @@ CircuitBreakerBuilder builds CircuitBreaker instances.
 
   - By default, any error is considered a failure and will be handled by the policy. You can override this by specifying your own handle
     conditions. The default error handling condition will only be overridden by another condition that handles error such as
-    Handle or HandleIf. Specifying a condition that only handles results, such as HandleResult or HandleResultIf will not replace the default
+    HandleErrors or HandleIf. Specifying a condition that only handles results, such as HandleResult or HandleResultIf will not replace the default
     error handling condition.
   - If multiple handle conditions are specified, any condition that matches an execution result or error will trigger policy handling.
 
@@ -141,13 +141,8 @@ func (c *circuitBreakerConfig[R]) Build() CircuitBreaker[R] {
 	return breaker
 }
 
-func (c *circuitBreakerConfig[R]) Handle(errs ...error) CircuitBreakerBuilder[R] {
-	c.BaseFailurePolicy.Handle(errs)
-	return c
-}
-
-func (c *circuitBreakerConfig[R]) HandleIf(predicate func(error) bool) CircuitBreakerBuilder[R] {
-	c.BaseFailurePolicy.HandleIf(predicate)
+func (c *circuitBreakerConfig[R]) HandleErrors(errs ...error) CircuitBreakerBuilder[R] {
+	c.BaseFailurePolicy.HandleErrors(errs...)
 	return c
 }
 
@@ -156,13 +151,8 @@ func (c *circuitBreakerConfig[R]) HandleResult(result R) CircuitBreakerBuilder[R
 	return c
 }
 
-func (c *circuitBreakerConfig[R]) HandleResultIf(resultPredicate func(R) bool) CircuitBreakerBuilder[R] {
-	c.BaseFailurePolicy.HandleResultIf(resultPredicate)
-	return c
-}
-
-func (c *circuitBreakerConfig[R]) HandleAllIf(predicate func(R, error) bool) CircuitBreakerBuilder[R] {
-	c.BaseFailurePolicy.HandleAllIf(predicate)
+func (c *circuitBreakerConfig[R]) HandleIf(predicate func(R, error) bool) CircuitBreakerBuilder[R] {
+	c.BaseFailurePolicy.HandleIf(predicate)
 	return c
 }
 

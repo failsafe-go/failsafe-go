@@ -25,7 +25,7 @@ func TestPanicInCircuitBreakerDelayFunction(t *testing.T) {
 func TestShouldDelayCircuitBreaker(t *testing.T) {
 	delays := 0
 	breaker := circuitbreaker.Builder[int]().
-		HandleResultIf(func(i int) bool {
+		HandleIf(func(i int, _ error) bool {
 			return i > 0
 		}).
 		WithDelayFn(func(exec *failsafe.Execution[int]) time.Duration {
