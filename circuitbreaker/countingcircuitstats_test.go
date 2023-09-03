@@ -6,6 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var _ circuitStats = &countingCircuitStats{}
+
 func TestShouldReturnUninitializedValues(t *testing.T) {
 	stats := newCountingCircuitStats(100)
 	for i := 0; i < 100; i++ {
