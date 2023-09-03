@@ -9,7 +9,7 @@ import (
 var _ CircuitBreaker[any] = &circuitBreaker[any]{}
 
 func TestShouldDefaultDelay(t *testing.T) {
-	breaker := OfDefaults[any]()
+	breaker := WithDefaults[any]()
 	breaker.RecordFailure()
 	assert.True(t, breaker.IsOpen())
 }

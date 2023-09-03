@@ -12,7 +12,7 @@ import (
 var _ RetryPolicy[any] = &retryPolicy[any]{}
 
 func TestIsAbortableNil(t *testing.T) {
-	rp := OfDefaults[any]().(*retryPolicy[any])
+	rp := WithDefaults[any]().(*retryPolicy[any])
 
 	assert.False(t, rp.config.isAbortable(nil, nil))
 }

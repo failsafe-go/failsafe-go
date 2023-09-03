@@ -111,9 +111,9 @@ type circuitBreakerConfig[R any] struct {
 
 var _ CircuitBreakerBuilder[any] = &circuitBreakerConfig[any]{}
 
-// OfDefaults creates a count based CircuitBreaker for execution result type R that opens after a single failure, closes after a single
+// WithDefaults creates a count based CircuitBreaker for execution result type R that opens after a single failure, closes after a single
 // success, and has a 1 minute delay by default. To configure additional options on a CircuitBreaker, use Builder() instead.
-func OfDefaults[R any]() CircuitBreaker[R] {
+func WithDefaults[R any]() CircuitBreaker[R] {
 	return Builder[R]().Build()
 }
 
