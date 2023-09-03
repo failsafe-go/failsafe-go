@@ -1,6 +1,7 @@
 package ratelimiter
 
 import (
+	"sync"
 	"time"
 
 	"failsafe/internal/util"
@@ -17,13 +18,18 @@ type rateLimiterStats interface {
 type smoothRateLimiterStats[R any] struct {
 	config    *rateLimiterConfig[R]
 	stopwatch util.Stopwatch
+	mtx       sync.Mutex
 
 	// The amount of time, relative to the start time, that the next permit will be free.
 	// Will be a multiple of the config.interval.
+	// Guarded by mtx
 	nextFreePermitTime time.Duration
 }
 
 func (s *smoothRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWaitTime time.Duration) time.Duration {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
 	currentTime := s.stopwatch.ElapsedTime()
 	requestedPermitTime := s.config.interval * time.Duration(requestedPermits)
 	var waitTime time.Duration
@@ -54,13 +60,18 @@ func (s *smoothRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWait
 type burstyRateLimiterStats[R any] struct {
 	config    *rateLimiterConfig[R]
 	stopwatch util.Stopwatch
+	mtx       sync.Mutex
 
 	// Available permits. Can be negative during a deficit.
+	// Guarded by mtx
 	availablePermits int
 	currentPeriod    int
 }
 
 func (s *burstyRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWaitTime time.Duration) time.Duration {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
 	currentTime := s.stopwatch.ElapsedTime()
 	newCurrentPeriod := int(currentTime / s.config.period)
 
