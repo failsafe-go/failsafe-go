@@ -19,7 +19,7 @@ type Executor[R any] interface {
 	//     Fallback(RetryPolicy(CircuitBreaker(func)))
 	Compose(innerPolicy Policy[R]) Executor[R]
 
-	// WithContext configures the ctx to watch for cancelled executions.
+	// WithContext configures the ctx to use for cancelling executions.
 	WithContext(ctx context.Context) Executor[R]
 
 	// OnComplete registers the listener to be called when an execution is complete.

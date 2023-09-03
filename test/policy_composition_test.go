@@ -73,7 +73,7 @@ func TestFallbackRetryPolicy(t *testing.T) {
 		3, 3, true)
 
 	// Given
-	fb = fallback.OfGetFn[bool](func(e failsafe.ExecutionAttemptedEvent[bool]) (bool, error) {
+	fb = fallback.OfFn[bool](func(e failsafe.ExecutionAttemptedEvent[bool]) (bool, error) {
 		assert.False(t, e.LastResult)
 		assert.ErrorIs(t, testutil.InvalidStateError{}, e.LastErr)
 		return true, nil
@@ -106,7 +106,7 @@ func TestRetryPolicyFallback(t *testing.T) {
 // Tests fallback with a circuit breaker that is closed.
 func TestFallbackCircuitBreaker(t *testing.T) {
 	// Given
-	fb := fallback.OfGetFn(func(e failsafe.ExecutionAttemptedEvent[bool]) (bool, error) {
+	fb := fallback.OfFn(func(e failsafe.ExecutionAttemptedEvent[bool]) (bool, error) {
 		assert.False(t, e.LastResult)
 		assert.ErrorIs(t, testutil.InvalidStateError{}, e.LastErr)
 		return true, nil
@@ -124,7 +124,7 @@ func TestFallbackCircuitBreaker(t *testing.T) {
 // Tests fallback with a circuit breaker that is open.
 func TestFallbackCircuitBreakerOpen(t *testing.T) {
 	// Given
-	fb := fallback.OfGetFn(func(e failsafe.ExecutionAttemptedEvent[bool]) (bool, error) {
+	fb := fallback.OfFn(func(e failsafe.ExecutionAttemptedEvent[bool]) (bool, error) {
 		assert.False(t, e.LastResult)
 		assert.ErrorIs(t, circuitbreaker.ErrCircuitBreakerOpen, e.LastErr)
 		return false, nil
