@@ -27,11 +27,11 @@ const (
 
 /*
 CircuitBreaker is a policy that temporarily blocks execution when a configured number of failures are exceeded.
-Circuit breakers have three states: closed, open, and half-open. When a circuit breaker is in the closed (initial) state, executions are
-allowed. If a configurable number of failures occur, optionally over some time period, the circuit breaker transitions to the open state.
-In the open state a circuit breaker will fail executions with ErrCircuitBreakerOpen. After a configurable delay, the circuit breaker will
-transition to a half-open state. In the half-open state a configurable number of trial executions will be allowed, after which the circuit
-breaker will transition back to closed or open depending on how many were successful.
+Circuit breakers have three states: closed, open, and half-open. When a circuit breaker is in the ClosedState (default), executions are
+allowed. If a configurable number of failures occur, optionally over some time period, the circuit breaker transitions to OpenState.
+In the OpenState a circuit breaker will fail executions with ErrCircuitBreakerOpen. After a configurable delay, the circuit breaker will
+transition to HalfOpenState. In the HalfOpenState a configurable number of trial executions will be allowed, after which the circuit
+breaker will transition to either ClosedState or OpenState depending on how many were successful.
 
 A circuit breaker can be count based or time based:
 
@@ -183,8 +183,7 @@ func (cb *circuitBreaker[R]) IsOpen() bool {
 }
 
 func (cb *circuitBreaker[R]) IsHalfOpen() bool {
-	s := cb.GetState()
-	return s == HalfOpenState
+	return cb.GetState() == HalfOpenState
 }
 
 func (cb *circuitBreaker[R]) GetExecutionCount() uint {
@@ -248,7 +247,8 @@ func (cb *circuitBreaker[R]) RecordSuccess() {
 }
 
 // Transitions to the newState if not already in that state and calls listener after transitioning.
-// Requires locking externally
+//
+// Requires external locking.
 func (cb *circuitBreaker[R]) transitionTo(newState State, exec *failsafe.Execution[R], listener func(StateChangedEvent)) {
 	transitioned := false
 	currentState := cb.state.getState()
@@ -275,29 +275,30 @@ func (cb *circuitBreaker[R]) transitionTo(newState State, exec *failsafe.Executi
 	}
 }
 
-// Requires external locking
+// Requires external locking.
 func (cb *circuitBreaker[R]) tryAcquirePermit() bool {
 	return cb.state.tryAcquirePermit()
 }
 
 // Opens the circuit breaker and considers the execution when computing the delay before the circuit breaker
 // will transition to half open.
-// Requires external locking
+//
+// Requires external locking.
 func (cb *circuitBreaker[R]) open(execution *failsafe.Execution[R]) {
 	cb.transitionTo(OpenState, execution, cb.config.openListener)
 }
 
-// Requires external locking
+// Requires external locking.
 func (cb *circuitBreaker[R]) close() {
 	cb.transitionTo(ClosedState, nil, cb.config.closeListener)
 }
 
-// Requires external locking
+// Requires external locking.
 func (cb *circuitBreaker[R]) halfOpen() {
 	cb.transitionTo(HalfOpenState, nil, cb.config.halfOpenListener)
 }
 
-// Requires external locking
+// Requires external locking.
 func (cb *circuitBreaker[R]) recordResult(result R, err error) {
 	if cb.config.IsFailure(result, err) {
 		cb.recordFailure(nil)
@@ -306,13 +307,13 @@ func (cb *circuitBreaker[R]) recordResult(result R, err error) {
 	}
 }
 
-// Requires external locking
+// Requires external locking.
 func (cb *circuitBreaker[R]) recordSuccess() {
 	cb.state.getStats().recordSuccess()
 	cb.state.checkThresholdAndReleasePermit(nil)
 }
 
-// Requires external locking
+// Requires external locking.
 func (cb *circuitBreaker[R]) recordFailure(exec *failsafe.Execution[R]) {
 	cb.state.getStats().recordFailure()
 	cb.state.checkThresholdAndReleasePermit(exec)
