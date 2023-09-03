@@ -60,6 +60,6 @@ func TestBurstyAcquirePermits(t *testing.T) {
 func newBurstyLimiterStats(maxPermits int, period time.Duration) (*burstyRateLimiterStats[any], *testutil.TestStopwatch) {
 	stats := BurstyBuilder[any](maxPermits, period).Build().(*rateLimiter[any]).stats.(*burstyRateLimiterStats[any])
 	stopwatch := &testutil.TestStopwatch{}
-	stats.Stopwatch = stopwatch
+	stats.stopwatch = stopwatch
 	return stats, stopwatch
 }

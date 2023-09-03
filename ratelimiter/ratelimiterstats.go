@@ -52,8 +52,8 @@ func (s *smoothRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWait
 // cause wait times for callers that can be several periods long, depending on the size of the deficit and the number of
 // requested permits.
 type burstyRateLimiterStats[R any] struct {
-	config *rateLimiterConfig[R]
-	util.Stopwatch
+	config    *rateLimiterConfig[R]
+	stopwatch util.Stopwatch
 
 	// Available permits. Can be negative during a deficit.
 	availablePermits int
@@ -61,7 +61,7 @@ type burstyRateLimiterStats[R any] struct {
 }
 
 func (s *burstyRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWaitTime time.Duration) time.Duration {
-	currentTime := s.Stopwatch.ElapsedTime()
+	currentTime := s.stopwatch.ElapsedTime()
 	newCurrentPeriod := int(currentTime / s.config.period)
 
 	// Update current period and available permits

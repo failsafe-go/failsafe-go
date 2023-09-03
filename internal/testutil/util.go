@@ -3,12 +3,7 @@ package testutil
 import (
 	"reflect"
 	"sync/atomic"
-	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
-
-	"failsafe"
 )
 
 type TestClock struct {
@@ -27,6 +22,12 @@ func (t *TestStopwatch) ElapsedTime() time.Duration {
 	return time.Duration(t.CurrentTime)
 }
 
+func Timed(fn func()) time.Duration {
+	startTime := time.Now()
+	fn()
+	return time.Now().Sub(startTime)
+}
+
 type Waiter struct {
 	count int32
 	done  chan struct{}
@@ -36,10 +37,6 @@ func NewWaiter() *Waiter {
 	return &Waiter{
 		done: make(chan struct{}),
 	}
-}
-
-func (w *Waiter) AssertEqual(t *testing.T, expected, actual interface{}, msgAndArgs ...interface{}) bool {
-	return assert.Equal(t, expected, actual, msgAndArgs)
 }
 
 func (w *Waiter) Await(expectedResumes int) {
@@ -75,17 +72,5 @@ func GetType(myvar interface{}) string {
 		return t.Elem().Name()
 	} else {
 		return t.Name()
-	}
-}
-
-func ErrorNTimesThenReturn[R any](err error, errorTimes int, result R) func(exec failsafe.Execution[R]) (R, error) {
-	counter := 0
-	return func(exec failsafe.Execution[R]) (R, error) {
-		if counter < errorTimes {
-			counter++
-			defaultResult := *(new(R))
-			return defaultResult, err
-		}
-		return result, nil
 	}
 }
