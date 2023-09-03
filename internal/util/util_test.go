@@ -5,7 +5,31 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"failsafe/internal/testutil"
 )
+
+func TestPredicateForResult(t *testing.T) {
+	handled := false
+	predicate := PredicateForResult(func(r any) bool {
+		handled = true
+		return true
+	})
+
+	assert.False(t, predicate("test", testutil.InvalidStateError{}))
+	assert.False(t, handled)
+}
+
+func TestPredicateForError(t *testing.T) {
+	handled := false
+	predicate := PredicateForError[any](func(err error) bool {
+		handled = true
+		return true
+	})
+
+	assert.False(t, predicate("test", nil))
+	assert.False(t, handled)
+}
 
 func TestRoundDown(t *testing.T) {
 	assert.Equal(t, time.Duration(0), RoundDown(0, 20))

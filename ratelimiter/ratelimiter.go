@@ -217,7 +217,7 @@ func (c *rateLimiterConfig[R]) Build() RateLimiter[R] {
 		config: c,
 		stats: &burstyRateLimiterStats[R]{
 			config:           c,
-			Stopwatch:        util.NewStopwatch(),
+			stopwatch:        util.NewStopwatch(),
 			availablePermits: c.periodPermits,
 		},
 	}
@@ -227,8 +227,6 @@ type rateLimiter[R any] struct {
 	config *rateLimiterConfig[R]
 	stats  rateLimiterStats
 }
-
-var _ RateLimiter[any] = &rateLimiter[any]{}
 
 func (r *rateLimiter[R]) AcquirePermit() {
 	r.AcquirePermits(1)

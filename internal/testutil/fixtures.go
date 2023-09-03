@@ -80,3 +80,15 @@ func GetWithExecutionFn[R any](result R, err error) func(exec failsafe.Execution
 		return result, err
 	}
 }
+
+func ErrorNTimesThenReturn[R any](err error, errorTimes int, result R) func(exec failsafe.Execution[R]) (R, error) {
+	counter := 0
+	return func(exec failsafe.Execution[R]) (R, error) {
+		if counter < errorTimes {
+			counter++
+			defaultResult := *(new(R))
+			return defaultResult, err
+		}
+		return result, nil
+	}
+}

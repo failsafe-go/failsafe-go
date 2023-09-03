@@ -9,7 +9,7 @@ import (
 	"failsafe/internal/util"
 )
 
-// Stats for a CircuitBreaker.
+// stats for a CircuitBreaker.
 type circuitStats interface {
 	getExecutionCount() uint
 	getFailureCount() uint

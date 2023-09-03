@@ -41,6 +41,23 @@ type RetryPolicyBuilder[R any] interface {
 	failsafe.FailurePolicyBuilder[RetryPolicyBuilder[R], R]
 	failsafe.DelayablePolicyBuilder[RetryPolicyBuilder[R], R]
 
+	// Abort specifies that retries should be aborted if the execution error matches any of the errs using errors.Is.
+	Abort(errs ...error) RetryPolicyBuilder[R]
+
+	// AbortIf specifies that retries should be aborted if the predicate matches the error. errorPredicate is not invoked when no error
+	// was returned from the execution.
+	AbortIf(errorPredicate func(error) bool) RetryPolicyBuilder[R]
+
+	// AbortResult wpecifies that retries should be aborted if the execution result matches the result using reflect.DeepEqual.
+	AbortResult(result R) RetryPolicyBuilder[R]
+
+	// AbortResultIf specifies that retries should be aborted if the predicate matches the result. resultPredicate is not invoked when an
+	// error is returned from the execution.
+	AbortResultIf(resultPredicate func(R) bool) RetryPolicyBuilder[R]
+
+	// AbortAllIf specifies that retries should be aborted if the predicate matches the result or error.
+	AbortAllIf(predicate func(R, error) bool) RetryPolicyBuilder[R]
+
 	// WithMaxAttempts sets the max number of execution attempts to perform. -1 indicates no limit. This method has the same effect as
 	// setting 1 more than WithMaxRetries. For example, 2 retries equal 3 attempts.
 	WithMaxAttempts(maxAttempts int) RetryPolicyBuilder[R]
@@ -150,28 +167,35 @@ func (c *retryPolicyConfig[R]) Build() RetryPolicy[R] {
 	}
 }
 
-func (c *retryPolicyConfig[R]) AbortOn(errs ...error) RetryPolicyBuilder[R] {
-	for _, err := range errs {
+func (c *retryPolicyConfig[R]) Abort(errs ...error) RetryPolicyBuilder[R] {
+	for _, target := range errs {
 		c.abortConditions = append(c.abortConditions, func(result R, actualErr error) bool {
-			return errors.Is(actualErr, err)
+			return errors.Is(actualErr, target)
 		})
 	}
 	return c
 }
 
-func (c *retryPolicyConfig[R]) AbortIf(predicate func(error) bool) RetryPolicyBuilder[R] {
-	c.abortConditions = append(c.abortConditions, func(result R, err error) bool {
-		if err == nil {
-			return false
-		}
-		return predicate(err)
+func (c *retryPolicyConfig[R]) AbortIf(errorPredicate func(error) bool) RetryPolicyBuilder[R] {
+	c.abortConditions = append(c.abortConditions, util.PredicateForError[R](errorPredicate))
+	return c
+}
+
+func (c *retryPolicyConfig[R]) AbortResult(result R) RetryPolicyBuilder[R] {
+	c.abortConditions = append(c.abortConditions, func(r R, err error) bool {
+		return reflect.DeepEqual(r, result)
 	})
 	return c
 }
 
-func (c *retryPolicyConfig[R]) AbortWhen(result R) RetryPolicyBuilder[R] {
-	c.abortConditions = append(c.abortConditions, func(r R, err error) bool {
-		return reflect.DeepEqual(r, result)
+func (c *retryPolicyConfig[R]) AbortResultIf(resultPredicate func(R) bool) RetryPolicyBuilder[R] {
+	c.abortConditions = append(c.abortConditions, util.PredicateForResult(resultPredicate))
+	return c
+}
+
+func (c *retryPolicyConfig[R]) AbortAllIf(predicate func(R, error) bool) RetryPolicyBuilder[R] {
+	c.abortConditions = append(c.abortConditions, func(result R, err error) bool {
+		return predicate(result, err)
 	})
 	return c
 }
