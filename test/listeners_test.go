@@ -1,6 +1,7 @@
 package test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -306,6 +307,50 @@ func TestRetryPolicyOnScheduledRetry(t *testing.T) {
 	})
 }
 
+// Asserts which listeners are called when a panic occurs.
+func TestListenersOnPanic(t *testing.T) {
+	// Given - Fail 2 times then panic
+	panicValue := "test panic"
+	stub := testutil.ErrorNTimesThenPanic[bool](testutil.InvalidStateError{}, 2, panicValue)
+	rpBuilder := retrypolicy.Builder[bool]().WithMaxAttempts(10)
+	cbBuilder := circuitbreaker.Builder[bool]().WithDelay(0)
+	fbBuilder := fallback.BuilderWithResult(true)
+	stats := &listenerStats{}
+	registerRpListeners(stats, rpBuilder)
+	registerCbListeners(stats, cbBuilder)
+	registerFbListeners(stats, fbBuilder)
+	executor := failsafe.With[bool](fbBuilder.Build(), rpBuilder.Build(), cbBuilder.Build())
+	registerExecutorListeners(stats, executor)
+
+	// When
+	assert.PanicsWithValue(t, panicValue, func() {
+		executor.GetWithExecution(stub)
+	})
+
+	// Then
+	assert.Equal(t, 0, stats.abort)
+	assert.Equal(t, 2, stats.rpFailedAttempt) // Failed attempt is currently skipped on a panic
+	assert.Equal(t, 0, stats.retriesExceeded)
+	assert.Equal(t, 2, stats.retryScheduled)
+	assert.Equal(t, 2, stats.retry)
+	assert.Equal(t, 0, stats.rpSuccess) // Success listener is not called on a panic
+	assert.Equal(t, 0, stats.rpFailure) // Failure listener is not called on a panic
+
+	assert.Equal(t, 2, stats.open)
+	assert.Equal(t, 2, stats.halfOpen)
+	assert.Equal(t, 0, stats.close)
+	assert.Equal(t, 0, stats.cbSuccess)
+	assert.Equal(t, 2, stats.cbFailure)
+
+	assert.Equal(t, 0, stats.fbFailedAttempt) // Failed attempt listener will not be called since the fallback is currently skipped on a panic
+	assert.Equal(t, 0, stats.fbSuccess)       // Success listener is not called on a panic
+	assert.Equal(t, 0, stats.fbFailure)       // Failure listener is not called on a panic
+
+	assert.Equal(t, 0, stats.complete) // Complete listener is not called on a panic
+	assert.Equal(t, 0, stats.success)  // Success listener is not called on a panic
+	assert.Equal(t, 0, stats.failure)  // Failure listener is not called on a panic
+}
+
 type listenerStats struct {
 	// RetryPolicy
 	abort           int
@@ -342,6 +387,7 @@ func registerRpListeners[R any](stats *listenerStats, rpBuilder retrypolicy.Retr
 	}).OnRetriesExceeded(func(f failsafe.ExecutionCompletedEvent[R]) {
 		stats.retriesExceeded++
 	}).OnRetry(func(f failsafe.ExecutionAttemptedEvent[R]) {
+		fmt.Println("RetryPolicy retry")
 		stats.retry++
 	}).OnRetryScheduled(func(f failsafe.ExecutionScheduledEvent[R]) {
 		stats.retryScheduled++
@@ -354,10 +400,13 @@ func registerRpListeners[R any](stats *listenerStats, rpBuilder retrypolicy.Retr
 
 func registerCbListeners[R any](stats *listenerStats, cbBuilder circuitbreaker.CircuitBreakerBuilder[R]) {
 	cbBuilder.OnOpen(func(event circuitbreaker.StateChangedEvent) {
+		fmt.Println("CircuitBreaker open")
 		stats.open++
 	}).OnClose(func(event circuitbreaker.StateChangedEvent) {
+		fmt.Println("CircuitBreaker closed")
 		stats.close++
 	}).OnHalfOpen(func(event circuitbreaker.StateChangedEvent) {
+		fmt.Println("CircuitBreaker half-open")
 		stats.halfOpen++
 	}).OnSuccess(func(event failsafe.ExecutionCompletedEvent[R]) {
 		stats.cbSuccess++
