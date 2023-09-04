@@ -1,4 +1,5 @@
-package rptesting
+// Package retrypolicy_testutil is needed to avoid a circular dependency with the spi package.
+package retrypolicy_testutil
 
 import (
 	"fmt"
@@ -9,14 +10,18 @@ import (
 )
 
 func WithRetryStats[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *testutil.Stats) retrypolicy.RetryPolicyBuilder[R] {
-	return WithRetryStatsAndLogs(rp, stats, false)
+	return withRetryStatsAndLogs(rp, stats, false)
 }
 
 func WithRetryLogs[R any](rp retrypolicy.RetryPolicyBuilder[R]) retrypolicy.RetryPolicyBuilder[R] {
-	return WithRetryStatsAndLogs(rp, &testutil.Stats{}, true)
+	return withRetryStatsAndLogs(rp, &testutil.Stats{}, true)
 }
 
-func WithRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *testutil.Stats, withLogging bool) retrypolicy.RetryPolicyBuilder[R] {
+func WithRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *testutil.Stats) retrypolicy.RetryPolicyBuilder[R] {
+	return withRetryStatsAndLogs(rp, stats, true)
+}
+
+func withRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *testutil.Stats, withLogging bool) retrypolicy.RetryPolicyBuilder[R] {
 	rp.OnFailedAttempt(func(e failsafe.ExecutionAttemptedEvent[R]) {
 		stats.ExecutionCount++
 		stats.FailedAttemptCount++

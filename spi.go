@@ -39,19 +39,60 @@ func (er *ExecutionResult[R]) WithFailure() *ExecutionResult[R] {
 // Part of the Failsafe-go SPI.
 type ExecutionInternal[R any] struct {
 	Execution[R]
+	// Guarded by mtx
+	attemptRecorded bool
 }
 
-// InitializeAttempt marks the beginning of an execution attempt.
-func (e *ExecutionInternal[R]) InitializeAttempt() {
+// InitializeAttempt prepares a new execution attempt, returning false if the attempt cannot be initialized since it was canceled.
+func (e *ExecutionInternal[R]) InitializeAttempt(policyExecutor PolicyExecutor[R]) bool {
+	// Lock to guard against a race with a Timeout canceling the execution
+	e.mtx.Lock()
+	defer e.mtx.Unlock()
+	if policyExecutor != nil && e.isCancelled(policyExecutor) {
+		return false
+	}
+	e.attemptRecorded = false
 	e.Attempts++
 	e.AttemptStartTime = time.Now()
+	e.canceledIndex = -1
+	return true
 }
 
-// recordAttempt records the result of an execution attempt.
-func (e *ExecutionInternal[R]) recordAttempt(result *ExecutionResult[R]) {
-	e.Executions++
-	e.LastResult = result.Result
-	e.LastErr = result.Err
+// Record records the result of an execution attempt.
+func (e *ExecutionInternal[R]) Record(result *ExecutionResult[R]) {
+	e.mtx.Lock()
+	defer e.mtx.Unlock()
+	e.record(result)
+}
+
+// Cancel marks the execution as having been cancelled by the policyExecutor, which will also cancel pending executions of any inner
+// policies of the policyExecutor, and also records the result. Outer policies of the policyExecutor will be unaffected.
+func (e *ExecutionInternal[R]) Cancel(policyExecutor PolicyExecutor[R], result *ExecutionResult[R]) {
+	e.mtx.Lock()
+	defer e.mtx.Unlock()
+	e.canceledIndex = policyExecutor.GetPolicyIndex()
+	e.record(result)
+}
+
+// IsCanceled returns whether the execution is considered canceled for the policyExecutor.
+func (e *ExecutionInternal[R]) IsCanceled(policyExecutor PolicyExecutor[R]) bool {
+	e.mtx.Lock()
+	defer e.mtx.Unlock()
+	return e.isCancelled(policyExecutor)
+}
+
+// Requires locking externally.
+func (e *ExecutionInternal[R]) isCancelled(policyExecutor PolicyExecutor[R]) bool {
+	return e.canceledIndex > policyExecutor.GetPolicyIndex() || (e.Context != nil && e.Context.Err() != nil)
+}
+
+// Requires locking externally.
+func (e *ExecutionInternal[R]) record(result *ExecutionResult[R]) {
+	if !e.attemptRecorded {
+		e.attemptRecorded = true
+		e.LastResult = result.Result
+		e.LastErr = result.Err
+	}
 }
 
 // ExecutionHandler returns an ExecutionResult for an ExecutionInternal.
@@ -82,4 +123,8 @@ type PolicyExecutor[R any] interface {
 	// OnFailure performs post-execution handling for a result that is considered a failure according to IsFailure, possibly creating a new
 	// result, else returning the original result.
 	OnFailure(exec *Execution[R], result *ExecutionResult[R]) *ExecutionResult[R]
+
+	// GetPolicyIndex returns the index of the policy relative to other policies in a composition, where the innermost policy in a
+	// composition has an index of 0.
+	GetPolicyIndex() int
 }

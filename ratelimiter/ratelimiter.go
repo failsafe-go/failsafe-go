@@ -10,6 +10,7 @@ import (
 	"failsafe/spi"
 )
 
+// ErrRateLimitExceeded is returned when an execution exceeds a configured rate limit.
 var ErrRateLimitExceeded = errors.New("rate limit exceeded")
 
 /*
@@ -271,13 +272,14 @@ func (r *rateLimiter[R]) TryReservePermits(requestedPermits int, maxWaitTime tim
 	return r.stats.acquirePermits(requestedPermits, maxWaitTime)
 }
 
-func (r *rateLimiter[R]) ToExecutor() failsafe.PolicyExecutor[R] {
-	rle := rateLimiterExecutor[R]{
+func (r *rateLimiter[R]) ToExecutor(policyIndex int) failsafe.PolicyExecutor[R] {
+	rle := &rateLimiterExecutor[R]{
 		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
 			BaseListenablePolicy: r.config.BaseListenablePolicy,
+			PolicyIndex:          policyIndex,
 		},
 		rateLimiter: r,
 	}
-	rle.PolicyExecutor = &rle
-	return &rle
+	rle.PolicyExecutor = rle
+	return rle
 }

@@ -56,7 +56,9 @@ func TestShouldComputeDelay(t *testing.T) {
 	}
 
 	assert.Equal(t, expected, policy.ComputeDelay(&failsafe.Execution[any]{
-		LastResult: true,
+		ExecutionAttempt: failsafe.ExecutionAttempt[any]{
+			LastResult: true,
+		},
 	}))
 	assert.Equal(t, time.Duration(-1), policy.ComputeDelay(nil))
 }

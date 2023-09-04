@@ -29,7 +29,7 @@ type FallbackBuilder[R any] interface {
 	// OnFailure to handle a failure in a fallback function itself.
 	OnFailedAttempt(listener func(failsafe.ExecutionAttemptedEvent[R])) FallbackBuilder[R]
 
-	// Build returns new Fallback using the builder's configuration.
+	// Build returns a new Fallback using the builder's configuration.
 	Build() Fallback[R]
 }
 
@@ -124,14 +124,15 @@ func (c *fallbackConfig[R]) Build() Fallback[R] {
 	}
 }
 
-func (fb *fallback[R]) ToExecutor() failsafe.PolicyExecutor[R] {
-	rpe := fallbackExecutor[R]{
+func (fb *fallback[R]) ToExecutor(policyIndex int) failsafe.PolicyExecutor[R] {
+	fbe := &fallbackExecutor[R]{
 		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
 			BaseListenablePolicy: fb.config.BaseListenablePolicy,
 			BaseFailurePolicy:    fb.config.BaseFailurePolicy,
+			PolicyIndex:          policyIndex,
 		},
 		fallback: fb,
 	}
-	rpe.PolicyExecutor = &rpe
-	return &rpe
+	fbe.PolicyExecutor = fbe
+	return fbe
 }

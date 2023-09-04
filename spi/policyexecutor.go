@@ -9,6 +9,8 @@ type BasePolicyExecutor[R any] struct {
 	failsafe.PolicyExecutor[R]
 	*BaseListenablePolicy[R]
 	*BaseFailurePolicy[R]
+	// Index of the policy relative to other policies in a composition, innermost first
+	PolicyIndex int
 }
 
 var _ failsafe.PolicyExecutor[any] = &BasePolicyExecutor[any]{}
@@ -18,25 +20,25 @@ func (bpe *BasePolicyExecutor[R]) PreExecute(_ *failsafe.ExecutionInternal[R]) *
 }
 
 func (bpe *BasePolicyExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsafe.ExecutionHandler[R] {
-	return func(execInternal *failsafe.ExecutionInternal[R]) *failsafe.ExecutionResult[R] {
-		result := bpe.PolicyExecutor.PreExecute(execInternal)
+	return func(exec *failsafe.ExecutionInternal[R]) *failsafe.ExecutionResult[R] {
+		result := bpe.PolicyExecutor.PreExecute(exec)
 		if result != nil {
 			return result
 		}
 
-		result = innerFn(execInternal)
-		return bpe.PostExecute(execInternal, result)
+		result = innerFn(exec)
+		return bpe.PolicyExecutor.PostExecute(exec, result)
 	}
 }
 
-func (bpe *BasePolicyExecutor[R]) PostExecute(execInternal *failsafe.ExecutionInternal[R], er *failsafe.ExecutionResult[R]) *failsafe.ExecutionResult[R] {
-	if bpe.IsFailure(er) {
-		er = bpe.PolicyExecutor.OnFailure(&execInternal.Execution, er.WithFailure())
+func (bpe *BasePolicyExecutor[R]) PostExecute(exec *failsafe.ExecutionInternal[R], er *failsafe.ExecutionResult[R]) *failsafe.ExecutionResult[R] {
+	if bpe.PolicyExecutor.IsFailure(er) {
+		er = bpe.PolicyExecutor.OnFailure(&exec.Execution, er.WithFailure())
 		if er.Complete && bpe.BaseListenablePolicy.failureListener != nil {
 			bpe.BaseListenablePolicy.failureListener(failsafe.ExecutionCompletedEvent[R]{
 				Result:         er.Result,
 				Err:            er.Err,
-				ExecutionStats: execInternal.ExecutionStats,
+				ExecutionStats: exec.ExecutionStats,
 			})
 		}
 	} else {
@@ -46,7 +48,7 @@ func (bpe *BasePolicyExecutor[R]) PostExecute(execInternal *failsafe.ExecutionIn
 			bpe.BaseListenablePolicy.successListener(failsafe.ExecutionCompletedEvent[R]{
 				Result:         er.Result,
 				Err:            er.Err,
-				ExecutionStats: execInternal.ExecutionStats,
+				ExecutionStats: exec.ExecutionStats,
 			})
 		}
 	}
@@ -65,4 +67,8 @@ func (bpe *BasePolicyExecutor[R]) OnSuccess(_ *failsafe.ExecutionResult[R]) {
 
 func (bpe *BasePolicyExecutor[R]) OnFailure(_ *failsafe.Execution[R], result *failsafe.ExecutionResult[R]) *failsafe.ExecutionResult[R] {
 	return result
+}
+
+func (bpe *BasePolicyExecutor[R]) GetPolicyIndex() int {
+	return bpe.PolicyIndex
 }

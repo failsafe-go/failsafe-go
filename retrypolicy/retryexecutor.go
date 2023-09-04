@@ -29,7 +29,7 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) f
 	return func(exec *failsafe.ExecutionInternal[R]) *failsafe.ExecutionResult[R] {
 		for {
 			result := innerFn(exec)
-			if rpe.retriesExceeded || exec.IsCanceled() {
+			if rpe.retriesExceeded || exec.IsCanceled(rpe) {
 				return result
 			}
 
@@ -42,22 +42,23 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) f
 			delay := rpe.getDelay(&exec.Execution)
 			if rpe.config.retryScheduledListener != nil {
 				rpe.config.retryScheduledListener(failsafe.ExecutionScheduledEvent[R]{
-					Execution: internal.NewExecutionForResult(result, &exec.Execution),
-					Delay:     delay,
+					ExecutionAttempt: internal.NewExecutionAttempt(result, &exec.Execution),
+					Delay:            delay,
 				})
 			}
-			util.WaitWithContext(exec.Context, delay)
-			if exec.IsCanceled() {
+			if err := util.WaitWithContext(exec.Context, delay); err != nil {
 				return result
 			}
 
 			// Prepare for next iteration
-			exec.InitializeAttempt()
+			if !exec.InitializeAttempt(rpe) {
+				return result
+			}
 
 			// Call retry listener
 			if rpe.config.retryListener != nil {
 				rpe.config.retryListener(failsafe.ExecutionAttemptedEvent[R]{
-					Execution: internal.NewExecutionForResult(result, &exec.Execution),
+					ExecutionAttempt: internal.NewExecutionAttempt(result, &exec.Execution),
 				})
 			}
 		}
@@ -77,22 +78,14 @@ func (rpe *retryPolicyExecutor[R]) OnFailure(exec *failsafe.Execution[R], result
 	// Call listeners
 	if rpe.config.failedAttemptListener != nil {
 		rpe.config.failedAttemptListener(failsafe.ExecutionAttemptedEvent[R]{
-			Execution: internal.NewExecutionForResult(result, exec),
+			ExecutionAttempt: internal.NewExecutionAttempt(result, exec),
 		})
 	}
 	if isAbortable && rpe.config.abortListener != nil {
-		rpe.config.abortListener(failsafe.ExecutionCompletedEvent[R]{
-			Result:         exec.LastResult,
-			Err:            exec.LastErr,
-			ExecutionStats: exec.ExecutionStats,
-		})
+		rpe.config.abortListener(internal.NewExecutionCompletedEventForExec(exec))
 	}
 	if rpe.retriesExceeded && !isAbortable && rpe.config.retriesExceededListener != nil {
-		rpe.config.retriesExceededListener(failsafe.ExecutionCompletedEvent[R]{
-			Result:         exec.LastResult,
-			Err:            exec.LastErr,
-			ExecutionStats: exec.ExecutionStats,
-		})
+		rpe.config.retriesExceededListener(internal.NewExecutionCompletedEventForExec(exec))
 	}
 	return result.WithComplete(completed, false)
 }

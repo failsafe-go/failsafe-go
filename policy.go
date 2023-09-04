@@ -7,7 +7,7 @@ import (
 // Policy handles execution failures.
 type Policy[R any] interface {
 	// ToExecutor returns a PolicyExecutor capable of handling an execution for the Policy.
-	ToExecutor() PolicyExecutor[R]
+	ToExecutor(policyIndex int) PolicyExecutor[R]
 }
 
 // ListenablePolicyBuilder configures listeners for a Policy execution result.

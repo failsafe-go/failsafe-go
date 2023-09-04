@@ -101,14 +101,6 @@ type circuitBreakerConfig[R any] struct {
 	successThresholdingCapacity uint
 }
 
-//type thresholdConfig struct {
-//	threshold            uint
-//	rateThreshold        uint
-//	thresholdingCapacity uint
-//	executionThreshold   uint
-//	thresholdingPeriod   time.Duration
-//}
-
 var _ CircuitBreakerBuilder[any] = &circuitBreakerConfig[any]{}
 
 // WithDefaults creates a count based CircuitBreaker for execution result type R that opens after a single failure, closes after a single

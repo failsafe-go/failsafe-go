@@ -19,15 +19,19 @@ var _ failsafe.PolicyExecutor[any] = &fallbackExecutor[any]{}
 func (e *fallbackExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsafe.ExecutionHandler[R] {
 	return func(exec *failsafe.ExecutionInternal[R]) *failsafe.ExecutionResult[R] {
 		result := innerFn(exec)
+		if exec.IsCanceled(e) {
+			return result
+		}
+
 		if e.IsFailure(result) {
 			event := failsafe.ExecutionAttemptedEvent[R]{
-				Execution: internal.NewExecutionForResult(result, &exec.Execution),
+				ExecutionAttempt: internal.NewExecutionAttempt(result, &exec.Execution),
 			}
 			if e.config.failedAttemptListener != nil {
 				e.config.failedAttemptListener(event)
 			}
 
-			fallbackResult, err := e.fallback.config.fn(event)
+			fallbackResult, err := e.config.fn(event)
 			result = &failsafe.ExecutionResult[R]{
 				Result:     fallbackResult,
 				Err:        err,

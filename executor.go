@@ -2,6 +2,7 @@ package failsafe
 
 import (
 	"context"
+	"sync"
 )
 
 /*
@@ -19,7 +20,7 @@ type Executor[R any] interface {
 	//     Fallback(RetryPolicy(CircuitBreaker(func)))
 	Compose(innerPolicy Policy[R]) Executor[R]
 
-	// WithContext configures a ctx that can be used to cancel executions.
+	// WithContext returns a new copy of the Executor with the ctx configured, which can be used to cancel executions.
 	WithContext(ctx context.Context) Executor[R]
 
 	// OnComplete registers the listener to be called when an execution is complete.
@@ -83,6 +84,7 @@ func With[R any](outerPolicy Policy[R], policies ...Policy[R]) Executor[R] {
 	policies = append([]Policy[R]{outerPolicy}, policies...)
 	return &executor[R]{
 		policies: policies,
+		ctx:      context.Background(),
 	}
 }
 
@@ -92,8 +94,9 @@ func (e *executor[R]) Compose(innerPolicy Policy[R]) Executor[R] {
 }
 
 func (e *executor[R]) WithContext(ctx context.Context) Executor[R] {
-	e.ctx = ctx
-	return e
+	c := *e
+	c.ctx = ctx
+	return &c
 }
 
 func (e *executor[R]) OnComplete(listener func(ExecutionCompletedEvent[R])) Executor[R] {
@@ -141,30 +144,35 @@ func (e *executor[R]) GetWithExecution(fn func(exec Execution[R]) (R, error)) (R
 			Success:    true,
 			SuccessAll: true,
 		}
-		execInternal.recordAttempt(er)
+		execInternal.Executions++
+		execInternal.Record(er)
 		return er
 	}
 
 	// Compose policy executors from the innermost policy to the outermost
-	for i := len(e.policies) - 1; i >= 0; i-- {
-		outerFn = e.policies[i].ToExecutor().Apply(outerFn)
+	for i, policyIndex := len(e.policies)-1, 0; i >= 0; i, policyIndex = i-1, policyIndex+1 {
+		outerFn = e.policies[i].ToExecutor(policyIndex).Apply(outerFn)
 	}
 
 	execInternal := &ExecutionInternal[R]{
 		Execution: Execution[R]{
-			Context:        e.ctx,
-			ExecutionStats: ExecutionStats{},
+			ExecutionAttempt: ExecutionAttempt[R]{
+				ExecutionStats: ExecutionStats{},
+			},
+			Context:       e.ctx,
+			mtx:           &sync.Mutex{},
+			canceledIndex: -1,
 		},
 	}
-	execInternal.InitializeAttempt()
+	execInternal.InitializeAttempt(nil)
 	er := outerFn(execInternal)
 	if e.onSuccess != nil && er.SuccessAll {
-		e.onSuccess(*newExecutionCompletedEvent(er, &execInternal.ExecutionStats))
+		e.onSuccess(newExecutionCompletedEvent(er, &execInternal.ExecutionStats))
 	} else if e.onFailure != nil && !er.SuccessAll {
-		e.onFailure(*newExecutionCompletedEvent(er, &execInternal.ExecutionStats))
+		e.onFailure(newExecutionCompletedEvent(er, &execInternal.ExecutionStats))
 	}
 	if e.onComplete != nil {
-		e.onComplete(*newExecutionCompletedEvent(er, &execInternal.ExecutionStats))
+		e.onComplete(newExecutionCompletedEvent(er, &execInternal.ExecutionStats))
 	}
 	return er.Result, er.Err
 }
