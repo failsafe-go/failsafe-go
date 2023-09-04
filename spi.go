@@ -65,7 +65,7 @@ type ExecutionHandler[R any] func(*ExecutionInternal[R]) *ExecutionResult[R]
 // Part of the Failsafe-go SPI.
 type PolicyExecutor[R any] interface {
 	// PreExecute is called before execution to return an alternative result or error, such as if execution is not allowed or needed.
-	PreExecute() *ExecutionResult[R]
+	PreExecute(exec *ExecutionInternal[R]) *ExecutionResult[R]
 
 	// Apply performs an execution by calling PreExecute and returning any result, else calling the innerFn PostExecute.
 	Apply(innerFn ExecutionHandler[R]) ExecutionHandler[R]

@@ -33,7 +33,7 @@ func (s *ExecutionStats) GetElapsedTime() time.Duration {
 
 // Execution contains contextual information about an execution.
 type Execution[R any] struct {
-	Context context.Context // TODO leave this?
+	Context context.Context
 	ExecutionStats
 	// The last error that occurred, else the zero value for R.
 	LastResult R
@@ -41,6 +41,11 @@ type Execution[R any] struct {
 	LastErr error
 	// The time that the most recent execution attempt started at.
 	AttemptStartTime time.Time
+}
+
+// IsCanceled returns whether any configured execution Context has been canceled.
+func (e *Execution[_]) IsCanceled() bool {
+	return e.Context != nil && e.Context.Err() != nil
 }
 
 // GetElapsedAttemptTime returns the elapsed time since the last execution attempt began.
