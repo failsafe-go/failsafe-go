@@ -13,13 +13,13 @@ type BasePolicyExecutor[R any] struct {
 
 var _ failsafe.PolicyExecutor[any] = &BasePolicyExecutor[any]{}
 
-func (bpe *BasePolicyExecutor[R]) PreExecute() *failsafe.ExecutionResult[R] {
+func (bpe *BasePolicyExecutor[R]) PreExecute(_ *failsafe.ExecutionInternal[R]) *failsafe.ExecutionResult[R] {
 	return nil
 }
 
 func (bpe *BasePolicyExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsafe.ExecutionHandler[R] {
 	return func(execInternal *failsafe.ExecutionInternal[R]) *failsafe.ExecutionResult[R] {
-		result := bpe.PolicyExecutor.PreExecute()
+		result := bpe.PolicyExecutor.PreExecute(execInternal)
 		if result != nil {
 			return result
 		}

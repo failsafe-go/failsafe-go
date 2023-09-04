@@ -1,6 +1,7 @@
 package util
 
 import (
+	"context"
 	"time"
 )
 
@@ -53,6 +54,20 @@ func RandomDelay[T number](delay T, jitter T, random float64) T {
 func RandomDelayFactor[T number](delay T, jitterFactor float32, random float32) T {
 	randomFactor := 1 + (1-random*2)*jitterFactor
 	return T(float32(delay) * randomFactor)
+}
+
+// WaitWithContext waits for the waitTime, returning false if any non-nil ctx is Done early, else true.
+func WaitWithContext(ctx context.Context, waitTime time.Duration) error {
+	if ctx != nil {
+		select {
+		case <-time.After(waitTime):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	} else {
+		time.Sleep(waitTime)
+	}
+	return nil
 }
 
 type Clock interface {

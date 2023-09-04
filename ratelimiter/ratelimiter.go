@@ -1,6 +1,7 @@
 package ratelimiter
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -28,8 +29,6 @@ methods include:
   - AcquirePermits
   - AcquirePermitWithMaxWait
   - AcquirePermitsWithMaxWait
-  - TryAcquirePermitWithMaxWait
-  - TryAcquirePermitsWithMaxWait
 
 The methods that return immediately include:
 
@@ -52,20 +51,30 @@ type RateLimiter[R any] interface {
 	failsafe.Policy[R]
 
 	// AcquirePermit attempts to acquire a permit to perform an execution against the rate limiter, waiting until one is available or the
-	// execution is cancelled.
-	AcquirePermit()
+	// ctx is canceled. Returns an error if the ctx is canceled.
+	//
+	// ctx may be nil.
+	AcquirePermit(ctx context.Context) error
 
 	// AcquirePermits attempts to acquire the requested permits to perform executions against the rate limiter, waiting until they are
-	// available or the execution is cancelled.
-	AcquirePermits(permits int)
+	// available or the ctx is canceled. Returns an error if the ctx is canceled.
+	//
+	// ctx may be nil.
+	AcquirePermits(ctx context.Context, permits int) error
 
 	// AcquirePermitWithMaxWait attempts to acquire a permit to perform an execution against the rate limiter, waiting up to the maxWaitTime
-	// until one is available, else return ErrRateLimitExceeded if a permit will not be available in time.
-	AcquirePermitWithMaxWait(maxWaitTime time.Duration) error
+	// until one is available or the ctx is canceled. Returns ErrRateLimitExceeded if a permit would not be available in time. Returns an
+	// error if the context is canceled.
+	//
+	// ctx may be nil.
+	AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) error
 
 	// AcquirePermitsWithMaxWait attempts to acquire the requested permits to perform executions against the rate limiter, waiting up to the
-	// maxWaitTime until they are available, else return ErrRateLimitExceeded if the permits will not be available in time.
-	AcquirePermitsWithMaxWait(requestedPermits int, maxWaitTime time.Duration) error
+	// maxWaitTime until they are available or the ctx is canceled. Returns ErrRateLimitExceeded if the permits would not be available in
+	// time. Returns an error if the context is canceled.
+	//
+	// ctx may be nil.
+	AcquirePermitsWithMaxWait(ctx context.Context, requestedPermits int, maxWaitTime time.Duration) error
 
 	// ReservePermit reserves a permit to perform an execution against the rate limiter, and returns the time that the caller is expected
 	// to wait before acting on the permit. Returns 0 if the permit is immediately available and no waiting is needed.
@@ -81,14 +90,6 @@ type RateLimiter[R any] interface {
 	// TryAcquirePermits tries to acquire the requested permits to perform executions against the rate limiter, returning immediately without
 	// waiting. Returns true if the permit was successfull acquired, else false.
 	TryAcquirePermits(permits int) bool
-
-	// TryAcquirePermitWithMaxWait tries to acquire a permit to perform an execution against the rate limiter, waiting up to the maxWaitTime
-	// until they are available. Returns true if the permit was successfull acquired, else false.
-	TryAcquirePermitWithMaxWait(maxWaitTime time.Duration) bool
-
-	// TryAcquirePermitsWithMaxWait tries to acquire the requested permits to perform executions against the rate limiter, waiting up to the
-	// maxWaitTime until they are available. Returns true if the permit was successfull acquired, else false.
-	TryAcquirePermitsWithMaxWait(requestedPermits int, maxWaitTime time.Duration) bool
 
 	// TryReservePermit tries to reserve a permit to perform an execution against the rate limiter, and returns the time that the caller is
 	// expected to wait before acting on the permit, as long as it's less than the maxWaitTime.
@@ -226,23 +227,24 @@ type rateLimiter[R any] struct {
 	stats  rateLimiterStats
 }
 
-func (r *rateLimiter[R]) AcquirePermit() {
-	r.AcquirePermits(1)
+func (r *rateLimiter[R]) AcquirePermit(ctx context.Context) error {
+	return r.AcquirePermits(ctx, 1)
 }
 
-func (r *rateLimiter[R]) AcquirePermits(permits int) {
-	time.Sleep(r.ReservePermits(permits))
+func (r *rateLimiter[R]) AcquirePermits(ctx context.Context, permits int) error {
+	return util.WaitWithContext(ctx, r.ReservePermits(permits))
 }
 
-func (r *rateLimiter[R]) AcquirePermitWithMaxWait(maxWaitTime time.Duration) error {
-	return r.AcquirePermitsWithMaxWait(1, maxWaitTime)
+func (r *rateLimiter[R]) AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) error {
+	return r.AcquirePermitsWithMaxWait(ctx, 1, maxWaitTime)
 }
 
-func (r *rateLimiter[R]) AcquirePermitsWithMaxWait(requestedPermits int, maxWaitTime time.Duration) error {
-	if !r.TryAcquirePermitsWithMaxWait(requestedPermits, maxWaitTime) {
+func (r *rateLimiter[R]) AcquirePermitsWithMaxWait(ctx context.Context, requestedPermits int, maxWaitTime time.Duration) error {
+	waitTime := r.stats.acquirePermits(requestedPermits, maxWaitTime)
+	if waitTime == -1 {
 		return ErrRateLimitExceeded
 	}
-	return nil
+	return util.WaitWithContext(ctx, waitTime)
 }
 
 func (r *rateLimiter[R]) ReservePermit() time.Duration {
@@ -259,19 +261,6 @@ func (r *rateLimiter[R]) TryAcquirePermit() bool {
 
 func (r *rateLimiter[R]) TryAcquirePermits(permits int) bool {
 	return r.TryReservePermits(permits, 0) == 0
-}
-
-func (r *rateLimiter[R]) TryAcquirePermitWithMaxWait(maxWaitTime time.Duration) bool {
-	return r.TryAcquirePermitsWithMaxWait(1, maxWaitTime)
-}
-
-func (r *rateLimiter[R]) TryAcquirePermitsWithMaxWait(requestedPermits int, maxWaitTime time.Duration) bool {
-	waitTime := r.stats.acquirePermits(requestedPermits, maxWaitTime)
-	if waitTime == -1 {
-		return false
-	}
-	time.Sleep(waitTime)
-	return true
 }
 
 func (r *rateLimiter[R]) TryReservePermit(maxWaitTime time.Duration) time.Duration {

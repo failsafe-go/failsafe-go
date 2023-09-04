@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -67,10 +68,24 @@ func TestMaxWaitTimeExceeded(t *testing.T) {
 	limiter := ratelimiter.SmoothBuilderForMaxRate[any](10 * time.Millisecond).Build()
 
 	// When / Then
-	limiter.TryAcquirePermitsWithMaxWait(50, time.Minute) // limiter should now be well over its max permits
+	limiter.AcquirePermitsWithMaxWait(nil, 50, time.Minute) // limiter should now be well over its max permits
 	testutil.TestRunFailure(t, failsafe.With[any](limiter),
 		func(execution failsafe.Execution[any]) error {
 			return nil
 		},
 		1, 0, ratelimiter.ErrRateLimitExceeded)
+}
+
+func TestCancelRateLimiting(t *testing.T) {
+	// Given
+	limiter := ratelimiter.SmoothBuilderForMaxRate[any](time.Second).Build()
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+
+	// When / Then
+	assert.NoError(t, limiter.AcquirePermit(nil))
+	assert.Error(t, limiter.AcquirePermit(ctx))
 }

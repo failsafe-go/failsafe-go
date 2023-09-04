@@ -13,7 +13,7 @@ type circuitBreakerExecutor[R any] struct {
 
 var _ failsafe.PolicyExecutor[any] = &circuitBreakerExecutor[any]{}
 
-func (cbe *circuitBreakerExecutor[R]) PreExecute() *failsafe.ExecutionResult[R] {
+func (cbe *circuitBreakerExecutor[R]) PreExecute(_ *failsafe.ExecutionInternal[R]) *failsafe.ExecutionResult[R] {
 	if !cbe.circuitBreaker.TryAcquirePermit() {
 		return &failsafe.ExecutionResult[R]{
 			Err:      ErrCircuitBreakerOpen,

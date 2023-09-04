@@ -21,15 +21,15 @@ type retryPolicyExecutor[R any] struct {
 	lastDelay       time.Duration // The last fixed, backoff, random, or computed delay time
 }
 
-func (rpe *retryPolicyExecutor[R]) PreExecute() *failsafe.ExecutionResult[R] {
-	return rpe.BasePolicyExecutor.PreExecute()
+func (rpe *retryPolicyExecutor[R]) PreExecute(exec *failsafe.ExecutionInternal[R]) *failsafe.ExecutionResult[R] {
+	return rpe.BasePolicyExecutor.PreExecute(exec)
 }
 
 func (rpe *retryPolicyExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsafe.ExecutionHandler[R] {
 	return func(exec *failsafe.ExecutionInternal[R]) *failsafe.ExecutionResult[R] {
 		for {
 			result := innerFn(exec)
-			if rpe.retriesExceeded {
+			if rpe.retriesExceeded || exec.IsCanceled() {
 				return result
 			}
 
@@ -46,14 +46,9 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) f
 					Delay:     delay,
 				})
 			}
-			if exec.Context != nil {
-				select {
-				case <-time.After(delay):
-				case <-exec.Context.Done():
-					return result
-				}
-			} else {
-				time.Sleep(delay)
+			util.WaitWithContext(exec.Context, delay)
+			if exec.IsCanceled() {
+				return result
 			}
 
 			// Prepare for next iteration
