@@ -2,6 +2,7 @@ package failsafe
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -43,9 +44,14 @@ type Execution[R any] struct {
 	AttemptStartTime time.Time
 }
 
-// IsCanceled returns whether any configured execution Context has been canceled.
-func (e *Execution[_]) IsCanceled() bool {
+// IsDone returns whether any configured Context is done, in which case [context.Context.Err] is not nil.
+func (e *Execution[_]) IsDone() bool {
 	return e.Context != nil && e.Context.Err() != nil
+}
+
+// IsCanceled returns whether any configured Context has been canceled.
+func (e *Execution[_]) IsCanceled() bool {
+	return e.Context != nil && errors.Is(e.Context.Err(), context.Canceled)
 }
 
 // GetElapsedAttemptTime returns the elapsed time since the last execution attempt began.
