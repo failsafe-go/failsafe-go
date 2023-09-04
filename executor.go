@@ -35,23 +35,23 @@ type Executor[R any] interface {
 	// and all policies have been exceeded.
 	OnFailure(listener func(ExecutionCompletedEvent[R])) Executor[R]
 
-	// Run executes the runnable until successful or until the configured policies are exceeded.
+	// Run executes the fn until successful or until the configured policies are exceeded.
 	//
 	// Any panic causes the execution to stop immediately without calling any event listeners.
 	Run(fn func() error) (err error)
 
-	// RunWithExecution executes the runnable until successful or until the configured policies are exceeded, while providing an Execution
+	// RunWithExecution executes the fn until successful or until the configured policies are exceeded, while providing an Execution
 	// to the fn.
 	//
 	// Any panic causes the execution to stop immediately without calling any event listeners.
 	RunWithExecution(fn func(exec Execution[R]) error) (err error)
 
-	// Get executes the runnable until a successful result is returned or the configured policies are exceeded.
+	// Get executes the fn until a successful result is returned or the configured policies are exceeded.
 	//
 	// Any panic causes the execution to stop immediately without calling any event listeners.
 	Get(fn func() (R, error)) (R, error)
 
-	// GetWithExecution executes the runnable until a successful result is returned or the configured policies are exceeded, while providing
+	// GetWithExecution executes the fn until a successful result is returned or the configured policies are exceeded, while providing
 	// an Execution to the fn.
 	//
 	// Any panic causes the execution to stop immediately without calling any event listeners.

@@ -7,7 +7,7 @@ import (
 
 	"failsafe"
 	"failsafe/fallback"
-	rptesting "failsafe/internal/retrypolicy_testutil"
+	"failsafe/internal/policytesting"
 	"failsafe/internal/testutil"
 	"failsafe/retrypolicy"
 )
@@ -21,8 +21,8 @@ func TestNestedRetryPoliciesWhereInnerIsExceeded(t *testing.T) {
 	// Given
 	outerRetryStats := &testutil.Stats{}
 	innerRetryStats := &testutil.Stats{}
-	outerRetryPolicy := rptesting.WithRetryStats(retrypolicy.Builder[bool]().WithMaxRetries(10), outerRetryStats).Build()
-	innerRetryPolicy := rptesting.WithRetryStats(retrypolicy.Builder[bool]().WithMaxRetries(1), innerRetryStats).Build()
+	outerRetryPolicy := policytesting.WithRetryStats(retrypolicy.Builder[bool]().WithMaxRetries(10), outerRetryStats).Build()
+	innerRetryPolicy := policytesting.WithRetryStats(retrypolicy.Builder[bool]().WithMaxRetries(1), innerRetryStats).Build()
 
 	// When / Then
 	testutil.TestGetSuccess(t, failsafe.With[bool](outerRetryPolicy, innerRetryPolicy),
@@ -41,8 +41,8 @@ func TestFallbackRetryPolicyRetryPolicy(t *testing.T) {
 	// Given
 	retryPolicy1Stats := &testutil.Stats{}
 	retryPolicy2Stats := &testutil.Stats{}
-	retryPolicy1 := rptesting.WithRetryStats(retrypolicy.Builder[any]().HandleErrors(testutil.InvalidStateError{}).WithMaxRetries(2), retryPolicy1Stats).Build()
-	retryPolicy2 := rptesting.WithRetryStats(retrypolicy.Builder[any]().HandleErrors(testutil.InvalidArgumentError{}).WithMaxRetries(3), retryPolicy2Stats).Build()
+	retryPolicy1 := policytesting.WithRetryStats(retrypolicy.Builder[any]().HandleErrors(testutil.InvalidStateError{}).WithMaxRetries(2), retryPolicy1Stats).Build()
+	retryPolicy2 := policytesting.WithRetryStats(retrypolicy.Builder[any]().HandleErrors(testutil.InvalidArgumentError{}).WithMaxRetries(3), retryPolicy2Stats).Build()
 	fb := fallback.WithResult[any](true)
 	fn := func(exec failsafe.Execution[any]) (any, error) {
 		if exec.Attempts%2 == 1 {

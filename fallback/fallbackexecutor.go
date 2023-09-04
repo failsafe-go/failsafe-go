@@ -14,8 +14,7 @@ type fallbackExecutor[R any] struct {
 
 var _ failsafe.PolicyExecutor[any] = &fallbackExecutor[any]{}
 
-// Apply performs an execution by calling pre-execute else calling the supplier, applying a fallback if it fails, and
-// calling post-execute.
+// Apply performs an execution by calling the innerFn, applying a fallback if it fails, and calling post-execute.
 func (e *fallbackExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsafe.ExecutionHandler[R] {
 	return func(exec *failsafe.ExecutionInternal[R]) *failsafe.ExecutionResult[R] {
 		result := innerFn(exec)

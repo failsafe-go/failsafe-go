@@ -9,8 +9,7 @@ import (
 
 	"failsafe"
 	"failsafe/circuitbreaker"
-	cbtesting "failsafe/internal/circuitbreaker_testutil"
-	rptesting "failsafe/internal/retrypolicy_testutil"
+	"failsafe/internal/policytesting"
 	"failsafe/internal/testutil"
 	"failsafe/retrypolicy"
 )
@@ -108,8 +107,8 @@ func TestShouldReturnErrCircuitBreakerOpenAfterFailuresExceeded(t *testing.T) {
 func TestRejectedWithRetries(t *testing.T) {
 	rpStats := &testutil.Stats{}
 	cbStats := &testutil.Stats{}
-	rp := rptesting.WithRetryStats(retrypolicy.Builder[any]().WithMaxAttempts(7), rpStats).Build()
-	cb := cbtesting.WithBreakerStats(circuitbreaker.Builder[any]().
+	rp := policytesting.WithRetryStats(retrypolicy.Builder[any]().WithMaxAttempts(7), rpStats).Build()
+	cb := policytesting.WithBreakerStats(circuitbreaker.Builder[any]().
 		WithFailureThreshold(3), cbStats).
 		Build()
 

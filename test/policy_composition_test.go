@@ -10,8 +10,7 @@ import (
 	"failsafe"
 	"failsafe/circuitbreaker"
 	"failsafe/fallback"
-	cbtesting "failsafe/internal/circuitbreaker_testutil"
-	rptesting "failsafe/internal/retrypolicy_testutil"
+	"failsafe/internal/policytesting"
 	"failsafe/internal/testutil"
 	"failsafe/ratelimiter"
 	"failsafe/retrypolicy"
@@ -36,8 +35,8 @@ func TestRetryPolicyCircuitBreaker(t *testing.T) {
 //
 // Tests RetryPolicy with a CircuitBreaker that is open.
 func TestRetryPolicyCircuitBreakerOpen(t *testing.T) {
-	rp := rptesting.WithRetryLogs(retrypolicy.Builder[any]()).Build()
-	cb := cbtesting.WithBreakerLogs(circuitbreaker.Builder[any]()).Build()
+	rp := policytesting.WithRetryLogs(retrypolicy.Builder[any]()).Build()
+	cb := policytesting.WithBreakerLogs(circuitbreaker.Builder[any]()).Build()
 
 	testutil.TestRunFailure(t, failsafe.With[any](rp, cb),
 		func(execution failsafe.Execution[any]) error {
@@ -141,7 +140,7 @@ func TestFallbackCircuitBreakerOpen(t *testing.T) {
 // RetryPolicy -> RateLimiter
 func TestRetryPolicyRateLimiter(t *testing.T) {
 	rpStats := &testutil.Stats{}
-	rp := rptesting.WithRetryStats(retrypolicy.Builder[any](), rpStats).WithMaxAttempts(7).Build()
+	rp := policytesting.WithRetryStats(retrypolicy.Builder[any](), rpStats).WithMaxAttempts(7).Build()
 	rl := ratelimiter.BurstyBuilder[any](3, 1*time.Second).Build()
 
 	testutil.TestGetFailure(t, failsafe.With[any](rp, rl),

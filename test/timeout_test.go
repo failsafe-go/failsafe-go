@@ -1,17 +1,16 @@
 package test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
 	"failsafe"
-	rptesting "failsafe/internal/retrypolicy_testutil"
-
+	"failsafe/fallback"
+	"failsafe/internal/policytesting"
 	"failsafe/internal/testutil"
-	timouttesting "failsafe/internal/timeout_testutil"
-
 	"failsafe/retrypolicy"
 	"failsafe/timeout"
 )
@@ -33,8 +32,8 @@ func TestShouldNotTimeout(t *testing.T) {
 func TestRetryTimeoutWithBlockedFunc(t *testing.T) {
 	timeoutStats := &testutil.Stats{}
 	rpStats := &testutil.Stats{}
-	timeout := timouttesting.WithTimeoutStatsAndLogs(timeout.Builder[any](50*time.Millisecond), timeoutStats).Build()
-	rp := rptesting.WithRetryStatsAndLogs(retrypolicy.Builder[any](), rpStats).Build()
+	timeout := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](50*time.Millisecond), timeoutStats).Build()
+	rp := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[any](), rpStats).Build()
 
 	testutil.TestGetSuccess(t, failsafe.With[any](rp, timeout),
 		func(exec failsafe.Execution[any]) (any, error) {
@@ -56,8 +55,8 @@ func TestRetryTimeoutWithBlockedFunc(t *testing.T) {
 func TestRetryTimeoutWithPendingRetry(t *testing.T) {
 	timeoutStats := &testutil.Stats{}
 	rpStats := &testutil.Stats{}
-	timeout := timouttesting.WithTimeoutStatsAndLogs(timeout.Builder[any](50*time.Millisecond), timeoutStats).Build()
-	rp := rptesting.WithRetryStatsAndLogs(retrypolicy.Builder[any]().WithDelay(100*time.Millisecond), rpStats).Build()
+	timeout := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](50*time.Millisecond), timeoutStats).Build()
+	rp := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[any]().WithDelay(100*time.Millisecond), rpStats).Build()
 
 	testutil.TestGetFailure(t, failsafe.With[any](rp, timeout),
 		func(exec failsafe.Execution[any]) (any, error) {
@@ -68,4 +67,110 @@ func TestRetryTimeoutWithPendingRetry(t *testing.T) {
 	assert.Equal(t, 3, timeoutStats.SuccessCount)
 	assert.Equal(t, 2, rpStats.RetryCount)
 	assert.Equal(t, 1, rpStats.FailureCount)
+}
+
+// Tests that an outer timeout will cancel inner retries when the inner func is blocked. The flow should be:
+//   - Execution that retries a few times, blocking each time
+//   - Timeout
+func TestTimeoutRetryWithBlockedFunc(t *testing.T) {
+	timeoutStats := &testutil.Stats{}
+	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](150*time.Millisecond), timeoutStats).Build()
+	rp := retrypolicy.WithDefaults[any]()
+
+	testutil.TestRunFailure(t, failsafe.With[any](to, rp),
+		func(_ failsafe.Execution[any]) error {
+			time.Sleep(60 * time.Millisecond)
+			return testutil.InvalidArgumentError{}
+		},
+		3, 3, timeout.ErrTimeoutExceeded)
+	assert.Equal(t, 1, timeoutStats.FailureCount)
+}
+
+// Tests that an outer timeout will cancel inner retries when an inner retry is pending. The flow should be:
+//   - Execution
+//   - Retry sleep/scheduled that blocks
+//   - Timeout
+func TestTimeoutRetryWithPendingRetry(t *testing.T) {
+	timeoutStats := &testutil.Stats{}
+	rpStats := &testutil.Stats{}
+	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](100*time.Millisecond), timeoutStats).Build()
+	rp := policytesting.WithRetryStatsAndLogs[any](retrypolicy.Builder[any]().WithDelay(time.Second), rpStats).Build()
+
+	testutil.TestRunFailure(t, failsafe.With[any](to).Compose(rp),
+		func(_ failsafe.Execution[any]) error {
+			return testutil.InvalidArgumentError{}
+		},
+		1, 1, timeout.ErrTimeoutExceeded)
+	assert.Equal(t, 1, timeoutStats.FailureCount)
+	assert.Equal(t, 1, rpStats.FailedAttemptCount)
+}
+
+// Tests an inner timeout that fires while the func is blocked.
+func TestFallbackTimeoutWithBlockedFunc(t *testing.T) {
+	timeoutStats := &testutil.Stats{}
+	fbStats := &testutil.Stats{}
+	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](10*time.Millisecond), timeoutStats).Build()
+	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithError[any](testutil.InvalidArgumentError{}), fbStats).Build()
+
+	testutil.TestRunFailure(t, failsafe.With[any](fb).Compose(to),
+		func(_ failsafe.Execution[any]) error {
+			time.Sleep(100 * time.Millisecond)
+			return errors.New("test")
+		},
+		1, 1, testutil.InvalidArgumentError{})
+	assert.Equal(t, 1, timeoutStats.FailureCount)
+	assert.Equal(t, 1, fbStats.ExecutionCount)
+	assert.Equal(t, 1, fbStats.FailureCount)
+}
+
+// Tests that an inner timeout will not interrupt an outer fallback. The inner timeout is never triggered since the func completes immediately.
+func TestFallbackTimeout(t *testing.T) {
+	timeoutStats := &testutil.Stats{}
+	fbStats := &testutil.Stats{}
+	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](10*time.Millisecond), timeoutStats).Build()
+	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithError[any](testutil.InvalidArgumentError{}), fbStats).Build()
+
+	testutil.TestRunFailure(t, failsafe.With[any](fb).Compose(to),
+		func(_ failsafe.Execution[any]) error {
+			return errors.New("test")
+		},
+		1, 1, testutil.InvalidArgumentError{})
+	assert.Equal(t, 0, timeoutStats.FailureCount)
+	assert.Equal(t, 1, fbStats.ExecutionCount)
+}
+
+// Tests that an outer timeout will interrupt an inner func that is blocked, skipping the inner fallback.
+func TestTimeoutFallbackWithBlockedFunc(t *testing.T) {
+	timeoutStats := &testutil.Stats{}
+	fbStats := &testutil.Stats{}
+	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](10*time.Millisecond), timeoutStats).Build()
+	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithError[any](testutil.InvalidArgumentError{}), fbStats).Build()
+
+	testutil.TestRunFailure(t, failsafe.With[any](to).Compose(fb),
+		func(_ failsafe.Execution[any]) error {
+			time.Sleep(100 * time.Millisecond)
+			return errors.New("test")
+		},
+		1, 1, timeout.ErrTimeoutExceeded)
+	assert.Equal(t, 1, timeoutStats.FailureCount)
+	assert.Equal(t, 0, fbStats.ExecutionCount)
+}
+
+// Tests that an outer timeout will interrupt an inner fallback that is blocked.
+func TestTimeoutFallbackWithBlockedFallback(t *testing.T) {
+	timeoutStats := &testutil.Stats{}
+	fbStats := &testutil.Stats{}
+	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](100*time.Millisecond), timeoutStats).Build()
+	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithFn[any](func(e failsafe.ExecutionAttemptedEvent[any]) (any, error) {
+		time.Sleep(200 * time.Millisecond)
+		return nil, testutil.InvalidStateError{}
+	}), fbStats).Build()
+
+	testutil.TestRunFailure(t, failsafe.With[any](to).Compose(fb),
+		func(_ failsafe.Execution[any]) error {
+			return errors.New("test")
+		},
+		1, 1, timeout.ErrTimeoutExceeded)
+	assert.Equal(t, 1, timeoutStats.FailureCount)
+	assert.Equal(t, 1, fbStats.ExecutionCount)
 }
