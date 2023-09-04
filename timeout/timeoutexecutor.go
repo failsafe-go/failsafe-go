@@ -30,7 +30,7 @@ func (e *timeoutExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsaf
 			case <-timeoutCtx.Done():
 				if errors.Is(timeoutCtx.Err(), context.DeadlineExceeded) {
 					// Timeout exceeded
-					fmt.Println("timeout fired!")
+					fmt.Println("Timeout fired") // TODO remove
 					timeoutResult := internal.FailureResult[R](ErrTimeoutExceeded)
 					if result.CompareAndSwap(nil, timeoutResult) {
 						exec.Cancel(e, timeoutResult)
@@ -47,7 +47,7 @@ func (e *timeoutExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsaf
 
 		// Store result and cancel timeout context if needed
 		if result.CompareAndSwap(nil, innerFn(exec)) {
-			fmt.Println("Execution done! canceling timeout")
+			fmt.Println("Execution done! canceling timeout") // TODO remove
 			timeoutCancelFn()
 		}
 		return e.PostExecute(exec, result.Load())
