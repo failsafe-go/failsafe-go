@@ -56,7 +56,7 @@ func RandomDelayFactor[T number](delay T, jitterFactor float32, random float32) 
 	return T(float32(delay) * randomFactor)
 }
 
-// WaitWithContext waits for the waitTime, returning false if any non-nil ctx is Done early, else true.
+// WaitWithContext waits for the waitTime, returning nil, else returning an error if the ctx is done first.
 func WaitWithContext(ctx context.Context, waitTime time.Duration) error {
 	if ctx != nil {
 		select {

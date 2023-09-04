@@ -1,6 +1,7 @@
 package failsafe_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -43,4 +44,13 @@ func TestGetWithExecution(t *testing.T) {
 	assert.Equal(t, lasteExec.Executions, 2)
 	assert.Equal(t, lasteExec.LastResult, "")
 	assert.Equal(t, lasteExec.LastErr, testutil.InvalidArgumentError{})
+}
+
+// Asserts that configuring a context returns a new copy of the Executor.
+func TestWithContext(t *testing.T) {
+	ctx1 := context.Background()
+	ctx2 := context.Background()
+	executor1 := failsafe.With[any](retrypolicy.WithDefaults[any]()).WithContext(ctx1)
+	executor2 := executor1.WithContext(ctx2)
+	assert.NotSame(t, executor1, executor2)
 }

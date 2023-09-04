@@ -2,6 +2,7 @@ package circuitbreaker
 
 import (
 	"failsafe"
+	"failsafe/internal"
 	"failsafe/spi"
 )
 
@@ -15,10 +16,7 @@ var _ failsafe.PolicyExecutor[any] = &circuitBreakerExecutor[any]{}
 
 func (cbe *circuitBreakerExecutor[R]) PreExecute(_ *failsafe.ExecutionInternal[R]) *failsafe.ExecutionResult[R] {
 	if !cbe.circuitBreaker.TryAcquirePermit() {
-		return &failsafe.ExecutionResult[R]{
-			Err:      ErrCircuitBreakerOpen,
-			Complete: true,
-		}
+		return internal.FailureResult[R](ErrCircuitBreakerOpen)
 	}
 	return nil
 }

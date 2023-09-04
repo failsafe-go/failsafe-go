@@ -9,6 +9,7 @@ import (
 	"failsafe/spi"
 )
 
+// ErrCircuitBreakerOpen is returned when an execution is attempted against a circuit breaker that is open.
 var ErrCircuitBreakerOpen = errors.New("circuit breaker open")
 
 // State of a CircuitBreaker.
@@ -132,16 +133,17 @@ type circuitBreaker[R any] struct {
 	state circuitState[R]
 }
 
-func (cb *circuitBreaker[R]) ToExecutor() failsafe.PolicyExecutor[R] {
-	rpe := circuitBreakerExecutor[R]{
+func (cb *circuitBreaker[R]) ToExecutor(policyIndex int) failsafe.PolicyExecutor[R] {
+	cbe := &circuitBreakerExecutor[R]{
 		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
 			BaseListenablePolicy: cb.config.BaseListenablePolicy,
 			BaseFailurePolicy:    cb.config.BaseFailurePolicy,
+			PolicyIndex:          policyIndex,
 		},
 		circuitBreaker: cb,
 	}
-	rpe.PolicyExecutor = &rpe
-	return &rpe
+	cbe.PolicyExecutor = cbe
+	return cbe
 }
 
 func (cb *circuitBreaker[R]) TryAcquirePermit() bool {
