@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"failsafe"
+	failsafe "github.com/failsafe-go/failsafe-go"
 )
 
 type WhenGet[R any] func(execution failsafe.Execution[R]) (R, error)

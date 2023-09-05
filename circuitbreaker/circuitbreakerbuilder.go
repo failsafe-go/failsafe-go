@@ -3,9 +3,9 @@ package circuitbreaker
 import (
 	"time"
 
-	"failsafe"
-	"failsafe/internal/util"
-	"failsafe/spi"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/internal/util"
+	"github.com/failsafe-go/failsafe-go/spi"
 )
 
 /*

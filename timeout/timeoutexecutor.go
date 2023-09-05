@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"failsafe"
-	"failsafe/internal"
-	"failsafe/spi"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/internal"
+	"github.com/failsafe-go/failsafe-go/spi"
 )
 
 // timeoutExecutor is a failsafe.PolicyExecutor that handles failures according to a Timeout.

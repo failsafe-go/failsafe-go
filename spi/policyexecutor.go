@@ -1,8 +1,6 @@
 package spi
 
-import (
-	"failsafe"
-)
+import "github.com/failsafe-go/failsafe-go"
 
 // BasePolicyExecutor provides base implementation of PolicyExecutor.
 type BasePolicyExecutor[R any] struct {

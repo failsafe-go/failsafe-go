@@ -7,11 +7,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"failsafe"
-	"failsafe/circuitbreaker"
-	"failsafe/internal/policytesting"
-	"failsafe/internal/testutil"
-	"failsafe/retrypolicy"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/circuitbreaker"
+	"github.com/failsafe-go/failsafe-go/internal/policytesting"
+	"github.com/failsafe-go/failsafe-go/internal/testutil"
+	"github.com/failsafe-go/failsafe-go/retrypolicy"
 )
 
 func TestShouldRejectInitialExecutionWhenCircuitOpen(t *testing.T) {

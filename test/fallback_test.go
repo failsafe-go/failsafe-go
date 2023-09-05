@@ -3,9 +3,9 @@ package test
 import (
 	"testing"
 
-	"failsafe"
-	"failsafe/fallback"
-	"failsafe/internal/testutil"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/fallback"
+	"github.com/failsafe-go/failsafe-go/internal/testutil"
 )
 
 // Tests Fallback.WithResult

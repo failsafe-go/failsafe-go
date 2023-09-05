@@ -8,12 +8,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"failsafe"
-	"failsafe/circuitbreaker"
-	"failsafe/fallback"
-	"failsafe/internal/testutil"
-	"failsafe/internal/util"
-	"failsafe/retrypolicy"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/circuitbreaker"
+	"github.com/failsafe-go/failsafe-go/fallback"
+	"github.com/failsafe-go/failsafe-go/internal/testutil"
+	"github.com/failsafe-go/failsafe-go/internal/util"
+	"github.com/failsafe-go/failsafe-go/retrypolicy"
 )
 
 // Asserts context timeouts are handled as expected.

@@ -6,10 +6,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"failsafe"
-	"failsafe/fallback"
-	"failsafe/internal/testutil"
-	"failsafe/retrypolicy"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/fallback"
+	"github.com/failsafe-go/failsafe-go/internal/testutil"
+	"github.com/failsafe-go/failsafe-go/retrypolicy"
 )
 
 func TestGetWithSuccess(t *testing.T) {

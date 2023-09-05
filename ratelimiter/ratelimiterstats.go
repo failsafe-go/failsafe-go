@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"failsafe/internal/util"
+	"github.com/failsafe-go/failsafe-go/internal/util"
 )
 
 type rateLimiterStats interface {
