@@ -4,8 +4,8 @@ import (
 	"errors"
 	"time"
 
-	"failsafe"
-	"failsafe/spi"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/spi"
 )
 
 // ErrTimeoutExceeded is returned when an execution exceeds a configured timeout.

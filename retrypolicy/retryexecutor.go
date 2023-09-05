@@ -4,10 +4,10 @@ import (
 	"math/rand"
 	"time"
 
-	"failsafe"
-	"failsafe/internal"
-	"failsafe/internal/util"
-	"failsafe/spi"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/internal"
+	"github.com/failsafe-go/failsafe-go/internal/util"
+	"github.com/failsafe-go/failsafe-go/spi"
 )
 
 // retryPolicyExecutor is a failsafe.PolicyExecutor that handles failures according to a RetryPolicy.

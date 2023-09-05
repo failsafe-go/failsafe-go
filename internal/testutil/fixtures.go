@@ -1,8 +1,6 @@
 package testutil
 
-import (
-	"failsafe"
-)
+import "github.com/failsafe-go/failsafe-go"
 
 type InvalidArgumentError struct {
 	Cause error

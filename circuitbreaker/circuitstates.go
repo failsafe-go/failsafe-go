@@ -3,8 +3,8 @@ package circuitbreaker
 import (
 	"time"
 
-	"failsafe"
-	"failsafe/internal/util"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/internal/util"
 )
 
 // State of a CircuitBreaker.

@@ -6,7 +6,7 @@ import (
 
 	"github.com/bits-and-blooms/bitset"
 
-	"failsafe/internal/util"
+	"github.com/failsafe-go/failsafe-go/internal/util"
 )
 
 // stats for a CircuitBreaker.

@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"time"
 
-	"failsafe"
-	"failsafe/internal/util"
-	"failsafe/spi"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/internal/util"
+	"github.com/failsafe-go/failsafe-go/spi"
 )
 
 const defaultMaxRetries = 2

@@ -5,9 +5,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"failsafe"
-	"failsafe/circuitbreaker"
-	"failsafe/internal/testutil"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/circuitbreaker"
+	"github.com/failsafe-go/failsafe-go/internal/testutil"
 )
 
 // Tests that multiple circuit breakers handle failures as expected, regardless of order.

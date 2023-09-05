@@ -7,13 +7,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"failsafe"
-	"failsafe/circuitbreaker"
-	"failsafe/fallback"
-	"failsafe/internal/policytesting"
-	"failsafe/internal/testutil"
-	"failsafe/ratelimiter"
-	"failsafe/retrypolicy"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/circuitbreaker"
+	"github.com/failsafe-go/failsafe-go/fallback"
+	"github.com/failsafe-go/failsafe-go/internal/policytesting"
+	"github.com/failsafe-go/failsafe-go/internal/testutil"
+	"github.com/failsafe-go/failsafe-go/ratelimiter"
+	"github.com/failsafe-go/failsafe-go/retrypolicy"
 )
 
 // RetryPolicy -> CircuitBreaker

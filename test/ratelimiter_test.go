@@ -7,9 +7,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"failsafe"
-	"failsafe/internal/testutil"
-	"failsafe/ratelimiter"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/internal/testutil"
+	"github.com/failsafe-go/failsafe-go/ratelimiter"
 )
 
 func TestReservePermit(t *testing.T) {

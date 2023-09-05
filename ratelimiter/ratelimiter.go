@@ -5,9 +5,9 @@ import (
 	"errors"
 	"time"
 
-	"failsafe"
-	"failsafe/internal/util"
-	"failsafe/spi"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/internal/util"
+	"github.com/failsafe-go/failsafe-go/spi"
 )
 
 // ErrRateLimitExceeded is returned when an execution exceeds a configured rate limit.
