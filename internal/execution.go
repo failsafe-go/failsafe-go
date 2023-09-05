@@ -1,6 +1,6 @@
 package internal
 
-import failsafe "github.com/failsafe-go/failsafe-go"
+import "github.com/failsafe-go/failsafe-go"
 
 func NewExecutionAttempt[R any](result *failsafe.ExecutionResult[R], exec *failsafe.Execution[R]) failsafe.ExecutionAttempt[R] {
 	return failsafe.ExecutionAttempt[R]{
