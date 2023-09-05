@@ -2,7 +2,6 @@ package circuitbreaker
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -25,7 +24,7 @@ func (s State) String() string {
 	case HalfOpenState:
 		return "half-open"
 	default:
-		panic(fmt.Sprintf("invalid state %d", s))
+		return "unknown"
 	}
 }
 
