@@ -2,6 +2,7 @@ package circuitbreaker
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -14,6 +15,19 @@ var ErrCircuitBreakerOpen = errors.New("circuit breaker open")
 
 // State of a CircuitBreaker.
 type State int
+
+func (s State) String() string {
+	switch s {
+	case ClosedState:
+		return "closed"
+	case OpenState:
+		return "open"
+	case HalfOpenState:
+		return "half-open"
+	default:
+		panic(fmt.Sprintf("invalid state %d", s))
+	}
+}
 
 const (
 	// ClosedState indicates the circuit is closed and fully functional, allowing executions to occur.
