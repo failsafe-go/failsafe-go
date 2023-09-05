@@ -7,9 +7,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"failsafe"
-	"failsafe/internal/testutil"
-	"failsafe/retrypolicy"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/internal/testutil"
+	"github.com/failsafe-go/failsafe-go/retrypolicy"
 )
 
 func TestPanicInRetryPolicyDelayFunction(t *testing.T) {

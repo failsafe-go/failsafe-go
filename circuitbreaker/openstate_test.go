@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"failsafe"
+	"github.com/failsafe-go/failsafe-go"
 )
 
 var _ circuitState[any] = &openState[any]{}

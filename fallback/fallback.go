@@ -1,8 +1,8 @@
 package fallback
 
 import (
-	"failsafe"
-	"failsafe/spi"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/spi"
 )
 
 // Fallback is a Policy that handles failures using a fallback function, result, or error.

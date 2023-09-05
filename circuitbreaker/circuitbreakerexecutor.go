@@ -1,9 +1,9 @@
 package circuitbreaker
 
 import (
-	"failsafe"
-	"failsafe/internal"
-	"failsafe/spi"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/internal"
+	"github.com/failsafe-go/failsafe-go/spi"
 )
 
 // circuitBreakerExecutor is a failsafe.PolicyExecutor that handles failures according to a CircuitBreaker.

@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"failsafe/internal/testutil"
+	"github.com/failsafe-go/failsafe-go/internal/testutil"
 )
 
 var _ RetryPolicy[any] = &retryPolicy[any]{}

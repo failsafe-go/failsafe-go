@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"time"
 
-	"failsafe"
-	"failsafe/internal/util"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/internal/util"
 )
 
 // BaseListenablePolicy provides a base for implementing ListenablePolicyBuilder.

@@ -1,9 +1,9 @@
 package ratelimiter
 
 import (
-	"failsafe"
-	"failsafe/internal"
-	"failsafe/spi"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/internal"
+	"github.com/failsafe-go/failsafe-go/spi"
 )
 
 // rateLimiterExecutor is a failsafe.PolicyExecutor that handles failures according to a RateLimiter.

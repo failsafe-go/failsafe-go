@@ -4,12 +4,12 @@ package policytesting
 import (
 	"fmt"
 
-	"failsafe"
-	"failsafe/circuitbreaker"
-	"failsafe/fallback"
-	"failsafe/internal/testutil"
-	"failsafe/retrypolicy"
-	"failsafe/timeout"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/circuitbreaker"
+	"github.com/failsafe-go/failsafe-go/fallback"
+	"github.com/failsafe-go/failsafe-go/internal/testutil"
+	"github.com/failsafe-go/failsafe-go/retrypolicy"
+	"github.com/failsafe-go/failsafe-go/timeout"
 )
 
 func WithRetryStats[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *testutil.Stats) retrypolicy.RetryPolicyBuilder[R] {

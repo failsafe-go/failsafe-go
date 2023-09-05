@@ -1,4 +1,4 @@
-module failsafe
+module github.com/failsafe-go/failsafe-go
 
 go 1.20
 

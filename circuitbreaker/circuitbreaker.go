@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"failsafe"
-	"failsafe/spi"
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/spi"
 )
 
 // ErrCircuitBreakerOpen is returned when an execution is attempted against a circuit breaker that is open.
