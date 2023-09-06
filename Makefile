@@ -10,7 +10,7 @@ build: ## Build Failsafe-go
 
 .PHONY: test
 test: ## Test Failsafe-go
-	go test ./...
+	go run gotest.tools/gotestsum@latest
 
 .PHONY: fmt
 fmt: ## Format Failsafe-go
