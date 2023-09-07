@@ -15,7 +15,7 @@ type rateLimiterExecutor[R any] struct {
 var _ failsafe.PolicyExecutor[any] = &rateLimiterExecutor[any]{}
 
 func (rle *rateLimiterExecutor[R]) PreExecute(exec *failsafe.ExecutionInternal[R]) *failsafe.ExecutionResult[R] {
-	if err := rle.rateLimiter.AcquirePermitWithMaxWait(exec.Context, rle.config.maxWaitTime); err != nil {
+	if err := rle.rateLimiter.acquirePermitsWithMaxWait(exec.Context, exec.Canceled(), 1, rle.config.maxWaitTime); err != nil {
 		return internal.FailureResult[R](err)
 	}
 	return nil

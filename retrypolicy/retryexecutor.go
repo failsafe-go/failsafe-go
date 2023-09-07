@@ -46,9 +46,11 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) f
 					Delay:     delay,
 				})
 			}
+			timer := time.NewTimer(delay)
 			select {
-			case <-time.After(delay):
+			case <-timer.C:
 			case <-exec.Canceled():
+				timer.Stop()
 				if exec.IsCanceled(rpe.PolicyIndex) {
 					return exec.GetResult()
 				}

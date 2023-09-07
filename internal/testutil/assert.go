@@ -19,9 +19,11 @@ func (w *Waiter) AssertEqual(t *testing.T, expected, actual interface{}, msgAndA
 
 func WaitAndAssertCanceled[R any](t *testing.T, waitDuration time.Duration, exec failsafe.Execution[R]) {
 	assert.False(t, exec.IsCanceled())
+	timer := time.NewTimer(waitDuration)
 	select {
-	case <-time.After(waitDuration):
+	case <-timer.C:
 	case <-exec.Canceled():
+		timer.Stop()
 		assert.True(t, exec.IsCanceled())
 		return
 	}

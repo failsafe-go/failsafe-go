@@ -45,11 +45,13 @@ func (w *Waiter) Await(expectedResumes int) {
 
 func (w *Waiter) AwaitWithTimeout(expectedResumes int, timeout time.Duration) {
 	atomic.AddInt32(&w.count, int32(expectedResumes))
+	timer := time.NewTimer(timeout)
 	select {
-	case <-w.done:
-		return
-	case <-time.After(timeout):
+	case <-timer.C:
 		panic("Timed out while waiting for a resume")
+	case <-w.done:
+		timer.Stop()
+		return
 	}
 }
 

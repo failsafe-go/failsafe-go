@@ -212,7 +212,7 @@ func (c *rateLimiterConfig[R]) Build() RateLimiter[R] {
 		return &rateLimiter[R]{
 			config: c,
 			stats: &smoothRateLimiterStats[R]{
-				config:    c,
+				config:    c, // TODO copy base fields
 				stopwatch: util.NewStopwatch(),
 			},
 		}
@@ -220,7 +220,7 @@ func (c *rateLimiterConfig[R]) Build() RateLimiter[R] {
 	return &rateLimiter[R]{
 		config: c,
 		stats: &burstyRateLimiterStats[R]{
-			config:           c,
+			config:           c, // TODO copy base fields
 			stopwatch:        util.NewStopwatch(),
 			availablePermits: c.periodPermits,
 		},
@@ -237,19 +237,47 @@ func (r *rateLimiter[R]) AcquirePermit(ctx context.Context) error {
 }
 
 func (r *rateLimiter[R]) AcquirePermits(ctx context.Context, permits int) error {
-	return util.WaitWithContext(r.ReservePermits(permits), ctx)
+	waitTime := r.ReservePermits(permits)
+	if ctx != nil {
+		timer := time.NewTimer(waitTime)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		}
+	} else {
+		time.Sleep(waitTime)
+	}
+	return nil
 }
 
 func (r *rateLimiter[R]) AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) error {
-	return r.AcquirePermitsWithMaxWait(ctx, 1, maxWaitTime)
+	return r.acquirePermitsWithMaxWait(ctx, nil, 1, maxWaitTime)
 }
 
 func (r *rateLimiter[R]) AcquirePermitsWithMaxWait(ctx context.Context, requestedPermits int, maxWaitTime time.Duration) error {
+	return r.acquirePermitsWithMaxWait(ctx, nil, requestedPermits, maxWaitTime)
+}
+
+func (r *rateLimiter[R]) acquirePermitsWithMaxWait(ctx context.Context, canceled <-chan any, requestedPermits int, maxWaitTime time.Duration) error {
 	waitTime := r.stats.acquirePermits(requestedPermits, maxWaitTime)
 	if waitTime == -1 {
 		return ErrRateLimitExceeded
 	}
-	return util.WaitWithContext(waitTime, ctx)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	timer := time.NewTimer(waitTime)
+	select {
+	case <-timer.C:
+	case <-canceled:
+		timer.Stop()
+	case <-ctx.Done():
+		timer.Stop()
+		return ctx.Err()
+	}
+	return nil
 }
 
 func (r *rateLimiter[R]) ReservePermit() time.Duration {
