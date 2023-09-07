@@ -117,7 +117,11 @@ This type is not concurrency safe.
 type RateLimiterBuilder[R any] interface {
 	failsafe.ListenablePolicyBuilder[RateLimiterBuilder[R], R]
 
-	// WithMaxWaitTime configures the maxWaitTime to wait for permits to be available.
+	// WithMaxWaitTime configures the maxWaitTime to wait for permits to be available. If permits cannot be acquired before the maxWaitTime
+	// is exceeded, then the rate limiter will return ErrRateLimitExceeded.
+	//
+	// This setting only applies when the resulting RateLimiter is used with the failsafe.Run or related APIs. It does not apply when the
+	// RateLimiter is used in a standalone way.
 	WithMaxWaitTime(maxWaitTime time.Duration) RateLimiterBuilder[R]
 
 	// Build returns a new RateLimiter using the builder's configuration.
@@ -156,7 +160,7 @@ func SmoothBuilder[R any](maxExecutions int64, period time.Duration) RateLimiter
 }
 
 /*
-SmoothBuilderForMaxRate returns a smooth RateLimiterBuilder for execution result type R and the maxRate, which controls how frequently an
+SmoothBuilderWithMaxRate returns a smooth RateLimiterBuilder for execution result type R and the maxRate, which controls how frequently an
 execution is permitted. For example, a maxRate of 10 millis would allow up to one execution every 10 millis.
 
 By default, the returned RateLimiterBuilder will have a max wait time of 0.
@@ -164,7 +168,7 @@ By default, the returned RateLimiterBuilder will have a max wait time of 0.
 Executions are performed with no delay until they exceed the maxRate, after which executions are either rejected or will block and wait
 until the max wait time is exceeded.
 */
-func SmoothBuilderForMaxRate[R any](maxRate time.Duration) RateLimiterBuilder[R] {
+func SmoothBuilderWithMaxRate[R any](maxRate time.Duration) RateLimiterBuilder[R] {
 	return &rateLimiterConfig[R]{
 		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
 		interval:             maxRate,
@@ -233,7 +237,7 @@ func (r *rateLimiter[R]) AcquirePermit(ctx context.Context) error {
 }
 
 func (r *rateLimiter[R]) AcquirePermits(ctx context.Context, permits int) error {
-	return util.WaitWithContext(ctx, r.ReservePermits(permits))
+	return util.WaitWithContext(r.ReservePermits(permits), ctx)
 }
 
 func (r *rateLimiter[R]) AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) error {
@@ -245,7 +249,7 @@ func (r *rateLimiter[R]) AcquirePermitsWithMaxWait(ctx context.Context, requeste
 	if waitTime == -1 {
 		return ErrRateLimitExceeded
 	}
-	return util.WaitWithContext(ctx, waitTime)
+	return util.WaitWithContext(waitTime, ctx)
 }
 
 func (r *rateLimiter[R]) ReservePermit() time.Duration {

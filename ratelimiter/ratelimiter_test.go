@@ -12,7 +12,7 @@ import (
 var _ RateLimiter[any] = &rateLimiter[any]{}
 
 func TestAcquirePermit(t *testing.T) {
-	limiter := SmoothBuilderForMaxRate[any](100 * time.Millisecond).Build()
+	limiter := SmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
 	setTestStopwatch(limiter)
 
 	elapsed := testutil.Timed(func() {
@@ -24,7 +24,7 @@ func TestAcquirePermit(t *testing.T) {
 }
 
 func TestAcquireWithMaxWaitTime(t *testing.T) {
-	limiter := SmoothBuilderForMaxRate[any](100 * time.Millisecond).Build()
+	limiter := SmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
 	setTestStopwatch(limiter)
 
 	limiter.AcquirePermitWithMaxWait(nil, 100*time.Millisecond)        // waits 0
@@ -34,7 +34,7 @@ func TestAcquireWithMaxWaitTime(t *testing.T) {
 }
 
 func TestTryAcquirePermit(t *testing.T) {
-	limiter := SmoothBuilderForMaxRate[any](100 * time.Nanosecond).Build()
+	limiter := SmoothBuilderWithMaxRate[any](100 * time.Nanosecond).Build()
 	stopwatch := setTestStopwatch(limiter)
 
 	assert.True(t, limiter.TryAcquirePermit())

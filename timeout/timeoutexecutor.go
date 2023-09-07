@@ -1,10 +1,9 @@
 package timeout
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"sync/atomic"
+	"time"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/internal"
@@ -20,35 +19,20 @@ type timeoutExecutor[R any] struct {
 var _ failsafe.PolicyExecutor[any] = &timeoutExecutor[any]{}
 
 func (e *timeoutExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsafe.ExecutionHandler[R] {
-	// This func sets up a race between a timeout context, the execution's context, and the innerFn returning.
+	// This func sets up a race between a timeout and the innerFn returning
 	return func(exec *failsafe.ExecutionInternal[R]) *failsafe.ExecutionResult[R] {
 		var result atomic.Pointer[failsafe.ExecutionResult[R]]
-		timeoutCtx, timeoutCancelFn := context.WithTimeout(context.Background(), e.config.timeoutDelay)
 
-		go func() {
-			select {
-			case <-timeoutCtx.Done():
-				if errors.Is(timeoutCtx.Err(), context.DeadlineExceeded) {
-					// Timeout exceeded
-					fmt.Println("Timeout fired") // TODO remove
-					timeoutResult := internal.FailureResult[R](ErrTimeoutExceeded)
-					if result.CompareAndSwap(nil, timeoutResult) {
-						exec.Cancel(e, timeoutResult)
-					}
-				}
-
-			case <-exec.Context.Done():
-				// Execution context completed
-				if result.CompareAndSwap(nil, internal.FailureResult[R](exec.Context.Err())) {
-					timeoutCancelFn()
-				}
+		timer := time.AfterFunc(e.config.timeoutDelay, func() {
+			timeoutResult := internal.FailureResult[R](ErrTimeoutExceeded)
+			if result.CompareAndSwap(nil, timeoutResult) {
+				exec.Cancel(e.PolicyIndex, timeoutResult)
 			}
-		}()
+		})
 
 		// Store result and cancel timeout context if needed
 		if result.CompareAndSwap(nil, innerFn(exec)) {
-			fmt.Println("Execution done! canceling timeout") // TODO remove
-			timeoutCancelFn()
+			timer.Stop()
 		}
 		return e.PostExecute(exec, result.Load())
 	}

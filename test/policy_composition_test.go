@@ -72,9 +72,9 @@ func TestFallbackRetryPolicy(t *testing.T) {
 		3, 3, true)
 
 	// Given
-	fb = fallback.WithFn[bool](func(e failsafe.ExecutionAttemptedEvent[bool]) (bool, error) {
-		assert.False(t, e.LastResult)
-		assert.ErrorIs(t, testutil.InvalidStateError{}, e.LastErr)
+	fb = fallback.WithFn[bool](func(exec failsafe.Execution[bool]) (bool, error) {
+		assert.False(t, exec.LastResult)
+		assert.ErrorIs(t, testutil.InvalidStateError{}, exec.LastErr)
 		return true, nil
 	})
 
@@ -105,9 +105,9 @@ func TestRetryPolicyFallback(t *testing.T) {
 // Tests fallback with a circuit breaker that is closed.
 func TestFallbackCircuitBreaker(t *testing.T) {
 	// Given
-	fb := fallback.WithFn(func(e failsafe.ExecutionAttemptedEvent[bool]) (bool, error) {
-		assert.False(t, e.LastResult)
-		assert.ErrorIs(t, testutil.InvalidStateError{}, e.LastErr)
+	fb := fallback.WithFn(func(exec failsafe.Execution[bool]) (bool, error) {
+		assert.False(t, exec.LastResult)
+		assert.ErrorIs(t, testutil.InvalidStateError{}, exec.LastErr)
 		return true, nil
 	})
 	cb := circuitbreaker.Builder[bool]().WithSuccessThreshold(3).Build()
@@ -123,9 +123,9 @@ func TestFallbackCircuitBreaker(t *testing.T) {
 // Tests fallback with a circuit breaker that is open.
 func TestFallbackCircuitBreakerOpen(t *testing.T) {
 	// Given
-	fb := fallback.WithFn(func(e failsafe.ExecutionAttemptedEvent[bool]) (bool, error) {
-		assert.False(t, e.LastResult)
-		assert.ErrorIs(t, circuitbreaker.ErrCircuitBreakerOpen, e.LastErr)
+	fb := fallback.WithFn(func(exec failsafe.Execution[bool]) (bool, error) {
+		assert.False(t, exec.LastResult)
+		assert.ErrorIs(t, circuitbreaker.ErrCircuitBreakerOpen, exec.LastErr)
 		return false, nil
 	})
 	cb := circuitbreaker.Builder[bool]().WithSuccessThreshold(3).Build()

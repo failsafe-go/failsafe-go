@@ -2,6 +2,7 @@ package failsafe
 
 import (
 	"context"
+	"math"
 	"sync"
 )
 
@@ -20,7 +21,8 @@ type Executor[R any] interface {
 	//     Fallback(RetryPolicy(CircuitBreaker(func)))
 	Compose(innerPolicy Policy[R]) Executor[R]
 
-	// WithContext returns a new copy of the Executor with the ctx configured, which can be used to cancel executions.
+	// WithContext returns a new copy of the Executor with the ctx configured. Any executions created with the resulting Executor will be
+	// canceled when the ctx is done. Executions can cooperate with cancellation by checking Execution.Canceled or Execution.IsCanceled.
 	WithContext(ctx context.Context) Executor[R]
 
 	// OnComplete registers the listener to be called when an execution is complete.
@@ -84,7 +86,6 @@ func With[R any](outerPolicy Policy[R], policies ...Policy[R]) Executor[R] {
 	policies = append([]Policy[R]{outerPolicy}, policies...)
 	return &executor[R]{
 		policies: policies,
-		ctx:      context.Background(),
 	}
 }
 
@@ -115,26 +116,32 @@ func (e *executor[R]) OnFailure(listener func(ExecutionCompletedEvent[R])) Execu
 }
 
 func (e *executor[R]) Run(fn func() error) (err error) {
-	_, err = e.GetWithExecution(func(exec Execution[R]) (R, error) {
+	_, err = e.execute(func(exec Execution[R]) (R, error) {
 		return *(new(R)), fn()
-	})
+	}, false)
 	return err
 }
 
 func (e *executor[R]) RunWithExecution(fn func(exec Execution[R]) error) (err error) {
-	_, err = e.GetWithExecution(func(exec Execution[R]) (R, error) {
+	_, err = e.execute(func(exec Execution[R]) (R, error) {
 		return *(new(R)), fn(exec)
-	})
+	}, true)
 	return err
 }
 
 func (e *executor[R]) Get(fn func() (R, error)) (R, error) {
-	return e.GetWithExecution(func(exec Execution[R]) (R, error) {
+	return e.execute(func(exec Execution[R]) (R, error) {
 		return fn()
-	})
+	}, false)
 }
 
 func (e *executor[R]) GetWithExecution(fn func(exec Execution[R]) (R, error)) (R, error) {
+	return e.execute(func(exec Execution[R]) (R, error) {
+		return fn(exec)
+	}, true)
+}
+
+func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error), withExecution bool) (R, error) {
 	outerFn := func(execInternal *ExecutionInternal[R]) *ExecutionResult[R] {
 		result, err := fn(execInternal.Execution)
 		er := &ExecutionResult[R]{
@@ -145,8 +152,8 @@ func (e *executor[R]) GetWithExecution(fn func(exec Execution[R]) (R, error)) (R
 			SuccessAll: true,
 		}
 		execInternal.Executions++
-		execInternal.Record(er)
-		return er
+		r := execInternal.Record(er)
+		return r
 	}
 
 	// Compose policy executors from the innermost policy to the outermost
@@ -154,18 +161,38 @@ func (e *executor[R]) GetWithExecution(fn func(exec Execution[R]) (R, error)) (R
 		outerFn = e.policies[i].ToExecutor(policyIndex).Apply(outerFn)
 	}
 
+	// Prepare execution
+	canceledIndex := -1
 	execInternal := &ExecutionInternal[R]{
 		Execution: Execution[R]{
-			ExecutionAttempt: ExecutionAttempt[R]{
-				ExecutionStats: ExecutionStats{},
-			},
-			Context:       e.ctx,
-			mtx:           &sync.Mutex{},
-			canceledIndex: -1,
+			ExecutionStats: ExecutionStats{},
+			mtx:            &sync.Mutex{},
+			canceled:       make(chan any),
+			canceledIndex:  &canceledIndex,
 		},
+		Context: e.ctx,
 	}
-	execInternal.InitializeAttempt(nil)
+
+	// Propagate context cancellations to the execution
+	ctx := e.ctx
+	var stopAfterFunc func() bool
+	if ctx != nil {
+		stopAfterFunc = context.AfterFunc(ctx, func() {
+			execInternal.Cancel(math.MaxInt, &ExecutionResult[R]{
+				Err:      ctx.Err(),
+				Complete: true,
+			})
+		})
+	}
+
+	// Initialize first attempt and execute
+	execInternal.InitializeAttempt(canceledIndex)
 	er := outerFn(execInternal)
+
+	// Stop the Context AfterFunc and call listeners
+	if stopAfterFunc != nil {
+		stopAfterFunc()
+	}
 	if e.onSuccess != nil && er.SuccessAll {
 		e.onSuccess(newExecutionCompletedEvent(er, &execInternal.ExecutionStats))
 	} else if e.onFailure != nil && !er.SuccessAll {

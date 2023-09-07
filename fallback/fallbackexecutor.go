@@ -2,7 +2,6 @@ package fallback
 
 import (
 	"github.com/failsafe-go/failsafe-go"
-	"github.com/failsafe-go/failsafe-go/internal"
 	"github.com/failsafe-go/failsafe-go/spi"
 )
 
@@ -18,19 +17,24 @@ var _ failsafe.PolicyExecutor[any] = &fallbackExecutor[any]{}
 func (e *fallbackExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsafe.ExecutionHandler[R] {
 	return func(exec *failsafe.ExecutionInternal[R]) *failsafe.ExecutionResult[R] {
 		result := innerFn(exec)
-		if exec.IsCanceled(e) {
+		if exec.IsCanceled(e.PolicyIndex) {
 			return result
 		}
 
 		if e.IsFailure(result) {
+			execWithResult := exec.ExecutionForResult(result)
 			event := failsafe.ExecutionAttemptedEvent[R]{
-				ExecutionAttempt: internal.NewExecutionAttempt(result, &exec.Execution),
+				Execution: execWithResult,
 			}
 			if e.config.failedAttemptListener != nil {
 				e.config.failedAttemptListener(event)
 			}
 
-			fallbackResult, err := e.config.fn(event)
+			fallbackResult, err := e.config.fn(execWithResult)
+			if exec.IsCanceled(e.PolicyIndex) {
+				return result
+			}
+
 			result = &failsafe.ExecutionResult[R]{
 				Result:     fallbackResult,
 				Err:        err,

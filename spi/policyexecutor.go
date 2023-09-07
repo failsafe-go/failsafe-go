@@ -7,7 +7,7 @@ type BasePolicyExecutor[R any] struct {
 	failsafe.PolicyExecutor[R]
 	*BaseListenablePolicy[R]
 	*BaseFailurePolicy[R]
-	// Index of the policy relative to other policies in a composition, innermost first
+	// Index of the policy relative to other policies in a composition, starting at 0 with the innermost policy.
 	PolicyIndex int
 }
 
@@ -31,7 +31,7 @@ func (bpe *BasePolicyExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) fa
 
 func (bpe *BasePolicyExecutor[R]) PostExecute(exec *failsafe.ExecutionInternal[R], er *failsafe.ExecutionResult[R]) *failsafe.ExecutionResult[R] {
 	if bpe.PolicyExecutor.IsFailure(er) {
-		er = bpe.PolicyExecutor.OnFailure(&exec.Execution, er.WithFailure())
+		er = bpe.PolicyExecutor.OnFailure(exec, er.WithFailure())
 		if er.Complete && bpe.BaseListenablePolicy.failureListener != nil {
 			bpe.BaseListenablePolicy.failureListener(failsafe.ExecutionCompletedEvent[R]{
 				Result:         er.Result,
@@ -63,7 +63,7 @@ func (bpe *BasePolicyExecutor[R]) IsFailure(result *failsafe.ExecutionResult[R])
 func (bpe *BasePolicyExecutor[R]) OnSuccess(_ *failsafe.ExecutionResult[R]) {
 }
 
-func (bpe *BasePolicyExecutor[R]) OnFailure(_ *failsafe.Execution[R], result *failsafe.ExecutionResult[R]) *failsafe.ExecutionResult[R] {
+func (bpe *BasePolicyExecutor[R]) OnFailure(_ *failsafe.ExecutionInternal[R], result *failsafe.ExecutionResult[R]) *failsafe.ExecutionResult[R] {
 	return result
 }
 

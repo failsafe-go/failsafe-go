@@ -36,7 +36,7 @@ type FallbackBuilder[R any] interface {
 type fallbackConfig[R any] struct {
 	*spi.BaseListenablePolicy[R]
 	*spi.BaseFailurePolicy[R]
-	fn                    func(event failsafe.ExecutionAttemptedEvent[R]) (R, error)
+	fn                    func(exec failsafe.Execution[R]) (R, error)
 	failedAttemptListener func(failsafe.ExecutionAttemptedEvent[R])
 }
 
@@ -57,14 +57,14 @@ func WithError[R any](err error) Fallback[R] {
 }
 
 // WithFn returns a Fallback for execution result type R that uses fallbackFn to handle a failed execution.
-func WithFn[R any](fallbackFn func(event failsafe.ExecutionAttemptedEvent[R]) (R, error)) Fallback[R] {
+func WithFn[R any](fallbackFn func(exec failsafe.Execution[R]) (R, error)) Fallback[R] {
 	return BuilderWithFn(fallbackFn).Build()
 }
 
 // BuilderWithResult returns a FallbackBuilder for execution result type R which builds Fallbacks that return the result when an execution
 // fails.
 func BuilderWithResult[R any](result R) FallbackBuilder[R] {
-	return BuilderWithFn(func(event failsafe.ExecutionAttemptedEvent[R]) (R, error) {
+	return BuilderWithFn(func(exec failsafe.Execution[R]) (R, error) {
 		return result, nil
 	})
 }
@@ -72,14 +72,14 @@ func BuilderWithResult[R any](result R) FallbackBuilder[R] {
 // BuilderWithError returns a FallbackBuilder for execution result type R which builds Fallbacks that return the error when an execution
 // fails.
 func BuilderWithError[R any](err error) FallbackBuilder[R] {
-	return BuilderWithFn(func(event failsafe.ExecutionAttemptedEvent[R]) (R, error) {
+	return BuilderWithFn(func(exec failsafe.Execution[R]) (R, error) {
 		return *(new(R)), err
 	})
 }
 
 // BuilderWithFn returns a FallbackBuilder for execution result type R which builds Fallbacks that use the fallbackFn to handle failed
 // executions.
-func BuilderWithFn[R any](fallbackFn func(event failsafe.ExecutionAttemptedEvent[R]) (R, error)) FallbackBuilder[R] {
+func BuilderWithFn[R any](fallbackFn func(exec failsafe.Execution[R]) (R, error)) FallbackBuilder[R] {
 	return &fallbackConfig[R]{
 		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
 		BaseFailurePolicy:    &spi.BaseFailurePolicy[R]{},

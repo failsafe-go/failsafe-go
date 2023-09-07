@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	failsafe "github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go"
 )
 
 type WhenGet[R any] func(execution failsafe.Execution[R]) (R, error)
@@ -44,8 +44,12 @@ func testRun[R any](t *testing.T, executor failsafe.Executor[R], when WhenRun[R]
 	err := executor.OnComplete(func(e failsafe.ExecutionCompletedEvent[R]) {
 		completedEvent = &e
 	}).RunWithExecution(when)
-	assert.Equal(t, expectedAttempts, completedEvent.Attempts, "expected attempts did not match")
-	assert.Equal(t, expectedExecutions, completedEvent.Executions, "expected executions did not match")
+	if expectedAttempts != -1 {
+		assert.Equal(t, expectedAttempts, completedEvent.Attempts, "expected attempts did not match")
+	}
+	if expectedExecutions != -1 {
+		assert.Equal(t, expectedExecutions, completedEvent.Executions, "expected executions did not match")
+	}
 	assert.ErrorIs(t, expectedError, err, "expected error did not match")
 }
 

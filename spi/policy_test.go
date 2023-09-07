@@ -50,15 +50,13 @@ func TestIsFailureForPredicate(t *testing.T) {
 func TestShouldComputeDelay(t *testing.T) {
 	expected := 5 * time.Millisecond
 	policy := BaseDelayablePolicy[any]{
-		DelayFn: func(exec *failsafe.Execution[any]) time.Duration {
+		DelayFn: func(exec failsafe.Execution[any]) time.Duration {
 			return expected
 		},
 	}
 
 	assert.Equal(t, expected, policy.ComputeDelay(&failsafe.Execution[any]{
-		ExecutionAttempt: failsafe.ExecutionAttempt[any]{
-			LastResult: true,
-		},
+		LastResult: true,
 	}))
 	assert.Equal(t, time.Duration(-1), policy.ComputeDelay(nil))
 }

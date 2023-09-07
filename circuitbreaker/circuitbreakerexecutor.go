@@ -25,9 +25,9 @@ func (cbe *circuitBreakerExecutor[R]) OnSuccess(_ *failsafe.ExecutionResult[R]) 
 	cbe.RecordSuccess()
 }
 
-func (cbe *circuitBreakerExecutor[R]) OnFailure(exec *failsafe.Execution[R], result *failsafe.ExecutionResult[R]) *failsafe.ExecutionResult[R] {
+func (cbe *circuitBreakerExecutor[R]) OnFailure(exec *failsafe.ExecutionInternal[R], result *failsafe.ExecutionResult[R]) *failsafe.ExecutionResult[R] {
 	cbe.mtx.Lock()
 	defer cbe.mtx.Unlock()
-	cbe.recordFailure(exec)
+	cbe.recordFailure(&exec.Execution)
 	return result
 }

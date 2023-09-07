@@ -161,7 +161,7 @@ func TestTimeoutFallbackWithBlockedFallback(t *testing.T) {
 	timeoutStats := &testutil.Stats{}
 	fbStats := &testutil.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](100*time.Millisecond), timeoutStats).Build()
-	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithFn[any](func(e failsafe.ExecutionAttemptedEvent[any]) (any, error) {
+	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithFn[any](func(_ failsafe.Execution[any]) (any, error) {
 		time.Sleep(200 * time.Millisecond)
 		return nil, testutil.InvalidStateError{}
 	}), fbStats).Build()
@@ -172,5 +172,5 @@ func TestTimeoutFallbackWithBlockedFallback(t *testing.T) {
 		},
 		1, 1, timeout.ErrTimeoutExceeded)
 	assert.Equal(t, 1, timeoutStats.FailureCount)
-	assert.Equal(t, 1, fbStats.ExecutionCount)
+	assert.Equal(t, 0, fbStats.ExecutionCount)
 }

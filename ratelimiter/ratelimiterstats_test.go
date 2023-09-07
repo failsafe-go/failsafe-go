@@ -179,7 +179,7 @@ func TestShouldHaveZeroWaitTime(t *testing.T) {
 }
 
 func newSmoothLimiterStats(maxRate time.Duration) (*smoothRateLimiterStats[any], *testutil.TestStopwatch) {
-	stats := SmoothBuilderForMaxRate[any](maxRate).Build().(*rateLimiter[any]).stats.(*smoothRateLimiterStats[any])
+	stats := SmoothBuilderWithMaxRate[any](maxRate).Build().(*rateLimiter[any]).stats.(*smoothRateLimiterStats[any])
 	stopwatch := &testutil.TestStopwatch{}
 	stats.stopwatch = stopwatch
 	return stats, stopwatch

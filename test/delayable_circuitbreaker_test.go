@@ -13,7 +13,7 @@ import (
 )
 
 func TestPanicInCircuitBreakerDelayFunction(t *testing.T) {
-	breaker := circuitbreaker.Builder[any]().WithDelayFn(func(exec *failsafe.Execution[any]) time.Duration {
+	breaker := circuitbreaker.Builder[any]().WithDelayFn(func(exec failsafe.Execution[any]) time.Duration {
 		panic("test")
 	}).Build()
 
@@ -28,7 +28,7 @@ func TestShouldDelayCircuitBreaker(t *testing.T) {
 		HandleIf(func(i int, _ error) bool {
 			return i > 0
 		}).
-		WithDelayFn(func(exec *failsafe.Execution[int]) time.Duration {
+		WithDelayFn(func(exec failsafe.Execution[int]) time.Duration {
 			delays++ // side-effect for test purposes
 			return 1
 		}).

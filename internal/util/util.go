@@ -6,7 +6,7 @@ import (
 )
 
 type number interface {
-	int | int64 | time.Duration
+	~int | ~int64 | ~uint | ~uint64
 }
 
 // AppliesToAny returns true if any of the biPredicates evaluate to true for the values.
@@ -56,17 +56,16 @@ func RandomDelayFactor[T number](delay T, jitterFactor float32, random float32) 
 	return T(float32(delay) * randomFactor)
 }
 
-// WaitWithContext waits for the waitTime, returning nil, else returning an error if the ctx is done first.
-func WaitWithContext(ctx context.Context, waitTime time.Duration) error {
+// WaitWithContext waits for the waitTime, returning nil if the waitTime elapses, else an error if the ctx is done first.
+func WaitWithContext(waitTime time.Duration, ctx context.Context) error {
 	if ctx != nil {
 		select {
 		case <-time.After(waitTime):
 		case <-ctx.Done():
 			return ctx.Err()
 		}
-	} else {
-		time.Sleep(waitTime)
 	}
+	time.Sleep(waitTime)
 	return nil
 }
 

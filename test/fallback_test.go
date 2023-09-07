@@ -32,9 +32,9 @@ func TestShouldFallbackOfError(t *testing.T) {
 
 // Tests Fallback.WithFn
 func TestShouldFallbackOfFn(t *testing.T) {
-	fb := fallback.WithFn[bool](func(event failsafe.ExecutionAttemptedEvent[bool]) (bool, error) {
+	fb := fallback.WithFn[bool](func(exec failsafe.Execution[bool]) (bool, error) {
 		return false, testutil.InvalidArgumentError{
-			Cause: event.LastErr,
+			Cause: exec.LastErr,
 		}
 	})
 

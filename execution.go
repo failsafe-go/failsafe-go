@@ -1,7 +1,6 @@
 package failsafe
 
 import (
-	"context"
 	"sync"
 	"time"
 )
@@ -32,47 +31,50 @@ func (s *ExecutionStats) GetElapsedTime() time.Duration {
 	return time.Since(s.StartTime)
 }
 
-// ExecutionAttempt contains information about an execution attempt.
-type ExecutionAttempt[R any] struct {
+// Execution contains information about an execution.
+type Execution[R any] struct {
 	ExecutionStats
+	// The time that the most recent execution attempt started at.
+	AttemptStartTime time.Time
+	mtx              *sync.Mutex
+
+	// Guarded by mtx
+
 	// The last error that occurred, else the zero value for R.
 	LastResult R
 	// The last error that occurred, else nil.
-	LastErr error
-	// The time that the most recent execution attempt started at.
-	AttemptStartTime time.Time
+	LastErr       error
+	canceled      chan any
+	canceledIndex *int
 }
 
 // GetElapsedAttemptTime returns the elapsed time since the last execution attempt began.
-func (e *ExecutionAttempt[_]) GetElapsedAttemptTime() time.Duration {
+func (e *Execution[_]) GetElapsedAttemptTime() time.Duration {
 	return time.Since(e.AttemptStartTime)
 }
 
-// Execution contains information about an execution in progress.
-type Execution[R any] struct {
-	ExecutionAttempt[R]
-	Context context.Context
-	mtx     *sync.Mutex
-	// Guarded by mtx
-	canceledIndex int
-}
-
-// IsCanceled returns whether the execution has been canceled. This happens when Timeout is exceeded or a configured Context is done, where
-// the [context.Context.Err] is not nil.
+// IsCanceled returns whether the execution has been canceled by an external Context or a timeout.Timeout.
 func (e *Execution[_]) IsCanceled() bool {
 	e.mtx.Lock()
 	defer e.mtx.Unlock()
-	return e.canceledIndex > -1 || (e.Context != nil && e.Context.Err() != nil)
+	return *e.canceledIndex > -1
+}
+
+// Canceled returns a channel that is done when the execution is canceled, either by an external Context or a timeout.Timeout.
+func (e *Execution[_]) Canceled() <-chan any {
+	e.mtx.Lock()
+	defer e.mtx.Unlock()
+	return e.canceled
 }
 
 // ExecutionAttemptedEvent indicates an execution was attempted.
 type ExecutionAttemptedEvent[R any] struct {
-	ExecutionAttempt[R]
+	Execution[R]
 }
 
 // ExecutionScheduledEvent indicates an execution was scheduled.
 type ExecutionScheduledEvent[R any] struct {
-	ExecutionAttempt[R]
+	Execution[R]
 	// The delay before the next execution attempt.
 	Delay time.Duration
 }

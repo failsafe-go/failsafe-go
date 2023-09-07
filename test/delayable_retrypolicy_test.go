@@ -13,7 +13,7 @@ import (
 )
 
 func TestPanicInRetryPolicyDelayFunction(t *testing.T) {
-	breaker := retrypolicy.Builder[any]().WithDelayFn(func(exec *failsafe.Execution[any]) time.Duration {
+	breaker := retrypolicy.Builder[any]().WithDelayFn(func(exec failsafe.Execution[any]) time.Duration {
 		panic("test")
 	}).Build()
 
@@ -26,7 +26,7 @@ func TestShouldDelayRetryPolicy(t *testing.T) {
 	delays := 0
 	retryPolicy := retrypolicy.Builder[bool]().
 		HandleResult(false).
-		WithDelayFn(func(exec *failsafe.Execution[bool]) time.Duration {
+		WithDelayFn(func(exec failsafe.Execution[bool]) time.Duration {
 			delays++ // side-effect for test purposes
 			return 1
 		}).

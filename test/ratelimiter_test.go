@@ -14,7 +14,7 @@ import (
 
 func TestReservePermit(t *testing.T) {
 	// Given
-	limiter := ratelimiter.SmoothBuilderForMaxRate[any](100 * time.Millisecond).Build()
+	limiter := ratelimiter.SmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
 
 	// When / Then
 	assert.Equal(t, time.Duration(0), limiter.ReservePermit())
@@ -24,7 +24,7 @@ func TestReservePermit(t *testing.T) {
 
 func TestTryReservePermit(t *testing.T) {
 	// Given
-	limiter := ratelimiter.SmoothBuilderForMaxRate[any](100 * time.Millisecond).Build()
+	limiter := ratelimiter.SmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
 
 	// When / Then
 	assert.Equal(t, time.Duration(0), limiter.TryReservePermit(1*time.Millisecond))
@@ -36,7 +36,7 @@ func TestTryReservePermit(t *testing.T) {
 
 func TestPermitAcquiredAfterWait(t *testing.T) {
 	// Given
-	limiter := ratelimiter.SmoothBuilderForMaxRate[string](50 * time.Millisecond).
+	limiter := ratelimiter.SmoothBuilderWithMaxRate[string](50 * time.Millisecond).
 		WithMaxWaitTime(2 * time.Second).
 		Build()
 
@@ -51,7 +51,7 @@ func TestPermitAcquiredAfterWait(t *testing.T) {
 
 func TestShouldReturnRateLimitExceededError(t *testing.T) {
 	// Given
-	limiter := ratelimiter.SmoothBuilderForMaxRate[any](100 * time.Millisecond).Build()
+	limiter := ratelimiter.SmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
 
 	// When / Then
 	limiter.TryAcquirePermit() // limiter should now be out of permits
@@ -65,7 +65,7 @@ func TestShouldReturnRateLimitExceededError(t *testing.T) {
 // Asserts that an exceeded maxWaitTime causes ErrRateLimitExceeded.
 func TestMaxWaitTimeExceeded(t *testing.T) {
 	// Given
-	limiter := ratelimiter.SmoothBuilderForMaxRate[any](10 * time.Millisecond).Build()
+	limiter := ratelimiter.SmoothBuilderWithMaxRate[any](10 * time.Millisecond).Build()
 
 	// When / Then
 	limiter.AcquirePermitsWithMaxWait(nil, 50, time.Minute) // limiter should now be well over its max permits
@@ -78,7 +78,7 @@ func TestMaxWaitTimeExceeded(t *testing.T) {
 
 func TestCancelRateLimiting(t *testing.T) {
 	// Given
-	limiter := ratelimiter.SmoothBuilderForMaxRate[any](time.Second).Build()
+	limiter := ratelimiter.SmoothBuilderWithMaxRate[any](time.Second).Build()
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		time.Sleep(100 * time.Millisecond)
