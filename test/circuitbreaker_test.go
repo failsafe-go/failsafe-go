@@ -105,8 +105,8 @@ func TestShouldReturnErrCircuitBreakerOpenAfterFailuresExceeded(t *testing.T) {
 
 // Tests a scenario where CircuitBreaker rejects some retried executions, which prevents the user's Supplier from being called.
 func TestRejectedWithRetries(t *testing.T) {
-	rpStats := &testutil.Stats{}
-	cbStats := &testutil.Stats{}
+	rpStats := &policytesting.Stats{}
+	cbStats := &policytesting.Stats{}
 	rp := policytesting.WithRetryStats(retrypolicy.Builder[any]().WithMaxAttempts(7), rpStats).Build()
 	cb := policytesting.WithBreakerStats(circuitbreaker.Builder[any]().
 		WithFailureThreshold(3), cbStats).

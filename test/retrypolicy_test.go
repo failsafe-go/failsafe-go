@@ -60,7 +60,7 @@ func TestShouldNotRetryOnNonRetriableFailure(t *testing.T) {
 // Asserts that an execution is failed when the max duration is exceeded.
 func TestShouldCompleteWhenMaxDurationExceeded(t *testing.T) {
 	// Given
-	stats := &testutil.Stats{}
+	stats := &policytesting.Stats{}
 	rp := policytesting.WithRetryStats(retrypolicy.Builder[bool]().
 		HandleResult(false).
 		WithMaxDuration(100*time.Millisecond), stats).

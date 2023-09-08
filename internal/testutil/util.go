@@ -29,7 +29,7 @@ func Timed(fn func()) time.Duration {
 }
 
 type Waiter struct {
-	count int32
+	count atomic.Int32
 	done  chan struct{}
 }
 
@@ -44,7 +44,7 @@ func (w *Waiter) Await(expectedResumes int) {
 }
 
 func (w *Waiter) AwaitWithTimeout(expectedResumes int, timeout time.Duration) {
-	atomic.AddInt32(&w.count, int32(expectedResumes))
+	w.count.Add(int32(expectedResumes))
 	timer := time.NewTimer(timeout)
 	select {
 	case <-timer.C:
@@ -56,11 +56,11 @@ func (w *Waiter) AwaitWithTimeout(expectedResumes int, timeout time.Duration) {
 }
 
 func (w *Waiter) Resume() {
-	i := atomic.AddInt32(&w.count, -1)
-	if i == 0 {
+	remainingResumes := w.count.Add(int32(-1))
+	if remainingResumes == 0 {
 		close(w.done)
 	}
-	if i < 0 {
+	if remainingResumes < 0 {
 		panic("too many Resume() calls")
 	}
 }

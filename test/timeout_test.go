@@ -30,8 +30,8 @@ func TestShouldNotTimeout(t *testing.T) {
 
 // Tests that an inner timeout does not prevent outer retries from being performed when the inner func is blocked.
 func TestRetryTimeoutWithBlockedFunc(t *testing.T) {
-	timeoutStats := &testutil.Stats{}
-	rpStats := &testutil.Stats{}
+	timeoutStats := &policytesting.Stats{}
+	rpStats := &policytesting.Stats{}
 	timeout := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](50*time.Millisecond), timeoutStats).Build()
 	rp := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[any](), rpStats).Build()
 
@@ -53,8 +53,8 @@ func TestRetryTimeoutWithBlockedFunc(t *testing.T) {
 // Tests that when an outer retry is scheduled any inner timeouts are cancelled. This prevents the timeout from accidentally cancelling a
 // scheduled retry that may be pending.
 func TestRetryTimeoutWithPendingRetry(t *testing.T) {
-	timeoutStats := &testutil.Stats{}
-	rpStats := &testutil.Stats{}
+	timeoutStats := &policytesting.Stats{}
+	rpStats := &policytesting.Stats{}
 	timeout := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](50*time.Millisecond), timeoutStats).Build()
 	rp := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[any]().WithDelay(100*time.Millisecond), rpStats).Build()
 
@@ -73,7 +73,7 @@ func TestRetryTimeoutWithPendingRetry(t *testing.T) {
 //   - Execution that retries a few times, blocking each time
 //   - Timeout
 func TestTimeoutRetryWithBlockedFunc(t *testing.T) {
-	timeoutStats := &testutil.Stats{}
+	timeoutStats := &policytesting.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](150*time.Millisecond), timeoutStats).Build()
 	rp := retrypolicy.WithDefaults[any]()
 
@@ -91,8 +91,8 @@ func TestTimeoutRetryWithBlockedFunc(t *testing.T) {
 //   - Retry sleep/scheduled that blocks
 //   - Timeout
 func TestTimeoutRetryWithPendingRetry(t *testing.T) {
-	timeoutStats := &testutil.Stats{}
-	rpStats := &testutil.Stats{}
+	timeoutStats := &policytesting.Stats{}
+	rpStats := &policytesting.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](100*time.Millisecond), timeoutStats).Build()
 	rp := policytesting.WithRetryStatsAndLogs[any](retrypolicy.Builder[any]().WithDelay(time.Second), rpStats).Build()
 
@@ -107,8 +107,8 @@ func TestTimeoutRetryWithPendingRetry(t *testing.T) {
 
 // Tests an inner timeout that fires while the func is blocked.
 func TestFallbackTimeoutWithBlockedFunc(t *testing.T) {
-	timeoutStats := &testutil.Stats{}
-	fbStats := &testutil.Stats{}
+	timeoutStats := &policytesting.Stats{}
+	fbStats := &policytesting.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](10*time.Millisecond), timeoutStats).Build()
 	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithError[any](testutil.InvalidArgumentError{}), fbStats).Build()
 
@@ -125,8 +125,8 @@ func TestFallbackTimeoutWithBlockedFunc(t *testing.T) {
 
 // Tests that an inner timeout will not interrupt an outer fallback. The inner timeout is never triggered since the func completes immediately.
 func TestFallbackTimeout(t *testing.T) {
-	timeoutStats := &testutil.Stats{}
-	fbStats := &testutil.Stats{}
+	timeoutStats := &policytesting.Stats{}
+	fbStats := &policytesting.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](10*time.Millisecond), timeoutStats).Build()
 	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithError[any](testutil.InvalidArgumentError{}), fbStats).Build()
 
@@ -141,8 +141,8 @@ func TestFallbackTimeout(t *testing.T) {
 
 // Tests that an outer timeout will interrupt an inner func that is blocked, skipping the inner fallback.
 func TestTimeoutFallbackWithBlockedFunc(t *testing.T) {
-	timeoutStats := &testutil.Stats{}
-	fbStats := &testutil.Stats{}
+	timeoutStats := &policytesting.Stats{}
+	fbStats := &policytesting.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](10*time.Millisecond), timeoutStats).Build()
 	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithError[any](testutil.InvalidArgumentError{}), fbStats).Build()
 
@@ -158,8 +158,8 @@ func TestTimeoutFallbackWithBlockedFunc(t *testing.T) {
 
 // Tests that an outer timeout will interrupt an inner fallback that is blocked.
 func TestTimeoutFallbackWithBlockedFallback(t *testing.T) {
-	timeoutStats := &testutil.Stats{}
-	fbStats := &testutil.Stats{}
+	timeoutStats := &policytesting.Stats{}
+	fbStats := &policytesting.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](100*time.Millisecond), timeoutStats).Build()
 	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithFn[any](func(_ failsafe.Execution[any]) (any, error) {
 		time.Sleep(200 * time.Millisecond)

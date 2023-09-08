@@ -12,19 +12,39 @@ import (
 	"github.com/failsafe-go/failsafe-go/timeout"
 )
 
-func WithRetryStats[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *testutil.Stats) retrypolicy.RetryPolicyBuilder[R] {
+type Stats struct {
+	ExecutionCount      int
+	FailedAttemptCount  int
+	SuccessCount        int
+	FailureCount        int
+	RetryCount          int
+	RetrieExceededCount int
+	AbortCount          int
+}
+
+func (s *Stats) Reset() {
+	s.ExecutionCount = 0
+	s.FailedAttemptCount = 0
+	s.SuccessCount = 0
+	s.FailureCount = 0
+	s.RetryCount = 0
+	s.RetrieExceededCount = 0
+	s.AbortCount = 0
+}
+
+func WithRetryStats[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *Stats) retrypolicy.RetryPolicyBuilder[R] {
 	return withRetryStatsAndLogs(rp, stats, false)
 }
 
 func WithRetryLogs[R any](rp retrypolicy.RetryPolicyBuilder[R]) retrypolicy.RetryPolicyBuilder[R] {
-	return withRetryStatsAndLogs(rp, &testutil.Stats{}, true)
+	return withRetryStatsAndLogs(rp, &Stats{}, true)
 }
 
-func WithRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *testutil.Stats) retrypolicy.RetryPolicyBuilder[R] {
+func WithRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *Stats) retrypolicy.RetryPolicyBuilder[R] {
 	return withRetryStatsAndLogs(rp, stats, true)
 }
 
-func withRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *testutil.Stats, withLogging bool) retrypolicy.RetryPolicyBuilder[R] {
+func withRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *Stats, withLogging bool) retrypolicy.RetryPolicyBuilder[R] {
 	rp.OnFailedAttempt(func(e failsafe.ExecutionAttemptedEvent[R]) {
 		stats.ExecutionCount++
 		stats.FailedAttemptCount++
@@ -48,25 +68,21 @@ func withRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *t
 			fmt.Println(fmt.Sprintf("RetryPolicy %p abort", rp))
 		}
 	})
-	testutil.WithStatsAndLogs[retrypolicy.RetryPolicyBuilder[R], R](rp, stats, withLogging)
+	withStatsAndLogs[retrypolicy.RetryPolicyBuilder[R], R](rp, stats, withLogging)
 	return rp
 }
 
-func WithBreakerStats[R any](cb circuitbreaker.CircuitBreakerBuilder[R], stats *testutil.Stats) circuitbreaker.CircuitBreakerBuilder[R] {
+func WithBreakerStats[R any](cb circuitbreaker.CircuitBreakerBuilder[R], stats *Stats) circuitbreaker.CircuitBreakerBuilder[R] {
 	withBreakerStatsAndLogs(cb, stats, false)
 	return cb
 }
 
 func WithBreakerLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R]) circuitbreaker.CircuitBreakerBuilder[R] {
-	withBreakerStatsAndLogs(cb, &testutil.Stats{}, true)
+	withBreakerStatsAndLogs(cb, &Stats{}, true)
 	return cb
 }
 
-func WithBreakerStatsAndLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R], stats *testutil.Stats) circuitbreaker.CircuitBreakerBuilder[R] {
-	return withBreakerStatsAndLogs(cb, stats, true)
-}
-
-func withBreakerStatsAndLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R], stats *testutil.Stats, withLogging bool) circuitbreaker.CircuitBreakerBuilder[R] {
+func withBreakerStatsAndLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R], stats *Stats, withLogging bool) circuitbreaker.CircuitBreakerBuilder[R] {
 	cb.OnOpen(func(event circuitbreaker.StateChangedEvent) {
 		if withLogging {
 			fmt.Println(fmt.Sprintf("CircuitBreaker %p opened", cb))
@@ -82,16 +98,39 @@ func withBreakerStatsAndLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R], 
 			fmt.Println(fmt.Sprintf("CircuitBreaker %p closed", cb))
 		}
 	})
-	testutil.WithStatsAndLogs[circuitbreaker.CircuitBreakerBuilder[R], R](cb, stats, withLogging)
+	withStatsAndLogs[circuitbreaker.CircuitBreakerBuilder[R], R](cb, stats, withLogging)
 	return cb
 }
 
-func WithTimeoutStatsAndLogs[R any](to timeout.TimeoutBuilder[R], stats *testutil.Stats) timeout.TimeoutBuilder[R] {
-	testutil.WithStatsAndLogs[timeout.TimeoutBuilder[R], R](to, stats, true)
+func WithTimeoutStatsAndLogs[R any](to timeout.TimeoutBuilder[R], stats *Stats) timeout.TimeoutBuilder[R] {
+	withStatsAndLogs[timeout.TimeoutBuilder[R], R](to, stats, true)
 	return to
 }
 
-func WithFallbackStatsAndLogs[R any](fb fallback.FallbackBuilder[R], stats *testutil.Stats) fallback.FallbackBuilder[R] {
-	testutil.WithStatsAndLogs[fallback.FallbackBuilder[R], R](fb, stats, true)
+func WithFallbackStatsAndLogs[R any](fb fallback.FallbackBuilder[R], stats *Stats) fallback.FallbackBuilder[R] {
+	withStatsAndLogs[fallback.FallbackBuilder[R], R](fb, stats, true)
 	return fb
+}
+
+func withLogs[P any, R any](policy failsafe.ListenablePolicyBuilder[P, R], stats *Stats, withLogging bool) {
+	withStatsAndLogs(policy, &Stats{}, true)
+}
+
+func withStatsAndLogs[P any, R any](policy failsafe.ListenablePolicyBuilder[P, R], stats *Stats, withLogging bool) {
+	policy.OnSuccess(func(e failsafe.ExecutionCompletedEvent[R]) {
+		stats.ExecutionCount++
+		stats.SuccessCount++
+		if withLogging {
+			fmt.Println(fmt.Sprintf("%s success [Result: %v, attempts: %d, executions: %d]",
+				testutil.GetType(policy), e.Result, e.Attempts, e.Executions))
+		}
+	})
+	policy.OnFailure(func(e failsafe.ExecutionCompletedEvent[R]) {
+		stats.ExecutionCount++
+		stats.FailureCount++
+		if withLogging {
+			fmt.Println(fmt.Sprintf("%s failure [Result: %v, failure: %s, attempts: %d, executions: %d]",
+				testutil.GetType(policy), e.Result, e.Err, e.Attempts, e.Executions))
+		}
+	})
 }

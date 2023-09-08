@@ -1,7 +1,6 @@
 package testutil
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -51,47 +50,4 @@ func testRun[R any](t *testing.T, executor failsafe.Executor[R], when WhenRun[R]
 		assert.Equal(t, expectedExecutions, completedEvent.Executions, "expected executions did not match")
 	}
 	assert.ErrorIs(t, expectedError, err, "expected error did not match")
-}
-
-type Stats struct {
-	ExecutionCount      int
-	FailedAttemptCount  int
-	SuccessCount        int
-	FailureCount        int
-	RetryCount          int
-	RetrieExceededCount int
-	AbortCount          int
-}
-
-func (s *Stats) Reset() {
-	s.ExecutionCount = 0
-	s.FailedAttemptCount = 0
-	s.SuccessCount = 0
-	s.FailureCount = 0
-	s.RetryCount = 0
-	s.RetrieExceededCount = 0
-	s.AbortCount = 0
-}
-
-func WithLogs[P any, R any](policy failsafe.ListenablePolicyBuilder[P, R], stats *Stats, withLogging bool) {
-	WithStatsAndLogs(policy, &Stats{}, true)
-}
-
-func WithStatsAndLogs[P any, R any](policy failsafe.ListenablePolicyBuilder[P, R], stats *Stats, withLogging bool) {
-	policy.OnSuccess(func(e failsafe.ExecutionCompletedEvent[R]) {
-		stats.ExecutionCount++
-		stats.SuccessCount++
-		if withLogging {
-			fmt.Println(fmt.Sprintf("%s success [Result: %v, attempts: %d, executions: %d]",
-				GetType(policy), e.Result, e.Attempts, e.Executions))
-		}
-	})
-	policy.OnFailure(func(e failsafe.ExecutionCompletedEvent[R]) {
-		stats.ExecutionCount++
-		stats.FailureCount++
-		if withLogging {
-			fmt.Println(fmt.Sprintf("%s failure [Result: %v, failure: %s, attempts: %d, executions: %d]",
-				GetType(policy), e.Result, e.Err, e.Attempts, e.Executions))
-		}
-	})
 }

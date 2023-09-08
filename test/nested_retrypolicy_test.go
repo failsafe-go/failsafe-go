@@ -19,8 +19,8 @@ Tests a scenario with nested retry policies where the inner policy is exceeded a
 */
 func TestNestedRetryPoliciesWhereInnerIsExceeded(t *testing.T) {
 	// Given
-	outerRetryStats := &testutil.Stats{}
-	innerRetryStats := &testutil.Stats{}
+	outerRetryStats := &policytesting.Stats{}
+	innerRetryStats := &policytesting.Stats{}
 	outerRetryPolicy := policytesting.WithRetryStats(retrypolicy.Builder[bool]().WithMaxRetries(10), outerRetryStats).Build()
 	innerRetryPolicy := policytesting.WithRetryStats(retrypolicy.Builder[bool]().WithMaxRetries(1), innerRetryStats).Build()
 
@@ -39,8 +39,8 @@ Fallback -> RetryPolicy -> RetryPolicy
 */
 func TestFallbackRetryPolicyRetryPolicy(t *testing.T) {
 	// Given
-	retryPolicy1Stats := &testutil.Stats{}
-	retryPolicy2Stats := &testutil.Stats{}
+	retryPolicy1Stats := &policytesting.Stats{}
+	retryPolicy2Stats := &policytesting.Stats{}
 	retryPolicy1 := policytesting.WithRetryStats(retrypolicy.Builder[any]().HandleErrors(testutil.InvalidStateError{}).WithMaxRetries(2), retryPolicy1Stats).Build()
 	retryPolicy2 := policytesting.WithRetryStats(retrypolicy.Builder[any]().HandleErrors(testutil.InvalidArgumentError{}).WithMaxRetries(3), retryPolicy2Stats).Build()
 	fb := fallback.WithResult[any](true)

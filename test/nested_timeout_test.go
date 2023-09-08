@@ -18,9 +18,9 @@ import (
 //
 // Tests a scenario where an inner timeout is exceeded, triggering retries, then eventually the outer timeout is exceeded.
 func TestTimeoutRetryPolicyTimeout(t *testing.T) {
-	innerTimeoutStats := &testutil.Stats{}
-	retryStats := &testutil.Stats{}
-	outerTimeoutStats := &testutil.Stats{}
+	innerTimeoutStats := &policytesting.Stats{}
+	retryStats := &policytesting.Stats{}
+	outerTimeoutStats := &policytesting.Stats{}
 	innerTimeout := policytesting.WithTimeoutStatsAndLogs[any](timeout.Builder[any](100*time.Millisecond), innerTimeoutStats).Build()
 	retryPolicy := policytesting.WithRetryStatsAndLogs[any](retrypolicy.Builder[any]().WithMaxRetries(10), retryStats).Build()
 	outerTimeout := policytesting.WithTimeoutStatsAndLogs[any](timeout.Builder[any](500*time.Millisecond), outerTimeoutStats).Build()
@@ -39,8 +39,8 @@ func TestTimeoutRetryPolicyTimeout(t *testing.T) {
 //
 // Tests a scenario with a fallback, retry policy, and two timeouts, where the outer timeout triggers first.
 func TestFallbackRetryPolicyTimeoutTimeout(t *testing.T) {
-	innerTimeoutStats := &testutil.Stats{}
-	outerTimeoutStats := &testutil.Stats{}
+	innerTimeoutStats := &policytesting.Stats{}
+	outerTimeoutStats := &policytesting.Stats{}
 	innerTimeout := policytesting.WithTimeoutStatsAndLogs[bool](timeout.Builder[bool](100*time.Millisecond), innerTimeoutStats).Build()
 	outerTimeout := policytesting.WithTimeoutStatsAndLogs[bool](timeout.Builder[bool](50*time.Millisecond), outerTimeoutStats).Build()
 	rp := retrypolicy.WithDefaults[bool]()
@@ -60,9 +60,9 @@ func TestFallbackRetryPolicyTimeoutTimeout(t *testing.T) {
 //
 // Tests a scenario where three consecutive timeouts should cause the execution to be canceled for all policies.
 func TestCancelNestedTimeouts(t *testing.T) {
-	retryStats := &testutil.Stats{}
-	innerTimeoutStats := &testutil.Stats{}
-	outerTimeoutStats := &testutil.Stats{}
+	retryStats := &policytesting.Stats{}
+	innerTimeoutStats := &policytesting.Stats{}
+	outerTimeoutStats := &policytesting.Stats{}
 	rp := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[any](), retryStats).Build()
 	innerTimeout := policytesting.WithTimeoutStatsAndLogs[any](timeout.Builder[any](time.Second), innerTimeoutStats).Build()
 	outerTimeout := policytesting.WithTimeoutStatsAndLogs[any](timeout.Builder[any](200*time.Millisecond), outerTimeoutStats).Build()

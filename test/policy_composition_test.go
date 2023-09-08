@@ -139,7 +139,7 @@ func TestFallbackCircuitBreakerOpen(t *testing.T) {
 
 // RetryPolicy -> RateLimiter
 func TestRetryPolicyRateLimiter(t *testing.T) {
-	rpStats := &testutil.Stats{}
+	rpStats := &policytesting.Stats{}
 	rp := policytesting.WithRetryStats(retrypolicy.Builder[any](), rpStats).WithMaxAttempts(7).Build()
 	rl := ratelimiter.BurstyBuilder[any](3, 1*time.Second).Build()
 

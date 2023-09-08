@@ -23,6 +23,9 @@ type Executor[R any] interface {
 
 	// WithContext returns a new copy of the Executor with the ctx configured. Any executions created with the resulting Executor will be
 	// canceled when the ctx is done. Executions can cooperate with cancellation by checking Execution.Canceled or Execution.IsCanceled.
+	//
+	// Note: This setting will cause a goroutine to be created for each execution, in order to propagate cancellations from the ctx to the
+	// execution.
 	WithContext(ctx context.Context) Executor[R]
 
 	// OnComplete registers the listener to be called when an execution is complete.
@@ -175,14 +178,20 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error), withExecuti
 
 	// Propagate context cancellations to the execution
 	ctx := e.ctx
-	var stopAfterFunc func() bool
+	var executionDone chan any
 	if ctx != nil {
-		stopAfterFunc = context.AfterFunc(ctx, func() {
-			execInternal.Cancel(math.MaxInt, &ExecutionResult[R]{
-				Err:      ctx.Err(),
-				Complete: true,
-			})
-		})
+		// This can be replaced with context.AfterFunc in 1.21
+		executionDone = make(chan any)
+		go func() {
+			select {
+			case <-ctx.Done():
+				execInternal.Cancel(math.MaxInt, &ExecutionResult[R]{
+					Err:      ctx.Err(),
+					Complete: true,
+				})
+			case <-executionDone:
+			}
+		}()
 	}
 
 	// Initialize first attempt and execute
@@ -190,8 +199,8 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error), withExecuti
 	er := outerFn(execInternal)
 
 	// Stop the Context AfterFunc and call listeners
-	if stopAfterFunc != nil {
-		stopAfterFunc()
+	if executionDone != nil {
+		close(executionDone)
 	}
 	if e.onSuccess != nil && er.SuccessAll {
 		e.onSuccess(newExecutionCompletedEvent(er, &execInternal.ExecutionStats))
