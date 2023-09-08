@@ -25,7 +25,7 @@ type TimeoutBuilder[R any] interface {
 
 type timeoutConfig[R any] struct {
 	timeoutDelay      time.Duration
-	onTimeoutExceeded func(event failsafe.ExecutionCompletedEvent[R])
+	onTimeoutExceeded func(failsafe.ExecutionCompletedEvent[R])
 }
 
 var _ TimeoutBuilder[any] = &timeoutConfig[any]{}

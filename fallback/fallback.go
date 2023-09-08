@@ -33,8 +33,8 @@ type FallbackBuilder[R any] interface {
 
 type fallbackConfig[R any] struct {
 	*spi.BaseFailurePolicy[R]
-	fn         func(exec failsafe.Execution[R]) (R, error)
-	onComplete func(event failsafe.ExecutionCompletedEvent[R])
+	fn         func(failsafe.Execution[R]) (R, error)
+	onComplete func(failsafe.ExecutionCompletedEvent[R])
 }
 
 var _ FallbackBuilder[any] = &fallbackConfig[any]{}

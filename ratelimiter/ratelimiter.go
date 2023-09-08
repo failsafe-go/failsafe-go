@@ -130,6 +130,8 @@ type RateLimiterBuilder[R any] interface {
 }
 
 type rateLimiterConfig[R any] struct {
+	// Common
+	maxWaitTime         time.Duration
 	onRateLimitExceeded func(failsafe.ExecutionCompletedEvent[R])
 
 	// Smooth
@@ -138,9 +140,6 @@ type rateLimiterConfig[R any] struct {
 	// Bursty
 	periodPermits int
 	period        time.Duration
-
-	// Common
-	maxWaitTime time.Duration
 }
 
 /*
