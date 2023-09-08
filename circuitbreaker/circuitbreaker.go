@@ -137,6 +137,7 @@ type CircuitBreaker[R any] interface {
 // StateChangedEvent indicates a CircuitBreaker's state has changed.
 type StateChangedEvent struct {
 	PreviousState State
+	CurrentState  State
 }
 
 type circuitBreaker[R any] struct {
@@ -283,10 +284,17 @@ func (cb *circuitBreaker[R]) transitionTo(newState State, exec *failsafe.Executi
 		transitioned = true
 	}
 
-	if transitioned && listener != nil {
-		listener(StateChangedEvent{
+	if transitioned {
+		event := StateChangedEvent{
 			PreviousState: currentState,
-		})
+			CurrentState:  newState,
+		}
+		if cb.config.stateChangedListener != nil {
+			cb.config.stateChangedListener(event)
+		}
+		if listener != nil {
+			listener(event)
+		}
 	}
 }
 

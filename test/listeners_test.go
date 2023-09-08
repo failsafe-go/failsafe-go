@@ -40,6 +40,7 @@ func TestListenersOnSuccess(t *testing.T) {
 	assert.Equal(t, 1, stats.rpSuccess)
 	assert.Equal(t, 0, stats.rpFailure)
 
+	assert.Equal(t, 9, stats.stateChanged)
 	assert.Equal(t, 4, stats.open)
 	assert.Equal(t, 4, stats.halfOpen)
 	assert.Equal(t, 1, stats.close)
@@ -79,6 +80,7 @@ func TestListenersForUnhandledFailure(t *testing.T) {
 	assert.Equal(t, 1, stats.rpSuccess)
 	assert.Equal(t, 0, stats.rpFailure)
 
+	assert.Equal(t, 5, stats.stateChanged)
 	assert.Equal(t, 3, stats.open)
 	assert.Equal(t, 2, stats.halfOpen)
 	assert.Equal(t, 0, stats.close)
@@ -114,6 +116,7 @@ func TestListenersForRetriesExceeded(t *testing.T) {
 	assert.Equal(t, 0, stats.rpSuccess)
 	assert.Equal(t, 1, stats.rpFailure)
 
+	assert.Equal(t, 7, stats.stateChanged)
 	assert.Equal(t, 4, stats.open)
 	assert.Equal(t, 3, stats.halfOpen)
 	assert.Equal(t, 0, stats.close)
@@ -148,6 +151,7 @@ func TestListenersForAbort(t *testing.T) {
 	assert.Equal(t, 0, stats.rpSuccess)
 	assert.Equal(t, 1, stats.rpFailure)
 
+	assert.Equal(t, 7, stats.stateChanged)
 	assert.Equal(t, 4, stats.open)
 	assert.Equal(t, 3, stats.halfOpen)
 	assert.Equal(t, 0, stats.close)
@@ -336,6 +340,7 @@ func TestListenersOnPanic(t *testing.T) {
 	assert.Equal(t, 0, stats.rpSuccess) // Success listener is not called on a panic
 	assert.Equal(t, 0, stats.rpFailure) // Failure listener is not called on a panic
 
+	assert.Equal(t, 4, stats.stateChanged)
 	assert.Equal(t, 2, stats.open)
 	assert.Equal(t, 2, stats.halfOpen)
 	assert.Equal(t, 0, stats.close)
@@ -362,11 +367,12 @@ type listenerStats struct {
 	rpFailure       int
 
 	// CircuitBreaker
-	open      int
-	close     int
-	halfOpen  int
-	cbSuccess int
-	cbFailure int
+	stateChanged int
+	open         int
+	close        int
+	halfOpen     int
+	cbSuccess    int
+	cbFailure    int
 
 	// Fallback
 	fbFailedAttempt int
@@ -399,6 +405,10 @@ func registerRpListeners[R any](stats *listenerStats, rpBuilder retrypolicy.Retr
 }
 
 func registerCbListeners[R any](stats *listenerStats, cbBuilder circuitbreaker.CircuitBreakerBuilder[R]) {
+	cbBuilder.OnStateChanged(func(event circuitbreaker.StateChangedEvent) {
+		fmt.Println("CircuitBreaker state change from", event.PreviousState, "to", event.CurrentState)
+		stats.stateChanged++
+	})
 	cbBuilder.OnOpen(func(event circuitbreaker.StateChangedEvent) {
 		fmt.Println("CircuitBreaker open")
 		stats.open++

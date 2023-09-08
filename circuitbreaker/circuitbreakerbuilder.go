@@ -24,6 +24,9 @@ type CircuitBreakerBuilder[R any] interface {
 	failsafe.FailurePolicyBuilder[CircuitBreakerBuilder[R], R]
 	failsafe.DelayablePolicyBuilder[CircuitBreakerBuilder[R], R]
 
+	// OnStateChanged calls the listener when the CircuitBreaker state changes.
+	OnStateChanged(listener func(StateChangedEvent)) CircuitBreakerBuilder[R]
+
 	// OnClose calls the listener when the CircuitBreaker is closed.
 	OnClose(listener func(StateChangedEvent)) CircuitBreakerBuilder[R]
 
@@ -84,10 +87,11 @@ type circuitBreakerConfig[R any] struct {
 	*spi.BaseListenablePolicy[R]
 	*spi.BaseFailurePolicy[R]
 	*spi.BaseDelayablePolicy[R]
-	clock            util.Clock
-	openListener     func(StateChangedEvent)
-	halfOpenListener func(StateChangedEvent)
-	closeListener    func(StateChangedEvent)
+	clock                util.Clock
+	stateChangedListener func(StateChangedEvent)
+	openListener         func(StateChangedEvent)
+	halfOpenListener     func(StateChangedEvent)
+	closeListener        func(StateChangedEvent)
 
 	// Failure config
 	failureThreshold            uint
@@ -194,6 +198,11 @@ func (c *circuitBreakerConfig[R]) WithDelay(delay time.Duration) CircuitBreakerB
 
 func (c *circuitBreakerConfig[R]) WithDelayFn(delayFn failsafe.DelayFunction[R]) CircuitBreakerBuilder[R] {
 	c.BaseDelayablePolicy.WithDelayFn(delayFn)
+	return c
+}
+
+func (c *circuitBreakerConfig[R]) OnStateChanged(listener func(event StateChangedEvent)) CircuitBreakerBuilder[R] {
+	c.stateChangedListener = listener
 	return c
 }
 
