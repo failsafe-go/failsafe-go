@@ -27,6 +27,12 @@ func (e *timeoutExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsaf
 			timeoutResult := internal.FailureResult[R](ErrTimeoutExceeded)
 			if result.CompareAndSwap(nil, timeoutResult) {
 				exec.Cancel(e.PolicyIndex, timeoutResult)
+				if e.config.onTimeoutExceeded != nil {
+					e.config.onTimeoutExceeded(failsafe.ExecutionCompletedEvent[R]{
+						ExecutionStats: exec.ExecutionStats,
+						Error:          ErrTimeoutExceeded,
+					})
+				}
 			}
 		})
 
@@ -39,5 +45,5 @@ func (e *timeoutExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsaf
 }
 
 func (e *timeoutExecutor[R]) IsFailure(result *failsafe.ExecutionResult[R]) bool {
-	return result.Err != nil && errors.Is(result.Err, ErrTimeoutExceeded)
+	return result.Error != nil && errors.Is(result.Error, ErrTimeoutExceeded)
 }

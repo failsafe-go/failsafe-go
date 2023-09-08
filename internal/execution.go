@@ -5,7 +5,7 @@ import "github.com/failsafe-go/failsafe-go"
 func NewExecutionCompletedEvent[R any](er *failsafe.ExecutionResult[R], stats *failsafe.ExecutionStats) failsafe.ExecutionCompletedEvent[R] {
 	return failsafe.ExecutionCompletedEvent[R]{
 		Result:         er.Result,
-		Err:            er.Err,
+		Error:          er.Error,
 		ExecutionStats: *stats,
 	}
 }
@@ -13,14 +13,14 @@ func NewExecutionCompletedEvent[R any](er *failsafe.ExecutionResult[R], stats *f
 func NewExecutionCompletedEventForExec[R any](exec *failsafe.Execution[R]) failsafe.ExecutionCompletedEvent[R] {
 	return failsafe.ExecutionCompletedEvent[R]{
 		Result:         exec.LastResult,
-		Err:            exec.LastErr,
+		Error:          exec.LastError,
 		ExecutionStats: exec.ExecutionStats,
 	}
 }
 
 func FailureResult[R any](err error) *failsafe.ExecutionResult[R] {
 	return &failsafe.ExecutionResult[R]{
-		Err:      err,
+		Error:    err,
 		Complete: true,
 	}
 }

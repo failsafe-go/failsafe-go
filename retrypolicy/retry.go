@@ -37,7 +37,6 @@ additional configuration.
 This type is not concurrency safe.
 */
 type RetryPolicyBuilder[R any] interface {
-	failsafe.ListenablePolicyBuilder[RetryPolicyBuilder[R], R]
 	failsafe.FailurePolicyBuilder[RetryPolicyBuilder[R], R]
 	failsafe.DelayablePolicyBuilder[RetryPolicyBuilder[R], R]
 
@@ -87,13 +86,6 @@ type RetryPolicyBuilder[R any] interface {
 	// OnAbort registers the listener to be called when an execution is aborted.
 	OnAbort(listener func(failsafe.ExecutionCompletedEvent[R])) RetryPolicyBuilder[R]
 
-	// OnFailedAttempt registers the listener to be called when an execution attempt fails. You can also use onFailure to determine when
-	// the execution attempt fails and all retries have failed.
-	OnFailedAttempt(listener func(failsafe.ExecutionAttemptedEvent[R])) RetryPolicyBuilder[R]
-
-	// OnRetriesExceeded registers the listener to be called when an execution fails and the max retry attempts or max duration are exceeded.
-	OnRetriesExceeded(listener func(failsafe.ExecutionCompletedEvent[R])) RetryPolicyBuilder[R]
-
 	// OnRetryScheduled registers the listener to be called when a retry is about to be scheduled. This method differs from OnRetry since it
 	// is called when a retry is initially scheduled but before any configured delay, whereas OnRetry is called after a delay, just before
 	// the retry attempt takes place.
@@ -102,12 +94,14 @@ type RetryPolicyBuilder[R any] interface {
 	// OnRetry registers the listener to be called when a retry is about to be attempted.
 	OnRetry(listener func(failsafe.ExecutionAttemptedEvent[R])) RetryPolicyBuilder[R]
 
+	// OnRetriesExceeded registers the listener to be called when an execution fails and the max retry attempts or max duration are exceeded.
+	OnRetriesExceeded(listener func(failsafe.ExecutionCompletedEvent[R])) RetryPolicyBuilder[R]
+
 	// Build returns a new RetryPolicy using the builder's configuration.
 	Build() RetryPolicy[R]
 }
 
 type retryPolicyConfig[R any] struct {
-	*spi.BaseListenablePolicy[R]
 	*spi.BaseFailurePolicy[R]
 	*spi.BaseDelayablePolicy[R]
 
@@ -122,11 +116,10 @@ type retryPolicyConfig[R any] struct {
 	// Conditions that determine whether retries should be aborted
 	abortConditions []func(result R, err error) bool
 
-	abortListener           func(failsafe.ExecutionCompletedEvent[R])
-	failedAttemptListener   func(failsafe.ExecutionAttemptedEvent[R])
-	retriesExceededListener func(failsafe.ExecutionCompletedEvent[R])
-	retryListener           func(failsafe.ExecutionAttemptedEvent[R])
-	retryScheduledListener  func(failsafe.ExecutionScheduledEvent[R])
+	onAbort           func(failsafe.ExecutionCompletedEvent[R])
+	onRetry           func(failsafe.ExecutionAttemptedEvent[R])
+	onRetryScheduled  func(failsafe.ExecutionScheduledEvent[R])
+	onRetriesExceeded func(failsafe.ExecutionCompletedEvent[R])
 }
 
 var _ RetryPolicyBuilder[any] = &retryPolicyConfig[any]{}
@@ -145,10 +138,9 @@ func WithDefaults[R any]() RetryPolicy[R] {
 // attempts max with no delay, unless configured otherwise.
 func Builder[R any]() RetryPolicyBuilder[R] {
 	return &retryPolicyConfig[R]{
-		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
-		BaseFailurePolicy:    &spi.BaseFailurePolicy[R]{},
-		BaseDelayablePolicy:  &spi.BaseDelayablePolicy[R]{},
-		maxRetries:           defaultMaxRetries,
+		BaseFailurePolicy:   &spi.BaseFailurePolicy[R]{},
+		BaseDelayablePolicy: &spi.BaseDelayablePolicy[R]{},
+		maxRetries:          defaultMaxRetries,
 	}
 }
 
@@ -246,38 +238,33 @@ func (c *retryPolicyConfig[R]) WithJitterFactor(jitterFactor float32) RetryPolic
 	return c
 }
 
-func (c *retryPolicyConfig[R]) OnSuccess(listener func(event failsafe.ExecutionCompletedEvent[R])) RetryPolicyBuilder[R] {
-	c.BaseListenablePolicy.OnSuccess(listener)
+func (c *retryPolicyConfig[R]) OnSuccess(listener func(event failsafe.ExecutionAttemptedEvent[R])) RetryPolicyBuilder[R] {
+	c.BaseFailurePolicy.OnSuccess(listener)
 	return c
 }
 
-func (c *retryPolicyConfig[R]) OnFailure(listener func(event failsafe.ExecutionCompletedEvent[R])) RetryPolicyBuilder[R] {
-	c.BaseListenablePolicy.OnFailure(listener)
+func (c *retryPolicyConfig[R]) OnFailure(listener func(event failsafe.ExecutionAttemptedEvent[R])) RetryPolicyBuilder[R] {
+	c.BaseFailurePolicy.OnFailure(listener)
 	return c
 }
 
 func (c *retryPolicyConfig[R]) OnAbort(listener func(failsafe.ExecutionCompletedEvent[R])) RetryPolicyBuilder[R] {
-	c.abortListener = listener
-	return c
-}
-
-func (c *retryPolicyConfig[R]) OnFailedAttempt(listener func(failsafe.ExecutionAttemptedEvent[R])) RetryPolicyBuilder[R] {
-	c.failedAttemptListener = listener
-	return c
-}
-
-func (c *retryPolicyConfig[R]) OnRetriesExceeded(listener func(failsafe.ExecutionCompletedEvent[R])) RetryPolicyBuilder[R] {
-	c.retriesExceededListener = listener
+	c.onAbort = listener
 	return c
 }
 
 func (c *retryPolicyConfig[R]) OnRetry(listener func(failsafe.ExecutionAttemptedEvent[R])) RetryPolicyBuilder[R] {
-	c.retryListener = listener
+	c.onRetry = listener
 	return c
 }
 
 func (c *retryPolicyConfig[R]) OnRetryScheduled(listener func(failsafe.ExecutionScheduledEvent[R])) RetryPolicyBuilder[R] {
-	c.retryScheduledListener = listener
+	c.onRetryScheduled = listener
+	return c
+}
+
+func (c *retryPolicyConfig[R]) OnRetriesExceeded(listener func(failsafe.ExecutionCompletedEvent[R])) RetryPolicyBuilder[R] {
+	c.onRetriesExceeded = listener
 	return c
 }
 
@@ -292,9 +279,8 @@ func (c *retryPolicyConfig[R]) isAbortable(result R, err error) bool {
 func (rp *retryPolicy[R]) ToExecutor(policyIndex int) failsafe.PolicyExecutor[R] {
 	rpe := &retryPolicyExecutor[R]{
 		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
-			BaseListenablePolicy: rp.config.BaseListenablePolicy,
-			BaseFailurePolicy:    rp.config.BaseFailurePolicy,
-			PolicyIndex:          policyIndex,
+			BaseFailurePolicy: rp.config.BaseFailurePolicy,
+			PolicyIndex:       policyIndex,
 		},
 		retryPolicy: rp,
 	}

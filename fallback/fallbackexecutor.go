@@ -22,22 +22,23 @@ func (e *fallbackExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsa
 		}
 
 		if e.IsFailure(result) {
-			execWithResult := exec.ExecutionForResult(result)
-			event := failsafe.ExecutionAttemptedEvent[R]{
-				Execution: execWithResult,
-			}
-			if e.config.failedAttemptListener != nil {
-				e.config.failedAttemptListener(event)
-			}
-
-			fallbackResult, err := e.config.fn(execWithResult)
+			// Call fallback fn
+			fallbackResult, fallbackError := e.config.fn(exec.ExecutionForResult(result))
 			if exec.IsCanceled(e.PolicyIndex) {
 				return result
 			}
 
+			if e.config.onComplete != nil {
+				e.config.onComplete(failsafe.ExecutionCompletedEvent[R]{
+					ExecutionStats: exec.ExecutionStats,
+					Result:         fallbackResult,
+					Error:          fallbackError,
+				})
+			}
+
 			result = &failsafe.ExecutionResult[R]{
 				Result:     fallbackResult,
-				Err:        err,
+				Error:      fallbackError,
 				Complete:   true,
 				Success:    true,
 				SuccessAll: result.SuccessAll,

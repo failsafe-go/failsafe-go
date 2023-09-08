@@ -21,11 +21,13 @@ func (cbe *circuitBreakerExecutor[R]) PreExecute(_ *failsafe.ExecutionInternal[R
 	return nil
 }
 
-func (cbe *circuitBreakerExecutor[R]) OnSuccess(_ *failsafe.ExecutionResult[R]) {
+func (cbe *circuitBreakerExecutor[R]) OnSuccess(exec *failsafe.ExecutionInternal[R], result *failsafe.ExecutionResult[R]) {
+	cbe.BasePolicyExecutor.OnSuccess(exec, result)
 	cbe.RecordSuccess()
 }
 
 func (cbe *circuitBreakerExecutor[R]) OnFailure(exec *failsafe.ExecutionInternal[R], result *failsafe.ExecutionResult[R]) *failsafe.ExecutionResult[R] {
+	cbe.BasePolicyExecutor.OnFailure(exec, result)
 	cbe.mtx.Lock()
 	defer cbe.mtx.Unlock()
 	cbe.recordFailure(&exec.Execution)

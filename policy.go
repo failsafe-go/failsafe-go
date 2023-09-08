@@ -10,17 +10,6 @@ type Policy[R any] interface {
 	ToExecutor(policyIndex int) PolicyExecutor[R]
 }
 
-// ListenablePolicyBuilder configures listeners for a Policy execution result.
-type ListenablePolicyBuilder[S any, R any] interface {
-	// OnSuccess registers the listener to be called when the policy succeeds in handling an execution. This means that the supplied
-	// execution either succeeded, or if it failed, the policy was able to produce a successful result.
-	OnSuccess(func(event ExecutionCompletedEvent[R])) S
-
-	// OnFailure registers the listener to be called when the policy fails to handle an error. This means that not only was the supplied
-	// execution considered a failure by the policy, but that the policy was unable to produce a successful result.
-	OnFailure(func(event ExecutionCompletedEvent[R])) S
-}
-
 /*
 FailurePolicyBuilder builds a Policy that allows configurable conditions to determine whether an execution is a failure.
   - By default, any error is considered a failure and will be handled by the policy. You can override this by specifying your own handle
@@ -39,6 +28,12 @@ type FailurePolicyBuilder[S any, R any] interface {
 
 	// HandleIf specifies that a failure has occurred if the predicate matches the execution result or error.
 	HandleIf(predicate func(R, error) bool) S
+
+	// OnSuccess registers the listener to be called when the policy determines an execution attempt was a success.
+	OnSuccess(func(event ExecutionAttemptedEvent[R])) S
+
+	// OnFailure registers the listener to be called when the policy determines an execution attempt was a failure, and may be handled.
+	OnFailure(func(event ExecutionAttemptedEvent[R])) S
 }
 
 // DelayFunction returns a duration to delay for given the Execution.

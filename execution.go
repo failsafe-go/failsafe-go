@@ -43,7 +43,7 @@ type Execution[R any] struct {
 	// The last error that occurred, else the zero value for R.
 	LastResult R
 	// The last error that occurred, else nil.
-	LastErr       error
+	LastError     error
 	canceled      chan any
 	canceledIndex *int
 }
@@ -90,13 +90,13 @@ type ExecutionCompletedEvent[R any] struct {
 	// The execution result, else the zero value for R
 	Result R
 	// The execution error, else nil
-	Err error
+	Error error
 }
 
 func newExecutionCompletedEvent[R any](er *ExecutionResult[R], stats *ExecutionStats) ExecutionCompletedEvent[R] {
 	return ExecutionCompletedEvent[R]{
 		Result:         er.Result,
-		Err:            er.Err,
+		Error:          er.Error,
 		ExecutionStats: *stats,
 	}
 }

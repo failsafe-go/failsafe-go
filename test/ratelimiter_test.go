@@ -51,7 +51,7 @@ func TestPermitAcquiredAfterWait(t *testing.T) {
 
 func TestShouldReturnRateLimitExceededError(t *testing.T) {
 	// Given
-	limiter := ratelimiter.SmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
+	limiter := ratelimiter.SmoothBuilderWithMaxRate[any](1 * time.Hour).Build()
 
 	// When / Then
 	limiter.TryAcquirePermit() // limiter should now be out of permits

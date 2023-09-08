@@ -20,20 +20,19 @@ CircuitBreakerBuilder builds CircuitBreaker instances.
 This type is not concurrency safe.
 */
 type CircuitBreakerBuilder[R any] interface {
-	failsafe.ListenablePolicyBuilder[CircuitBreakerBuilder[R], R]
 	failsafe.FailurePolicyBuilder[CircuitBreakerBuilder[R], R]
 	failsafe.DelayablePolicyBuilder[CircuitBreakerBuilder[R], R]
 
 	// OnStateChanged calls the listener when the CircuitBreaker state changes.
 	OnStateChanged(listener func(StateChangedEvent)) CircuitBreakerBuilder[R]
 
-	// OnClose calls the listener when the CircuitBreaker is closed.
+	// OnClose calls the listener when the CircuitBreaker state changes to closed.
 	OnClose(listener func(StateChangedEvent)) CircuitBreakerBuilder[R]
 
-	// OnOpen calls the listener when the CircuitBreaker is opened.
+	// OnOpen calls the listener when the CircuitBreaker state changes to open.
 	OnOpen(listener func(StateChangedEvent)) CircuitBreakerBuilder[R]
 
-	// OnHalfOpen calls the listener when the CircuitBreaker is half-opened.
+	// OnHalfOpen calls the listener when the CircuitBreaker state changes to half-open.
 	OnHalfOpen(listener func(StateChangedEvent)) CircuitBreakerBuilder[R]
 
 	// WithFailureThreshold configures count based failure thresholding by setting the number of consecutive failures that must occur when
@@ -84,7 +83,6 @@ type CircuitBreakerBuilder[R any] interface {
 }
 
 type circuitBreakerConfig[R any] struct {
-	*spi.BaseListenablePolicy[R]
 	*spi.BaseFailurePolicy[R]
 	*spi.BaseDelayablePolicy[R]
 	clock                util.Clock
@@ -117,8 +115,7 @@ func WithDefaults[R any]() CircuitBreaker[R] {
 // after a single failure, closes after a single success, and has a 1 minute delay, unless configured otherwise.
 func Builder[R any]() CircuitBreakerBuilder[R] {
 	return &circuitBreakerConfig[R]{
-		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
-		BaseFailurePolicy:    &spi.BaseFailurePolicy[R]{},
+		BaseFailurePolicy: &spi.BaseFailurePolicy[R]{},
 		BaseDelayablePolicy: &spi.BaseDelayablePolicy[R]{
 			Delay: 1 * time.Minute,
 		},
@@ -221,12 +218,12 @@ func (c *circuitBreakerConfig[R]) OnHalfOpen(listener func(event StateChangedEve
 	return c
 }
 
-func (c *circuitBreakerConfig[R]) OnSuccess(listener func(event failsafe.ExecutionCompletedEvent[R])) CircuitBreakerBuilder[R] {
-	c.BaseListenablePolicy.OnSuccess(listener)
+func (c *circuitBreakerConfig[R]) OnSuccess(listener func(event failsafe.ExecutionAttemptedEvent[R])) CircuitBreakerBuilder[R] {
+	c.BaseFailurePolicy.OnSuccess(listener)
 	return c
 }
 
-func (c *circuitBreakerConfig[R]) OnFailure(listener func(event failsafe.ExecutionCompletedEvent[R])) CircuitBreakerBuilder[R] {
-	c.BaseListenablePolicy.OnFailure(listener)
+func (c *circuitBreakerConfig[R]) OnFailure(listener func(event failsafe.ExecutionAttemptedEvent[R])) CircuitBreakerBuilder[R] {
+	c.BaseFailurePolicy.OnFailure(listener)
 	return c
 }

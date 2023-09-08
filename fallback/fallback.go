@@ -22,22 +22,19 @@ FallbackBuilder builds Fallback instances.
 This type is not concurrency safe.
 */
 type FallbackBuilder[R any] interface {
-	failsafe.ListenablePolicyBuilder[FallbackBuilder[R], R]
 	failsafe.FailurePolicyBuilder[FallbackBuilder[R], R]
 
-	// OnFailedAttempt registers the listener to be called when the last execution attempt prior to the fallback failed. You can also use
-	// OnFailure to handle a failure in a fallback function itself.
-	OnFailedAttempt(listener func(failsafe.ExecutionAttemptedEvent[R])) FallbackBuilder[R]
+	// OnComplete registers the listener to be called after the Fallback has completed.
+	OnComplete(listener func(event failsafe.ExecutionCompletedEvent[R])) FallbackBuilder[R]
 
 	// Build returns a new Fallback using the builder's configuration.
 	Build() Fallback[R]
 }
 
 type fallbackConfig[R any] struct {
-	*spi.BaseListenablePolicy[R]
 	*spi.BaseFailurePolicy[R]
-	fn                    func(exec failsafe.Execution[R]) (R, error)
-	failedAttemptListener func(failsafe.ExecutionAttemptedEvent[R])
+	fn         func(exec failsafe.Execution[R]) (R, error)
+	onComplete func(event failsafe.ExecutionCompletedEvent[R])
 }
 
 var _ FallbackBuilder[any] = &fallbackConfig[any]{}
@@ -81,9 +78,8 @@ func BuilderWithError[R any](err error) FallbackBuilder[R] {
 // executions.
 func BuilderWithFn[R any](fallbackFn func(exec failsafe.Execution[R]) (R, error)) FallbackBuilder[R] {
 	return &fallbackConfig[R]{
-		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
-		BaseFailurePolicy:    &spi.BaseFailurePolicy[R]{},
-		fn:                   fallbackFn,
+		BaseFailurePolicy: &spi.BaseFailurePolicy[R]{},
+		fn:                fallbackFn,
 	}
 }
 
@@ -102,18 +98,18 @@ func (c *fallbackConfig[R]) HandleIf(predicate func(R, error) bool) FallbackBuil
 	return c
 }
 
-func (c *fallbackConfig[R]) OnFailedAttempt(listener func(failsafe.ExecutionAttemptedEvent[R])) FallbackBuilder[R] {
-	c.failedAttemptListener = listener
+func (c *fallbackConfig[R]) OnSuccess(listener func(event failsafe.ExecutionAttemptedEvent[R])) FallbackBuilder[R] {
+	c.BaseFailurePolicy.OnSuccess(listener)
 	return c
 }
 
-func (c *fallbackConfig[R]) OnSuccess(listener func(event failsafe.ExecutionCompletedEvent[R])) FallbackBuilder[R] {
-	c.BaseListenablePolicy.OnSuccess(listener)
+func (c *fallbackConfig[R]) OnFailure(listener func(event failsafe.ExecutionAttemptedEvent[R])) FallbackBuilder[R] {
+	c.BaseFailurePolicy.OnFailure(listener)
 	return c
 }
 
-func (c *fallbackConfig[R]) OnFailure(listener func(event failsafe.ExecutionCompletedEvent[R])) FallbackBuilder[R] {
-	c.BaseListenablePolicy.OnFailure(listener)
+func (c *fallbackConfig[R]) OnComplete(listener func(event failsafe.ExecutionCompletedEvent[R])) FallbackBuilder[R] {
+	c.onComplete = listener
 	return c
 }
 
@@ -127,9 +123,8 @@ func (c *fallbackConfig[R]) Build() Fallback[R] {
 func (fb *fallback[R]) ToExecutor(policyIndex int) failsafe.PolicyExecutor[R] {
 	fbe := &fallbackExecutor[R]{
 		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
-			BaseListenablePolicy: fb.config.BaseListenablePolicy,
-			BaseFailurePolicy:    fb.config.BaseFailurePolicy,
-			PolicyIndex:          policyIndex,
+			BaseFailurePolicy: fb.config.BaseFailurePolicy,
+			PolicyIndex:       policyIndex,
 		},
 		fallback: fb,
 	}

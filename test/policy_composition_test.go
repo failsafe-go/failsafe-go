@@ -74,7 +74,7 @@ func TestFallbackRetryPolicy(t *testing.T) {
 	// Given
 	fb = fallback.WithFn[bool](func(exec failsafe.Execution[bool]) (bool, error) {
 		assert.False(t, exec.LastResult)
-		assert.ErrorIs(t, testutil.InvalidStateError{}, exec.LastErr)
+		assert.ErrorIs(t, testutil.InvalidStateError{}, exec.LastError)
 		return true, nil
 	})
 
@@ -107,7 +107,7 @@ func TestFallbackCircuitBreaker(t *testing.T) {
 	// Given
 	fb := fallback.WithFn(func(exec failsafe.Execution[bool]) (bool, error) {
 		assert.False(t, exec.LastResult)
-		assert.ErrorIs(t, testutil.InvalidStateError{}, exec.LastErr)
+		assert.ErrorIs(t, testutil.InvalidStateError{}, exec.LastError)
 		return true, nil
 	})
 	cb := circuitbreaker.Builder[bool]().WithSuccessThreshold(3).Build()
@@ -125,7 +125,7 @@ func TestFallbackCircuitBreakerOpen(t *testing.T) {
 	// Given
 	fb := fallback.WithFn(func(exec failsafe.Execution[bool]) (bool, error) {
 		assert.False(t, exec.LastResult)
-		assert.ErrorIs(t, circuitbreaker.ErrCircuitBreakerOpen, exec.LastErr)
+		assert.ErrorIs(t, circuitbreaker.ErrCircuitBreakerOpen, exec.LastError)
 		return false, nil
 	})
 	cb := circuitbreaker.Builder[bool]().WithSuccessThreshold(3).Build()
@@ -146,7 +146,7 @@ func TestRetryPolicyRateLimiter(t *testing.T) {
 	testutil.TestGetFailure(t, failsafe.With[any](rp, rl),
 		testutil.GetWithExecutionFn[any](nil, testutil.InvalidStateError{}),
 		7, 3, ratelimiter.ErrRateLimitExceeded)
-	assert.Equal(t, 7, rpStats.FailedAttemptCount)
+	assert.Equal(t, 7, rpStats.ExecutionCount)
 	assert.Equal(t, 6, rpStats.RetryCount)
 }
 

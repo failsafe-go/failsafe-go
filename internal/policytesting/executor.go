@@ -13,10 +13,11 @@ import (
 )
 
 type Stats struct {
-	ExecutionCount      int
-	FailedAttemptCount  int
-	SuccessCount        int
-	FailureCount        int
+	ExecutionCount int
+	SuccessCount   int
+	FailureCount   int
+
+	// Retry specific stats
 	RetryCount          int
 	RetrieExceededCount int
 	AbortCount          int
@@ -24,9 +25,10 @@ type Stats struct {
 
 func (s *Stats) Reset() {
 	s.ExecutionCount = 0
-	s.FailedAttemptCount = 0
 	s.SuccessCount = 0
 	s.FailureCount = 0
+
+	// Retry specific stats
 	s.RetryCount = 0
 	s.RetrieExceededCount = 0
 	s.AbortCount = 0
@@ -45,27 +47,20 @@ func WithRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *S
 }
 
 func withRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *Stats, withLogging bool) retrypolicy.RetryPolicyBuilder[R] {
-	rp.OnFailedAttempt(func(e failsafe.ExecutionAttemptedEvent[R]) {
-		stats.ExecutionCount++
-		stats.FailedAttemptCount++
-		if withLogging {
-			fmt.Println(fmt.Sprintf("RetryPolicy %p failed attempt [Result: %v, failure: %s, attempts: %d, executions: %d]",
-				rp, e.LastResult, e.LastErr, e.Attempts, e.Executions))
-		}
-	}).OnRetry(func(e failsafe.ExecutionAttemptedEvent[R]) {
+	rp.OnRetry(func(e failsafe.ExecutionAttemptedEvent[R]) {
 		stats.RetryCount++
 		if withLogging {
-			fmt.Println(fmt.Sprintf("RetryPolicy %p retrying [Result: %v, failure: %s]", rp, e.LastResult, e.LastErr))
+			fmt.Println(fmt.Sprintf("%s %p retrying [Result: %v, failure: %s]", testutil.GetType(rp), rp, e.LastResult, e.LastError))
 		}
 	}).OnRetriesExceeded(func(e failsafe.ExecutionCompletedEvent[R]) {
 		stats.RetrieExceededCount++
 		if withLogging {
-			fmt.Println(fmt.Sprintf("RetryPolicy %p retries exceeded", rp))
+			fmt.Println(fmt.Sprintf("%s %p retries exceeded", testutil.GetType(rp), rp))
 		}
 	}).OnAbort(func(e failsafe.ExecutionCompletedEvent[R]) {
 		stats.AbortCount++
 		if withLogging {
-			fmt.Println(fmt.Sprintf("RetryPolicy %p abort", rp))
+			fmt.Println(fmt.Sprintf("%s %p abort", testutil.GetType(rp), rp))
 		}
 	})
 	withStatsAndLogs[retrypolicy.RetryPolicyBuilder[R], R](rp, stats, withLogging)
@@ -85,17 +80,17 @@ func WithBreakerLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R]) circuitb
 func withBreakerStatsAndLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R], stats *Stats, withLogging bool) circuitbreaker.CircuitBreakerBuilder[R] {
 	cb.OnOpen(func(event circuitbreaker.StateChangedEvent) {
 		if withLogging {
-			fmt.Println(fmt.Sprintf("CircuitBreaker %p opened", cb))
+			fmt.Println(fmt.Sprintf("%s %p opened", testutil.GetType(cb), cb))
 		}
 	})
 	cb.OnHalfOpen(func(event circuitbreaker.StateChangedEvent) {
 		if withLogging {
-			fmt.Println(fmt.Sprintf("CircuitBreaker %p half-opened", cb))
+			fmt.Println(fmt.Sprintf("%s %p half-opened", testutil.GetType(cb), cb))
 		}
 	})
 	cb.OnClose(func(event circuitbreaker.StateChangedEvent) {
 		if withLogging {
-			fmt.Println(fmt.Sprintf("CircuitBreaker %p closed", cb))
+			fmt.Println(fmt.Sprintf("%s %p closed", testutil.GetType(cb), cb))
 		}
 	})
 	withStatsAndLogs[circuitbreaker.CircuitBreakerBuilder[R], R](cb, stats, withLogging)
@@ -103,34 +98,38 @@ func withBreakerStatsAndLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R], 
 }
 
 func WithTimeoutStatsAndLogs[R any](to timeout.TimeoutBuilder[R], stats *Stats) timeout.TimeoutBuilder[R] {
-	withStatsAndLogs[timeout.TimeoutBuilder[R], R](to, stats, true)
+	to.OnTimeoutExceeded(func(e failsafe.ExecutionCompletedEvent[R]) {
+		stats.ExecutionCount++
+		fmt.Println(fmt.Sprintf("%s %p exceeded [attempts: %d, executions: %d]",
+			testutil.GetType(to), to, e.Attempts, e.Executions))
+	})
 	return to
 }
 
 func WithFallbackStatsAndLogs[R any](fb fallback.FallbackBuilder[R], stats *Stats) fallback.FallbackBuilder[R] {
-	withStatsAndLogs[fallback.FallbackBuilder[R], R](fb, stats, true)
+	fb.OnComplete(func(e failsafe.ExecutionCompletedEvent[R]) {
+		stats.ExecutionCount++
+		fmt.Println(fmt.Sprintf("%s %p complete [Result: %v, failure: %s, attempts: %d, executions: %d]",
+			testutil.GetType(fb), fb, e.Result, e.Error, e.Attempts, e.Executions))
+	})
 	return fb
 }
 
-func withLogs[P any, R any](policy failsafe.ListenablePolicyBuilder[P, R], stats *Stats, withLogging bool) {
-	withStatsAndLogs(policy, &Stats{}, true)
-}
-
-func withStatsAndLogs[P any, R any](policy failsafe.ListenablePolicyBuilder[P, R], stats *Stats, withLogging bool) {
-	policy.OnSuccess(func(e failsafe.ExecutionCompletedEvent[R]) {
+func withStatsAndLogs[P any, R any](policy failsafe.FailurePolicyBuilder[P, R], stats *Stats, withLogging bool) {
+	policy.OnSuccess(func(e failsafe.ExecutionAttemptedEvent[R]) {
 		stats.ExecutionCount++
 		stats.SuccessCount++
 		if withLogging {
-			fmt.Println(fmt.Sprintf("%s success [Result: %v, attempts: %d, executions: %d]",
-				testutil.GetType(policy), e.Result, e.Attempts, e.Executions))
+			fmt.Println(fmt.Sprintf("%s %p success [Result: %v, attempts: %d, executions: %d]",
+				testutil.GetType(policy), policy, e.LastResult, e.Attempts, e.Executions))
 		}
 	})
-	policy.OnFailure(func(e failsafe.ExecutionCompletedEvent[R]) {
+	policy.OnFailure(func(e failsafe.ExecutionAttemptedEvent[R]) {
 		stats.ExecutionCount++
 		stats.FailureCount++
 		if withLogging {
-			fmt.Println(fmt.Sprintf("%s failure [Result: %v, failure: %s, attempts: %d, executions: %d]",
-				testutil.GetType(policy), e.Result, e.Err, e.Attempts, e.Executions))
+			fmt.Println(fmt.Sprintf("%s %p failure [Result: %v, failure: %s, attempts: %d, executions: %d]",
+				testutil.GetType(policy), policy, e.LastResult, e.LastError, e.Attempts, e.Executions))
 		}
 	})
 }

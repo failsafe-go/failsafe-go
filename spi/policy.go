@@ -9,26 +9,14 @@ import (
 	"github.com/failsafe-go/failsafe-go/internal/util"
 )
 
-// BaseListenablePolicy provides a base for implementing ListenablePolicyBuilder.
-type BaseListenablePolicy[R any] struct {
-	successListener func(failsafe.ExecutionCompletedEvent[R])
-	failureListener func(failsafe.ExecutionCompletedEvent[R])
-}
-
-func (bp *BaseListenablePolicy[R]) OnSuccess(listener func(event failsafe.ExecutionCompletedEvent[R])) {
-	bp.successListener = listener
-}
-
-func (bp *BaseListenablePolicy[R]) OnFailure(listener func(event failsafe.ExecutionCompletedEvent[R])) {
-	bp.failureListener = listener
-}
-
 // BaseFailurePolicy provides a base for implementing FailurePolicyBuilder.
 type BaseFailurePolicy[R any] struct {
 	// Indicates whether errors are checked by a configured failure condition
 	errorsChecked bool
 	// Conditions that determine whether an execution is a failure
 	failureConditions []func(result R, err error) bool
+	onSuccess         func(failsafe.ExecutionAttemptedEvent[R])
+	onFailure         func(failsafe.ExecutionAttemptedEvent[R])
 }
 
 func (p *BaseFailurePolicy[R]) HandleErrors(errs ...error) {
@@ -49,6 +37,14 @@ func (p *BaseFailurePolicy[R]) HandleResult(result R) {
 func (p *BaseFailurePolicy[R]) HandleIf(predicate func(R, error) bool) {
 	p.failureConditions = append(p.failureConditions, predicate)
 	p.errorsChecked = true
+}
+
+func (p *BaseFailurePolicy[R]) OnSuccess(listener func(event failsafe.ExecutionAttemptedEvent[R])) {
+	p.onSuccess = listener
+}
+
+func (p *BaseFailurePolicy[R]) OnFailure(listener func(event failsafe.ExecutionAttemptedEvent[R])) {
+	p.onFailure = listener
 }
 
 func (p *BaseFailurePolicy[R]) IsFailure(result R, err error) bool {

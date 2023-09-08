@@ -150,9 +150,8 @@ type circuitBreaker[R any] struct {
 func (cb *circuitBreaker[R]) ToExecutor(policyIndex int) failsafe.PolicyExecutor[R] {
 	cbe := &circuitBreakerExecutor[R]{
 		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
-			BaseListenablePolicy: cb.config.BaseListenablePolicy,
-			BaseFailurePolicy:    cb.config.BaseFailurePolicy,
-			PolicyIndex:          policyIndex,
+			BaseFailurePolicy: cb.config.BaseFailurePolicy,
+			PolicyIndex:       policyIndex,
 		},
 		circuitBreaker: cb,
 	}

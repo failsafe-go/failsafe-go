@@ -21,17 +21,19 @@ func TestNestedRetryPoliciesWhereInnerIsExceeded(t *testing.T) {
 	// Given
 	outerRetryStats := &policytesting.Stats{}
 	innerRetryStats := &policytesting.Stats{}
-	outerRetryPolicy := policytesting.WithRetryStats(retrypolicy.Builder[bool]().WithMaxRetries(10), outerRetryStats).Build()
-	innerRetryPolicy := policytesting.WithRetryStats(retrypolicy.Builder[bool]().WithMaxRetries(1), innerRetryStats).Build()
+	outerRetryPolicy := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[bool]().WithMaxRetries(10), outerRetryStats).Build()
+	innerRetryPolicy := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[bool]().WithMaxRetries(1), innerRetryStats).Build()
 
 	// When / Then
 	testutil.TestGetSuccess(t, failsafe.With[bool](outerRetryPolicy, innerRetryPolicy),
 		testutil.ErrorNTimesThenReturn[bool](testutil.ConnectionError{}, 5, true),
 		6, 6, true)
-	assert.Equal(t, 4, outerRetryStats.FailedAttemptCount)
-	assert.Equal(t, 0, outerRetryStats.FailureCount)
-	assert.Equal(t, 2, innerRetryStats.FailedAttemptCount)
-	assert.Equal(t, 1, innerRetryStats.FailureCount)
+	assert.Equal(t, 5, outerRetryStats.ExecutionCount)
+	assert.Equal(t, 4, outerRetryStats.FailureCount)
+	assert.Equal(t, 1, outerRetryStats.SuccessCount)
+	assert.Equal(t, 2, innerRetryStats.ExecutionCount)
+	assert.Equal(t, 2, innerRetryStats.FailureCount)
+	assert.Equal(t, 0, innerRetryStats.SuccessCount)
 }
 
 /*
@@ -63,10 +65,12 @@ func TestFallbackRetryPolicyRetryPolicy(t *testing.T) {
 	//    rp2 InvalidArgumentError - failure, retry
 	//    rp1 InvalidStateError - failure, retries exceeded
 	//    rp2 InvalidStateError - success
-	assert.Equal(t, 3, retryPolicy1Stats.FailedAttemptCount)
-	assert.Equal(t, 1, retryPolicy1Stats.FailureCount)
-	assert.Equal(t, 2, retryPolicy2Stats.FailedAttemptCount)
-	assert.Equal(t, 0, retryPolicy2Stats.FailureCount)
+	assert.Equal(t, 5, retryPolicy1Stats.ExecutionCount)
+	assert.Equal(t, 3, retryPolicy1Stats.FailureCount)
+	assert.Equal(t, 2, retryPolicy1Stats.SuccessCount)
+	assert.Equal(t, 3, retryPolicy2Stats.ExecutionCount)
+	assert.Equal(t, 2, retryPolicy2Stats.FailureCount)
+	assert.Equal(t, 1, retryPolicy2Stats.SuccessCount)
 
 	// When / Then
 	retryPolicy1Stats.Reset()
@@ -82,8 +86,10 @@ func TestFallbackRetryPolicyRetryPolicy(t *testing.T) {
 	//    rp2 InvalidArgumentError - failure, retry
 	//    rp2 InvalidStateError - success
 	//    rp1 InvalidStateError - retries exceeded
-	assert.Equal(t, 3, retryPolicy1Stats.FailedAttemptCount)
-	assert.Equal(t, 1, retryPolicy1Stats.FailureCount)
-	assert.Equal(t, 2, retryPolicy2Stats.FailedAttemptCount)
-	assert.Equal(t, 0, retryPolicy2Stats.FailureCount)
+	assert.Equal(t, 3, retryPolicy1Stats.ExecutionCount)
+	assert.Equal(t, 3, retryPolicy1Stats.FailureCount)
+	assert.Equal(t, 0, retryPolicy1Stats.SuccessCount)
+	assert.Equal(t, 5, retryPolicy2Stats.ExecutionCount)
+	assert.Equal(t, 2, retryPolicy2Stats.FailureCount)
+	assert.Equal(t, 3, retryPolicy2Stats.SuccessCount)
 }

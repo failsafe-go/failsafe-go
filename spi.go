@@ -11,8 +11,9 @@ import (
 //
 // Part of the Failsafe-go SPI.
 type ExecutionResult[R any] struct {
-	Result     R
-	Err        error
+	Result R
+	Error  error
+	// Complete indicates whether an execution is complete or if retries may be needed.
 	Complete   bool
 	Success    bool
 	SuccessAll bool
@@ -47,7 +48,7 @@ type ExecutionInternal[R any] struct {
 func (e *ExecutionInternal[R]) ExecutionForResult(result *ExecutionResult[R]) Execution[R] {
 	c := e.Execution
 	c.LastResult = result.Result
-	c.LastErr = result.Err
+	c.LastError = result.Error
 	return c
 }
 
@@ -81,7 +82,7 @@ func (e *ExecutionInternal[R]) record(result *ExecutionResult[R]) *ExecutionResu
 	if !e.isCanceled(-1) {
 		e.result = result
 		e.LastResult = result.Result
-		e.LastErr = result.Err
+		e.LastError = result.Error
 	}
 	return e.result
 }
@@ -96,7 +97,7 @@ func (e *ExecutionInternal[R]) Cancel(policyIndex int, result *ExecutionResult[R
 	}
 	e.result = result
 	e.LastResult = result.Result
-	e.LastErr = result.Err
+	e.LastError = result.Error
 	*e.canceledIndex = policyIndex
 	if e.canceled != nil {
 		close(e.canceled)
@@ -150,7 +151,7 @@ type PolicyExecutor[R any] interface {
 	IsFailure(result *ExecutionResult[R]) bool
 
 	// OnSuccess performs post-execution handling for a result that is considered a success according to IsFailure.
-	OnSuccess(result *ExecutionResult[R])
+	OnSuccess(exec *ExecutionInternal[R], result *ExecutionResult[R])
 
 	// OnFailure performs post-execution handling for a result that is considered a failure according to IsFailure, possibly creating a new
 	// result, else returning the original result.

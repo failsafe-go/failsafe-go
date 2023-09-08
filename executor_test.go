@@ -43,7 +43,7 @@ func TestGetWithExecution(t *testing.T) {
 	assert.Equal(t, lasteExec.Attempts, 3)
 	assert.Equal(t, lasteExec.Executions, 2)
 	assert.Equal(t, lasteExec.LastResult, "")
-	assert.Equal(t, lasteExec.LastErr, testutil.InvalidArgumentError{})
+	assert.Equal(t, lasteExec.LastError, testutil.InvalidArgumentError{})
 }
 
 // Asserts that configuring a context returns a new copy of the Executor.

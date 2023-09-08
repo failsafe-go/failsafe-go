@@ -11,6 +11,7 @@ import (
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
 	"github.com/failsafe-go/failsafe-go/fallback"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
+	"github.com/failsafe-go/failsafe-go/ratelimiter"
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
 )
 
@@ -33,12 +34,11 @@ func TestListenersOnSuccess(t *testing.T) {
 
 	// Then
 	assert.Equal(t, 0, stats.abort)
-	assert.Equal(t, 4, stats.rpFailedAttempt)
-	assert.Equal(t, 0, stats.retriesExceeded)
-	assert.Equal(t, 4, stats.retryScheduled)
 	assert.Equal(t, 4, stats.retry)
+	assert.Equal(t, 4, stats.retryScheduled)
+	assert.Equal(t, 0, stats.retriesExceeded)
 	assert.Equal(t, 1, stats.rpSuccess)
-	assert.Equal(t, 0, stats.rpFailure)
+	assert.Equal(t, 4, stats.rpFailure)
 
 	assert.Equal(t, 9, stats.stateChanged)
 	assert.Equal(t, 4, stats.open)
@@ -47,9 +47,7 @@ func TestListenersOnSuccess(t *testing.T) {
 	assert.Equal(t, 1, stats.cbSuccess)
 	assert.Equal(t, 4, stats.cbFailure)
 
-	assert.Equal(t, 0, stats.fbFailedAttempt)
-	assert.Equal(t, 1, stats.fbSuccess)
-	assert.Equal(t, 0, stats.fbFailure)
+	assert.Equal(t, 0, stats.fbComplete)
 
 	assert.Equal(t, 1, stats.complete)
 	assert.Equal(t, 1, stats.success)
@@ -73,12 +71,11 @@ func TestListenersForUnhandledFailure(t *testing.T) {
 
 	// Then
 	assert.Equal(t, 0, stats.abort)
-	assert.Equal(t, 2, stats.rpFailedAttempt)
-	assert.Equal(t, 0, stats.retriesExceeded)
-	assert.Equal(t, 2, stats.retryScheduled)
 	assert.Equal(t, 2, stats.retry)
+	assert.Equal(t, 2, stats.retryScheduled)
+	assert.Equal(t, 0, stats.retriesExceeded)
 	assert.Equal(t, 1, stats.rpSuccess)
-	assert.Equal(t, 0, stats.rpFailure)
+	assert.Equal(t, 2, stats.rpFailure)
 
 	assert.Equal(t, 5, stats.stateChanged)
 	assert.Equal(t, 3, stats.open)
@@ -109,12 +106,11 @@ func TestListenersForRetriesExceeded(t *testing.T) {
 
 	// Then
 	assert.Equal(t, 0, stats.abort)
-	assert.Equal(t, 4, stats.rpFailedAttempt)
-	assert.Equal(t, 1, stats.retriesExceeded)
-	assert.Equal(t, 3, stats.retryScheduled)
 	assert.Equal(t, 3, stats.retry)
+	assert.Equal(t, 3, stats.retryScheduled)
+	assert.Equal(t, 1, stats.retriesExceeded)
+	assert.Equal(t, 4, stats.rpFailure)
 	assert.Equal(t, 0, stats.rpSuccess)
-	assert.Equal(t, 1, stats.rpFailure)
 
 	assert.Equal(t, 7, stats.stateChanged)
 	assert.Equal(t, 4, stats.open)
@@ -144,12 +140,11 @@ func TestListenersForAbort(t *testing.T) {
 
 	// Then
 	assert.Equal(t, 1, stats.abort)
-	assert.Equal(t, 4, stats.rpFailedAttempt)
-	assert.Equal(t, 0, stats.retriesExceeded)
-	assert.Equal(t, 3, stats.retryScheduled)
 	assert.Equal(t, 3, stats.retry)
+	assert.Equal(t, 3, stats.retryScheduled)
+	assert.Equal(t, 0, stats.retriesExceeded)
 	assert.Equal(t, 0, stats.rpSuccess)
-	assert.Equal(t, 1, stats.rpFailure)
+	assert.Equal(t, 4, stats.rpFailure)
 
 	assert.Equal(t, 7, stats.stateChanged)
 	assert.Equal(t, 4, stats.open)
@@ -183,14 +178,12 @@ func TestListenersForFailingRetryPolicy(t *testing.T) {
 
 	// Then
 	assert.Equal(t, 0, stats.rpSuccess)
-	assert.Equal(t, 1, stats.rpFailure)
+	assert.Equal(t, 3, stats.rpFailure)
 
 	assert.Equal(t, 3, stats.cbSuccess)
 	assert.Equal(t, 0, stats.cbFailure)
 
-	assert.Equal(t, 0, stats.fbFailedAttempt)
-	assert.Equal(t, 1, stats.fbSuccess)
-	assert.Equal(t, 0, stats.fbFailure)
+	assert.Equal(t, 0, stats.fbComplete)
 
 	assert.Equal(t, 1, stats.complete)
 	assert.Equal(t, 0, stats.success)
@@ -223,9 +216,7 @@ func TestListenersForFailingCircuitBreaker(t *testing.T) {
 	assert.Equal(t, 0, stats.cbSuccess)
 	assert.Equal(t, 1, stats.cbFailure)
 
-	assert.Equal(t, 0, stats.fbFailedAttempt)
-	assert.Equal(t, 1, stats.fbSuccess)
-	assert.Equal(t, 0, stats.fbFailure)
+	assert.Equal(t, 0, stats.fbComplete)
 
 	assert.Equal(t, 1, stats.complete)
 	assert.Equal(t, 0, stats.success)
@@ -257,9 +248,7 @@ func TestListenersForFailingFallback(t *testing.T) {
 	assert.Equal(t, 1, stats.cbSuccess)
 	assert.Equal(t, 0, stats.cbFailure)
 
-	assert.Equal(t, 1, stats.fbFailedAttempt)
-	assert.Equal(t, 0, stats.fbSuccess)
-	assert.Equal(t, 1, stats.fbFailure)
+	assert.Equal(t, 1, stats.fbComplete)
 
 	assert.Equal(t, 1, stats.complete)
 	assert.Equal(t, 0, stats.success)
@@ -281,34 +270,63 @@ func TestGetElapsedTime(t *testing.T) {
 
 func TestRetryPolicyOnScheduledRetry(t *testing.T) {
 	executions := 0
-	rp := retrypolicy.Builder[any]().HandleResult(nil).WithMaxRetries(1).OnFailedAttempt(func(e failsafe.ExecutionAttemptedEvent[any]) {
-		if executions == 1 {
-			assert.True(t, e.IsFirstAttempt())
-			assert.False(t, e.IsRetry())
-		} else {
+	rp := retrypolicy.Builder[any]().HandleResult(nil).WithMaxRetries(1).
+		OnFailure(func(e failsafe.ExecutionAttemptedEvent[any]) {
+			if executions == 1 {
+				assert.True(t, e.IsFirstAttempt())
+				assert.False(t, e.IsRetry())
+			} else {
+				assert.False(t, e.IsFirstAttempt())
+				assert.True(t, e.IsRetry())
+			}
+		}).
+		OnRetry(func(e failsafe.ExecutionAttemptedEvent[any]) {
 			assert.False(t, e.IsFirstAttempt())
 			assert.True(t, e.IsRetry())
-		}
-	}).OnRetry(func(e failsafe.ExecutionAttemptedEvent[any]) {
-		assert.False(t, e.IsFirstAttempt())
-		assert.True(t, e.IsRetry())
-	}).OnRetryScheduled(func(e failsafe.ExecutionScheduledEvent[any]) {
-		if executions == 1 {
-			assert.True(t, e.IsFirstAttempt())
-			assert.False(t, e.IsRetry())
-		} else {
+		}).
+		OnRetryScheduled(func(e failsafe.ExecutionScheduledEvent[any]) {
+			if executions == 1 {
+				assert.True(t, e.IsFirstAttempt())
+				assert.False(t, e.IsRetry())
+			} else {
+				assert.False(t, e.IsFirstAttempt())
+				assert.True(t, e.IsRetry())
+			}
+		}).
+		OnRetriesExceeded(func(e failsafe.ExecutionCompletedEvent[any]) {
 			assert.False(t, e.IsFirstAttempt())
 			assert.True(t, e.IsRetry())
-		}
-	}).OnFailure(func(e failsafe.ExecutionCompletedEvent[any]) {
-		assert.False(t, e.IsFirstAttempt())
-		assert.True(t, e.IsRetry())
-	}).Build()
+		}).
+		Build()
 
 	failsafe.With[any](rp).Get(func() (any, error) {
 		executions++
 		return nil, nil
 	})
+}
+
+func TestListenersForRateLimiter(t *testing.T) {
+	// Given - Fail 4 times then succeed
+	rlBuilder := ratelimiter.SmoothBuilderWithMaxRate[bool](100 * time.Millisecond)
+	stats := &listenerStats{}
+	registerRlListeners(stats, rlBuilder)
+	executor := failsafe.With[bool](rlBuilder.Build())
+	registerExecutorListeners(stats, executor)
+
+	// When
+	executor.Run(testutil.RunFn(nil)) // Success
+	executor.Run(testutil.RunFn(nil)) // Failure
+	time.Sleep(110 * time.Millisecond)
+	executor.Run(testutil.RunFn(nil)) // Success
+	executor.Run(testutil.RunFn(nil)) // Failure
+	executor.Run(testutil.RunFn(nil)) // Failure
+
+	// Then
+	assert.Equal(t, 3, stats.rlExceeded)
+
+	assert.Equal(t, 5, stats.complete)
+	assert.Equal(t, 2, stats.success)
+	assert.Equal(t, 3, stats.failure)
 }
 
 // Asserts which listeners are called when a panic occurs.
@@ -333,12 +351,11 @@ func TestListenersOnPanic(t *testing.T) {
 
 	// Then
 	assert.Equal(t, 0, stats.abort)
-	assert.Equal(t, 2, stats.rpFailedAttempt) // Failed attempt is currently skipped on a panic
-	assert.Equal(t, 0, stats.retriesExceeded)
-	assert.Equal(t, 2, stats.retryScheduled)
 	assert.Equal(t, 2, stats.retry)
+	assert.Equal(t, 2, stats.retryScheduled)
+	assert.Equal(t, 0, stats.retriesExceeded)
 	assert.Equal(t, 0, stats.rpSuccess) // Success listener is not called on a panic
-	assert.Equal(t, 0, stats.rpFailure) // Failure listener is not called on a panic
+	assert.Equal(t, 2, stats.rpFailure) // Failure is currently skipped on a panic
 
 	assert.Equal(t, 4, stats.stateChanged)
 	assert.Equal(t, 2, stats.open)
@@ -347,9 +364,7 @@ func TestListenersOnPanic(t *testing.T) {
 	assert.Equal(t, 0, stats.cbSuccess)
 	assert.Equal(t, 2, stats.cbFailure)
 
-	assert.Equal(t, 0, stats.fbFailedAttempt) // Failed attempt listener will not be called since the fallback is currently skipped on a panic
-	assert.Equal(t, 0, stats.fbSuccess)       // Success listener is not called on a panic
-	assert.Equal(t, 0, stats.fbFailure)       // Failure listener is not called on a panic
+	assert.Equal(t, 0, stats.fbComplete) // Failed attempt listener will not be called since the fallback is currently skipped on a panic
 
 	assert.Equal(t, 0, stats.complete) // Complete listener is not called on a panic
 	assert.Equal(t, 0, stats.success)  // Success listener is not called on a panic
@@ -359,10 +374,9 @@ func TestListenersOnPanic(t *testing.T) {
 type listenerStats struct {
 	// RetryPolicy
 	abort           int
-	rpFailedAttempt int
-	retriesExceeded int
 	retry           int
 	retryScheduled  int
+	retriesExceeded int
 	rpSuccess       int
 	rpFailure       int
 
@@ -375,9 +389,10 @@ type listenerStats struct {
 	cbFailure    int
 
 	// Fallback
-	fbFailedAttempt int
-	fbSuccess       int
-	fbFailure       int
+	fbComplete int
+
+	// RateLimiter
+	rlExceeded int
 
 	// Executor
 	complete int
@@ -388,8 +403,6 @@ type listenerStats struct {
 func registerRpListeners[R any](stats *listenerStats, rpBuilder retrypolicy.RetryPolicyBuilder[R]) {
 	rpBuilder.OnAbort(func(f failsafe.ExecutionCompletedEvent[R]) {
 		stats.abort++
-	}).OnFailedAttempt(func(f failsafe.ExecutionAttemptedEvent[R]) {
-		stats.rpFailedAttempt++
 	}).OnRetriesExceeded(func(f failsafe.ExecutionCompletedEvent[R]) {
 		stats.retriesExceeded++
 	}).OnRetry(func(f failsafe.ExecutionAttemptedEvent[R]) {
@@ -397,9 +410,9 @@ func registerRpListeners[R any](stats *listenerStats, rpBuilder retrypolicy.Retr
 		stats.retry++
 	}).OnRetryScheduled(func(f failsafe.ExecutionScheduledEvent[R]) {
 		stats.retryScheduled++
-	}).OnSuccess(func(event failsafe.ExecutionCompletedEvent[R]) {
+	}).OnSuccess(func(event failsafe.ExecutionAttemptedEvent[R]) {
 		stats.rpSuccess++
-	}).OnFailure(func(event failsafe.ExecutionCompletedEvent[R]) {
+	}).OnFailure(func(event failsafe.ExecutionAttemptedEvent[R]) {
 		stats.rpFailure++
 	})
 }
@@ -418,20 +431,22 @@ func registerCbListeners[R any](stats *listenerStats, cbBuilder circuitbreaker.C
 	}).OnHalfOpen(func(event circuitbreaker.StateChangedEvent) {
 		fmt.Println("CircuitBreaker half-open")
 		stats.halfOpen++
-	}).OnSuccess(func(event failsafe.ExecutionCompletedEvent[R]) {
+	}).OnSuccess(func(event failsafe.ExecutionAttemptedEvent[R]) {
 		stats.cbSuccess++
-	}).OnFailure(func(event failsafe.ExecutionCompletedEvent[R]) {
+	}).OnFailure(func(event failsafe.ExecutionAttemptedEvent[R]) {
 		stats.cbFailure++
 	})
 }
 
 func registerFbListeners[R any](stats *listenerStats, fbBuilder fallback.FallbackBuilder[R]) {
-	fbBuilder.OnFailedAttempt(func(f failsafe.ExecutionAttemptedEvent[R]) {
-		stats.fbFailedAttempt++
-	}).OnSuccess(func(event failsafe.ExecutionCompletedEvent[R]) {
-		stats.fbSuccess++
-	}).OnFailure(func(event failsafe.ExecutionCompletedEvent[R]) {
-		stats.fbFailure++
+	fbBuilder.OnComplete(func(f failsafe.ExecutionCompletedEvent[R]) {
+		stats.fbComplete++
+	})
+}
+
+func registerRlListeners[R any](stats *listenerStats, rlBuilder ratelimiter.RateLimiterBuilder[R]) {
+	rlBuilder.OnRateLimitExceeded(func(event failsafe.ExecutionCompletedEvent[R]) {
+		stats.rlExceeded++
 	})
 }
 

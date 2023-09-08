@@ -149,7 +149,7 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error), withExecuti
 		result, err := fn(execInternal.Execution)
 		er := &ExecutionResult[R]{
 			Result:     result,
-			Err:        err,
+			Error:      err,
 			Complete:   true,
 			Success:    true,
 			SuccessAll: true,
@@ -186,7 +186,7 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error), withExecuti
 			select {
 			case <-ctx.Done():
 				execInternal.Cancel(math.MaxInt, &ExecutionResult[R]{
-					Err:      ctx.Err(),
+					Error:    ctx.Err(),
 					Complete: true,
 				})
 			case <-executionDone:
@@ -210,5 +210,5 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error), withExecuti
 	if e.onComplete != nil {
 		e.onComplete(newExecutionCompletedEvent(er, &execInternal.ExecutionStats))
 	}
-	return er.Result, er.Err
+	return er.Result, er.Error
 }

@@ -40,8 +40,8 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) f
 
 			// Delay
 			delay := rpe.getDelay(&exec.Execution)
-			if rpe.config.retryScheduledListener != nil {
-				rpe.config.retryScheduledListener(failsafe.ExecutionScheduledEvent[R]{
+			if rpe.config.onRetryScheduled != nil {
+				rpe.config.onRetryScheduled(failsafe.ExecutionScheduledEvent[R]{
 					Execution: exec.ExecutionForResult(result),
 					Delay:     delay,
 				})
@@ -62,8 +62,8 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) f
 			}
 
 			// Call retry listener
-			if rpe.config.retryListener != nil {
-				rpe.config.retryListener(failsafe.ExecutionAttemptedEvent[R]{
+			if rpe.config.onRetry != nil {
+				rpe.config.onRetry(failsafe.ExecutionAttemptedEvent[R]{
 					Execution: exec.ExecutionForResult(result),
 				})
 			}
@@ -73,25 +73,22 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) f
 
 // OnFailure updates failedAttempts and retriesExceeded, and calls event listeners
 func (rpe *retryPolicyExecutor[R]) OnFailure(exec *failsafe.ExecutionInternal[R], result *failsafe.ExecutionResult[R]) *failsafe.ExecutionResult[R] {
+	rpe.BasePolicyExecutor.OnFailure(exec, result)
+
 	rpe.failedAttempts++
 	maxRetriesExceeded := rpe.config.maxRetries != -1 && rpe.failedAttempts > rpe.config.maxRetries
 	maxDurationExceeded := rpe.config.maxDuration != 0 && exec.GetElapsedTime() > rpe.config.maxDuration
 	rpe.retriesExceeded = maxRetriesExceeded || maxDurationExceeded
-	isAbortable := rpe.config.isAbortable(result.Result, result.Err)
+	isAbortable := rpe.config.isAbortable(result.Result, result.Error)
 	shouldRetry := !isAbortable && !rpe.retriesExceeded && rpe.config.allowsRetries()
 	completed := isAbortable || !shouldRetry
 
 	// Call listeners
-	if rpe.config.failedAttemptListener != nil {
-		rpe.config.failedAttemptListener(failsafe.ExecutionAttemptedEvent[R]{
-			Execution: exec.ExecutionForResult(result),
-		})
+	if isAbortable && rpe.config.onAbort != nil {
+		rpe.config.onAbort(internal.NewExecutionCompletedEventForExec(&exec.Execution))
 	}
-	if isAbortable && rpe.config.abortListener != nil {
-		rpe.config.abortListener(internal.NewExecutionCompletedEventForExec(&exec.Execution))
-	}
-	if rpe.retriesExceeded && !isAbortable && rpe.config.retriesExceededListener != nil {
-		rpe.config.retriesExceededListener(internal.NewExecutionCompletedEventForExec(&exec.Execution))
+	if rpe.retriesExceeded && !isAbortable && rpe.config.onRetriesExceeded != nil {
+		rpe.config.onRetriesExceeded(internal.NewExecutionCompletedEventForExec(&exec.Execution))
 	}
 	return result.WithComplete(completed, false)
 }

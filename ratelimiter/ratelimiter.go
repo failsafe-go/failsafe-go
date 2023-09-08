@@ -115,8 +115,6 @@ RateLimiterBuilder builds RateLimiter instances.
 This type is not concurrency safe.
 */
 type RateLimiterBuilder[R any] interface {
-	failsafe.ListenablePolicyBuilder[RateLimiterBuilder[R], R]
-
 	// WithMaxWaitTime configures the maxWaitTime to wait for permits to be available. If permits cannot be acquired before the maxWaitTime
 	// is exceeded, then the rate limiter will return ErrRateLimitExceeded.
 	//
@@ -124,12 +122,15 @@ type RateLimiterBuilder[R any] interface {
 	// RateLimiter is used in a standalone way.
 	WithMaxWaitTime(maxWaitTime time.Duration) RateLimiterBuilder[R]
 
+	// OnRateLimitExceeded registers the listener to be called when the rate limit is exceeded.
+	OnRateLimitExceeded(listener func(event failsafe.ExecutionCompletedEvent[R])) RateLimiterBuilder[R]
+
 	// Build returns a new RateLimiter using the builder's configuration.
 	Build() RateLimiter[R]
 }
 
 type rateLimiterConfig[R any] struct {
-	*spi.BaseListenablePolicy[R]
+	onRateLimitExceeded func(failsafe.ExecutionCompletedEvent[R])
 
 	// Smooth
 	interval time.Duration
@@ -154,8 +155,7 @@ until the max wait time is exceeded.
 */
 func SmoothBuilder[R any](maxExecutions int64, period time.Duration) RateLimiterBuilder[R] {
 	return &rateLimiterConfig[R]{
-		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
-		interval:             period / time.Duration(maxExecutions),
+		interval: period / time.Duration(maxExecutions),
 	}
 }
 
@@ -170,8 +170,7 @@ until the max wait time is exceeded.
 */
 func SmoothBuilderWithMaxRate[R any](maxRate time.Duration) RateLimiterBuilder[R] {
 	return &rateLimiterConfig[R]{
-		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
-		interval:             maxRate,
+		interval: maxRate,
 	}
 }
 
@@ -186,9 +185,8 @@ rejected or will block and wait until the max wait time is exceeded.
 */
 func BurstyBuilder[R any](maxExecutions int, period time.Duration) RateLimiterBuilder[R] {
 	return &rateLimiterConfig[R]{
-		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
-		periodPermits:        maxExecutions,
-		period:               period,
+		periodPermits: maxExecutions,
+		period:        period,
 	}
 }
 
@@ -197,13 +195,8 @@ func (c *rateLimiterConfig[R]) WithMaxWaitTime(maxWaitTime time.Duration) RateLi
 	return c
 }
 
-func (c *rateLimiterConfig[R]) OnSuccess(listener func(event failsafe.ExecutionCompletedEvent[R])) RateLimiterBuilder[R] {
-	c.BaseListenablePolicy.OnSuccess(listener)
-	return c
-}
-
-func (c *rateLimiterConfig[R]) OnFailure(listener func(event failsafe.ExecutionCompletedEvent[R])) RateLimiterBuilder[R] {
-	c.BaseListenablePolicy.OnFailure(listener)
+func (c *rateLimiterConfig[R]) OnRateLimitExceeded(listener func(event failsafe.ExecutionCompletedEvent[R])) RateLimiterBuilder[R] {
+	c.onRateLimitExceeded = listener
 	return c
 }
 
@@ -307,8 +300,7 @@ func (r *rateLimiter[R]) TryReservePermits(requestedPermits int, maxWaitTime tim
 func (r *rateLimiter[R]) ToExecutor(policyIndex int) failsafe.PolicyExecutor[R] {
 	rle := &rateLimiterExecutor[R]{
 		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
-			BaseListenablePolicy: r.config.BaseListenablePolicy,
-			PolicyIndex:          policyIndex,
+			PolicyIndex: policyIndex,
 		},
 		rateLimiter: r,
 	}

@@ -16,15 +16,16 @@ type Timeout[R any] interface {
 }
 
 type TimeoutBuilder[R any] interface {
-	failsafe.ListenablePolicyBuilder[TimeoutBuilder[R], R]
+	// OnTimeoutExceeded registers the listener to be called when the timeout is exceeded.
+	OnTimeoutExceeded(listener func(event failsafe.ExecutionCompletedEvent[R])) TimeoutBuilder[R]
 
 	// Build returns a new Timeout using the builder's configuration.
 	Build() Timeout[R]
 }
 
 type timeoutConfig[R any] struct {
-	*spi.BaseListenablePolicy[R]
-	timeoutDelay time.Duration
+	timeoutDelay      time.Duration
+	onTimeoutExceeded func(event failsafe.ExecutionCompletedEvent[R])
 }
 
 var _ TimeoutBuilder[any] = &timeoutConfig[any]{}
@@ -40,18 +41,12 @@ func With[R any](timeoutDelay time.Duration) Timeout[R] {
 // Builder returns a TimeoutBuilder for execution result type R which builds Timeouts for the timeoutDelay.
 func Builder[R any](timeoutDelay time.Duration) TimeoutBuilder[R] {
 	return &timeoutConfig[R]{
-		BaseListenablePolicy: &spi.BaseListenablePolicy[R]{},
-		timeoutDelay:         timeoutDelay,
+		timeoutDelay: timeoutDelay,
 	}
 }
 
-func (c *timeoutConfig[R]) OnSuccess(listener func(event failsafe.ExecutionCompletedEvent[R])) TimeoutBuilder[R] {
-	c.BaseListenablePolicy.OnSuccess(listener)
-	return c
-}
-
-func (c *timeoutConfig[R]) OnFailure(listener func(event failsafe.ExecutionCompletedEvent[R])) TimeoutBuilder[R] {
-	c.BaseListenablePolicy.OnFailure(listener)
+func (c *timeoutConfig[R]) OnTimeoutExceeded(listener func(event failsafe.ExecutionCompletedEvent[R])) TimeoutBuilder[R] {
+	c.onTimeoutExceeded = listener
 	return c
 }
 
@@ -65,8 +60,7 @@ func (c *timeoutConfig[R]) Build() Timeout[R] {
 func (t *timeout[R]) ToExecutor(policyIndex int) failsafe.PolicyExecutor[R] {
 	te := &timeoutExecutor[R]{
 		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
-			BaseListenablePolicy: t.config.BaseListenablePolicy,
-			PolicyIndex:          policyIndex,
+			PolicyIndex: policyIndex,
 		},
 		timeout: t,
 	}

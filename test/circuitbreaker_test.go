@@ -118,7 +118,7 @@ func TestRejectedWithRetries(t *testing.T) {
 			return testutil.InvalidArgumentError{}
 		},
 		7, 3, circuitbreaker.ErrCircuitBreakerOpen)
-	assert.Equal(t, 7, rpStats.FailedAttemptCount)
+	assert.Equal(t, 7, rpStats.ExecutionCount)
 	assert.Equal(t, 6, rpStats.RetryCount)
 	assert.Equal(t, uint(3), cb.GetExecutionCount())
 	assert.Equal(t, uint(3), cb.GetFailureCount())
