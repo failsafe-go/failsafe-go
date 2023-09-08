@@ -1,6 +1,9 @@
 package spi
 
-import "github.com/failsafe-go/failsafe-go"
+import (
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/internal"
+)
 
 // BasePolicyExecutor provides base implementation of PolicyExecutor.
 type BasePolicyExecutor[R any] struct {
@@ -33,21 +36,13 @@ func (bpe *BasePolicyExecutor[R]) PostExecute(exec *failsafe.ExecutionInternal[R
 	if bpe.PolicyExecutor.IsFailure(er) {
 		er = bpe.PolicyExecutor.OnFailure(exec, er.WithFailure())
 		if er.Complete && bpe.BaseListenablePolicy.failureListener != nil {
-			bpe.BaseListenablePolicy.failureListener(failsafe.ExecutionCompletedEvent[R]{
-				Result:         er.Result,
-				Err:            er.Err,
-				ExecutionStats: exec.ExecutionStats,
-			})
+			bpe.BaseListenablePolicy.failureListener(internal.NewExecutionCompletedEvent(er, &exec.ExecutionStats))
 		}
 	} else {
 		er = er.WithComplete(true, true)
 		bpe.PolicyExecutor.OnSuccess(er)
 		if er.Complete && bpe.BaseListenablePolicy.successListener != nil {
-			bpe.BaseListenablePolicy.successListener(failsafe.ExecutionCompletedEvent[R]{
-				Result:         er.Result,
-				Err:            er.Err,
-				ExecutionStats: exec.ExecutionStats,
-			})
+			bpe.BaseListenablePolicy.successListener(internal.NewExecutionCompletedEvent(er, &exec.ExecutionStats))
 		}
 	}
 	return er
