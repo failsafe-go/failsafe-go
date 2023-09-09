@@ -8,7 +8,7 @@ import (
 	"github.com/failsafe-go/failsafe-go/common"
 )
 
-// ExecutionStats contains stats for an execution.
+// ExecutionStats contains execution stats.
 type ExecutionStats interface {
 	// Attempts returns the number of execution attempts so far, including attempts that are currently in progress and
 	// attempts that were blocked before being executed, such as by a CircuitBreaker or RateLimiter.
@@ -25,8 +25,8 @@ type ExecutionStats interface {
 	ElapsedTime() time.Duration
 }
 
-// Execution contains information about an execution.
-type Execution[R any] interface {
+// ExecutionAttempt contains information for an execution attempt.
+type ExecutionAttempt[R any] interface {
 	ExecutionStats
 
 	// LastResult returns the result, if any, from the last execution attempt.
@@ -46,6 +46,11 @@ type Execution[R any] interface {
 
 	// ElapsedAttemptTime returns the elapsed time since the last execution attempt began.
 	ElapsedAttemptTime() time.Duration
+}
+
+// Execution contains information about an execution.
+type Execution[R any] interface {
+	ExecutionAttempt[R]
 
 	// IsCanceled returns whether the execution has been canceled by an external Context or a timeout.Timeout.
 	IsCanceled() bool

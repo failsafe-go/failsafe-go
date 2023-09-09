@@ -14,6 +14,7 @@ import (
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
 	"github.com/failsafe-go/failsafe-go/ratelimiter"
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
+	"github.com/failsafe-go/failsafe-go/timeout"
 )
 
 // RetryPolicy -> CircuitBreaker
@@ -139,10 +140,12 @@ func TestFallbackCircuitBreakerOpen(t *testing.T) {
 
 // RetryPolicy -> RateLimiter
 func TestRetryPolicyRateLimiter(t *testing.T) {
+	// Given
 	rpStats := &policytesting.Stats{}
 	rp := policytesting.WithRetryStats(retrypolicy.Builder[any](), rpStats).WithMaxAttempts(7).Build()
 	rl := ratelimiter.BurstyBuilder[any](3, 1*time.Second).Build()
 
+	// When / Then
 	testutil.TestGetFailure(t, failsafe.With[any](rp, rl),
 		testutil.GetWithExecutionFn[any](nil, testutil.InvalidStateError{}),
 		7, 3, ratelimiter.ErrRateLimitExceeded)
@@ -152,14 +155,75 @@ func TestRetryPolicyRateLimiter(t *testing.T) {
 
 // Fallback -> RetryPolicy -> CircuitBreaker
 func TestFallbackRetryPolicyCircuitBreaker(t *testing.T) {
+	// Given
 	rp := retrypolicy.WithDefaults[string]()
 	cb := circuitbreaker.Builder[string]().WithFailureThreshold(5).Build()
 	fb := fallback.WithResult[string]("test")
 
+	// When / Then
 	testutil.TestGetSuccess(t, failsafe.With[string](fb).Compose(rp).Compose(cb),
 		testutil.GetWithExecutionFn[string]("", testutil.InvalidStateError{}),
 		3, 3, "test")
 	assert.Equal(t, uint(0), cb.SuccessCount())
 	assert.Equal(t, uint(3), cb.FailureCount())
 	assert.True(t, cb.IsClosed())
+}
+
+// RetryPolicy -> Timeout
+//
+// Tests 2 timeouts, then a success, and asserts the execution is cancelled after each timeout.
+func TestRetryPolicyTimeout(t *testing.T) {
+	// Given
+	rp := retrypolicy.Builder[any]().OnFailure(func(e failsafe.ExecutionEvent[any]) {
+		assert.ErrorIs(t, e.LastError(), timeout.ErrTimeoutExceeded)
+	}).Build()
+	toStats := &policytesting.Stats{}
+	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](50*time.Millisecond), toStats).Build()
+
+	// When / Then
+	testutil.TestGetSuccess(t, failsafe.With[any](rp, to),
+		func(e failsafe.Execution[any]) (any, error) {
+			if e.Attempts() <= 2 {
+				time.Sleep(100 * time.Millisecond)
+				assert.True(t, e.IsCanceled())
+			} else {
+				assert.False(t, e.IsCanceled())
+			}
+			return "success", nil
+		}, 3, 3, "success")
+	assert.Equal(t, 2, toStats.ExecutionCount)
+}
+
+// CircuitBreaker -> Timeout
+func TestCircuitBreakerTimeout(t *testing.T) {
+	// Given
+	to := timeout.With[string](50 * time.Millisecond)
+	cb := circuitbreaker.WithDefaults[string]()
+	assert.True(t, cb.IsClosed())
+
+	// When / Then
+	testutil.TestRunFailure(t, failsafe.With[string](cb, to),
+		func(execution failsafe.Execution[string]) error {
+			time.Sleep(100 * time.Millisecond)
+			return nil
+		}, 1, 1, timeout.ErrTimeoutExceeded)
+	assert.True(t, cb.IsOpen())
+}
+
+// Fallback -> Timeout
+func TestFallbackTimeout(t *testing.T) {
+	// Given
+	to := timeout.With[bool](10 * time.Millisecond)
+	fb := fallback.WithFn[bool](func(e failsafe.Execution[bool]) (bool, error) {
+		assert.ErrorIs(t, e.LastError(), timeout.ErrTimeoutExceeded)
+		return true, nil
+	})
+
+	// When / Then
+	testutil.TestGetSuccess(t, failsafe.With[bool](fb, to),
+		func(execution failsafe.Execution[bool]) (bool, error) {
+			time.Sleep(100 * time.Millisecond)
+			return false, nil
+		},
+		1, 1, true)
 }

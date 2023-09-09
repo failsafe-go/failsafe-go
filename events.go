@@ -8,7 +8,7 @@ import (
 
 // ExecutionEvent indicates an execution was attempted.
 type ExecutionEvent[R any] struct {
-	Execution[R]
+	ExecutionAttempt[R]
 }
 
 // ExecutionScheduledEvent indicates an execution was scheduled.

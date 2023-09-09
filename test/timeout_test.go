@@ -119,7 +119,7 @@ func TestFallbackTimeoutWithBlockedFunc(t *testing.T) {
 }
 
 // Tests that an inner timeout will not interrupt an outer fallback. The inner timeout is never triggered since the func completes immediately.
-func TestFallbackTimeout(t *testing.T) {
+func TestFallbackWithInnerTimeout(t *testing.T) {
 	timeoutStats := &policytesting.Stats{}
 	fbStats := &policytesting.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](10*time.Millisecond), timeoutStats).Build()

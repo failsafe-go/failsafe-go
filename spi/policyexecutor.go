@@ -82,7 +82,7 @@ func (bpe *BasePolicyExecutor[R]) IsFailure(result *common.ExecutionResult[R]) b
 func (bpe *BasePolicyExecutor[R]) OnSuccess(exec ExecutionInternal[R], result *common.ExecutionResult[R]) {
 	if bpe.BaseFailurePolicy != nil && bpe.onSuccess != nil {
 		bpe.onSuccess(failsafe.ExecutionEvent[R]{
-			Execution: exec.ExecutionForResult(result),
+			ExecutionAttempt: exec.ExecutionForResult(result),
 		})
 	}
 }
@@ -90,7 +90,7 @@ func (bpe *BasePolicyExecutor[R]) OnSuccess(exec ExecutionInternal[R], result *c
 func (bpe *BasePolicyExecutor[R]) OnFailure(exec ExecutionInternal[R], result *common.ExecutionResult[R]) *common.ExecutionResult[R] {
 	if bpe.BaseFailurePolicy != nil && bpe.onFailure != nil {
 		bpe.onFailure(failsafe.ExecutionEvent[R]{
-			Execution: exec.ExecutionForResult(result),
+			ExecutionAttempt: exec.ExecutionForResult(result),
 		})
 	}
 	return result

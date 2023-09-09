@@ -184,7 +184,7 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error)) (R, error) 
 
 	// Compose policy executors from the innermost policy to the outermost
 	for i, policyIndex := len(e.policies)-1, 0; i >= 0; i, policyIndex = i-1, policyIndex+1 {
-		pp := e.policies[i].ToExecutor(policyIndex)
+		pp := e.policies[i].ToExecutor(policyIndex, *(new(R)))
 		pe := pp.(policyExecutor[R])
 		outerFn = pe.Apply(outerFn)
 	}

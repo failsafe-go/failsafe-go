@@ -122,7 +122,7 @@ func (c *fallbackConfig[R]) Build() Fallback[R] {
 	}
 }
 
-func (fb *fallback[R]) ToExecutor(policyIndex int) any {
+func (fb *fallback[R]) ToExecutor(policyIndex int, _ R) any {
 	fbe := &fallbackExecutor[R]{
 		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
 			BaseFailurePolicy: fb.config.BaseFailurePolicy,
