@@ -96,10 +96,10 @@ These result in the following internal composition when executing a func and han
 
 	Fallback(RetryPolicy(CircuitBreaker(func)))
 */
-func With[R any](outerPolicy Policy[R], policies ...Policy[R]) Executor[R] {
-	policies = append([]Policy[R]{outerPolicy}, policies...)
+func With[R any](outerPolicy Policy[R], innerPolicies ...Policy[R]) Executor[R] {
+	innerPolicies = append([]Policy[R]{outerPolicy}, innerPolicies...)
 	return &executor[R]{
-		policies: policies,
+		policies: innerPolicies,
 	}
 }
 
