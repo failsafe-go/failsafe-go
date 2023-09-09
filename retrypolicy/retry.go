@@ -12,7 +12,8 @@ import (
 
 const defaultMaxRetries = 2
 
-// RetryPolicy is a policy that defines when retries should be performed. See RetryPolicyBuilder for configuration options.
+// RetryPolicy is a policy that defines when retries should be performed. See RetryPolicyBuilder for configuration
+// options.
 //
 // This type is concurrency safe.
 type RetryPolicy[R any] interface {
@@ -24,15 +25,16 @@ RetryPolicyBuilder builds RetryPolicy instances.
 
   - By default, a RetryPolicy will retry up to 2 times when any error is returned, with no delay between retry attempts.
   - You can change the default number of retry attempts and delay between retries by using the with configuration methods.
-  - By default, any error is considered a failure and will be handled by the policy. You can override this by specifying your own HandleErrors
-    conditions. The default error handling condition will only be overridden by another condition that handles error such as HandleErrors or
-    HandleIf. Specifying a condition that only handles results, such as HandleResult or HandleResultIf will not replace the default error
-    handling condition.
-  - If multiple HandleErrors conditions are specified, any condition that matches an execution result or error will trigger policy handling.
+  - By default, any error is considered a failure and will be handled by the policy. You can override this by specifying
+    your own HandleErrors conditions. The default error handling condition will only be overridden by another condition
+    that handles error such as HandleErrors or HandleIf. Specifying a condition that only handles results, such as
+    HandleResult or HandleResultIf will not replace the default error handling condition.
+  - If multiple HandleErrors conditions are specified, any condition that matches an execution result or error will
+    trigger policy handling.
   - The AbortOn, AbortWhen and AbortIf methods describe when retries should be aborted.
 
-This class extends failsafe.ListenablePolicyBuilder, failsafe.FailurePolicyBuilder and failsafe.DelayablePolicyBuilder which offer
-additional configuration.
+This class extends failsafe.ListenablePolicyBuilder, failsafe.FailurePolicyBuilder and failsafe.DelayablePolicyBuilder
+which offer additional configuration.
 
 This type is not concurrency safe.
 */
@@ -43,58 +45,62 @@ type RetryPolicyBuilder[R any] interface {
 	// AbortOnErrors specifies that retries should be aborted if the execution error matches any of the errs using errors.Is.
 	AbortOnErrors(errs ...error) RetryPolicyBuilder[R]
 
-	// AbortOnResult wpecifies that retries should be aborted if the execution result matches the result using reflect.DeepEqual.
+	// AbortOnResult wpecifies that retries should be aborted if the execution result matches the result using
+	// reflect.DeepEqual.
 	AbortOnResult(result R) RetryPolicyBuilder[R]
 
 	// AbortIf specifies that retries should be aborted if the predicate matches the result or error.
 	AbortIf(predicate func(R, error) bool) RetryPolicyBuilder[R]
 
-	// WithMaxAttempts sets the max number of execution attempts to perform. -1 indicates no limit. This method has the same effect as
-	// setting 1 more than WithMaxRetries. For example, 2 retries equal 3 attempts.
+	// WithMaxAttempts sets the max number of execution attempts to perform. -1 indicates no limit. This method has the same
+	// effect as setting 1 more than WithMaxRetries. For example, 2 retries equal 3 attempts.
 	WithMaxAttempts(maxAttempts int) RetryPolicyBuilder[R]
 
-	// WithMaxRetries sets the max number of retries to perform when an execution attempt fails. -1 indicates no limit. This method has the
-	// same effect as setting 1 less than WithMaxAttempts. For example, 2 retries equal 3 attempts.
+	// WithMaxRetries sets the max number of retries to perform when an execution attempt fails. -1 indicates no limit. This
+	// method has the same effect as setting 1 less than WithMaxAttempts. For example, 2 retries equal 3 attempts.
 	WithMaxRetries(maxRetries int) RetryPolicyBuilder[R]
 
 	// WithMaxDuration sets the max duration to perform retries for, else the execution will be failed.
 	WithMaxDuration(maxDuration time.Duration) RetryPolicyBuilder[R]
 
-	// WithBackoff wets the delay between retries, exponentially backing off to the maxDelay and multiplying consecutive delays by a factor
-	// of 2. Replaces any previously configured fixed or random delays.
+	// WithBackoff wets the delay between retries, exponentially backing off to the maxDelay and multiplying consecutive
+	// delays by a factor of 2. Replaces any previously configured fixed or random delays.
 	WithBackoff(delay time.Duration, maxDelay time.Duration) RetryPolicyBuilder[R]
 
-	// WithBackoffFactor sets the delay between retries, exponentially backing off to the maxDelay and multiplying consecutive delays by the
-	// delayFactor. Replaces any previously configured fixed or random delays.
+	// WithBackoffFactor sets the delay between retries, exponentially backing off to the maxDelay and multiplying
+	// consecutive delays by the delayFactor. Replaces any previously configured fixed or random delays.
 	WithBackoffFactor(delay time.Duration, maxDelay time.Duration, delayFactor float32) RetryPolicyBuilder[R]
 
-	// WithJitter sets the jitter to randomly vary retry delays by. For each retry delay, a random portion of the jitter will be added or
-	// subtracted to the delay. For example: a jitter of 100 milliseconds will randomly add between -100 and 100 milliseconds to each retry
-	// delay. Replaces any previously configured jitter factor.
+	// WithJitter sets the jitter to randomly vary retry delays by. For each retry delay, a random portion of the jitter will
+	// be added or subtracted to the delay. For example: a jitter of 100 milliseconds will randomly add between -100 and 100
+	// milliseconds to each retry delay. Replaces any previously configured jitter factor.
 	//
-	// Jitter should be combined with fixed, random, or exponential backoff delays. If no delays are configured, this setting is ignored.
+	// Jitter should be combined with fixed, random, or exponential backoff delays. If no delays are configured, this setting
+	// is ignored.
 	WithJitter(jitter time.Duration) RetryPolicyBuilder[R]
 
-	// WithJitterFactor sets the jitterFactor to randomly vary retry delays by. For each retry delay, a random portion of the delay
-	// multiplied by the jitterFactor will be added or subtracted to the delay. For example: a retry delay of 100 milliseconds and a
-	// jitterFactor of .25 will result in a random retry delay between 75 and 125 milliseconds. Replaces any previously configured jitter
-	// duration.
+	// WithJitterFactor sets the jitterFactor to randomly vary retry delays by. For each retry delay, a random portion of the
+	// delay multiplied by the jitterFactor will be added or subtracted to the delay. For example: a retry delay of 100
+	// milliseconds and a jitterFactor of .25 will result in a random retry delay between 75 and 125 milliseconds. Replaces
+	// any previously configured jitter duration.
 	//
-	// Jitter should be combined with fixed, random, or exponential backoff delays. If no delays are configured, this setting is ignored.
+	// Jitter should be combined with fixed, random, or exponential backoff delays. If no delays are configured, this setting
+	// is ignored.
 	WithJitterFactor(jitterFactor float32) RetryPolicyBuilder[R]
 
 	// OnAbort registers the listener to be called when an execution is aborted.
 	OnAbort(listener func(failsafe.ExecutionCompletedEvent[R])) RetryPolicyBuilder[R]
 
-	// OnRetryScheduled registers the listener to be called when a retry is about to be scheduled. This method differs from OnRetry since it
-	// is called when a retry is initially scheduled but before any configured delay, whereas OnRetry is called after a delay, just before
-	// the retry attempt takes place.
+	// OnRetryScheduled registers the listener to be called when a retry is about to be scheduled. This method differs from
+	// OnRetry since it is called when a retry is initially scheduled but before any configured delay, whereas OnRetry is
+	// called after a delay, just before the retry attempt takes place.
 	OnRetryScheduled(listener func(failsafe.ExecutionScheduledEvent[R])) RetryPolicyBuilder[R]
 
 	// OnRetry registers the listener to be called when a retry is about to be attempted.
 	OnRetry(listener func(failsafe.ExecutionAttemptedEvent[R])) RetryPolicyBuilder[R]
 
-	// OnRetriesExceeded registers the listener to be called when an execution fails and the max retry attempts or max duration are exceeded.
+	// OnRetriesExceeded registers the listener to be called when an execution fails and the max retry attempts or max
+	// duration are exceeded.
 	OnRetriesExceeded(listener func(failsafe.ExecutionCompletedEvent[R])) RetryPolicyBuilder[R]
 
 	// Build returns a new RetryPolicy using the builder's configuration.
@@ -128,14 +134,14 @@ type retryPolicy[R any] struct {
 	config *retryPolicyConfig[R]
 }
 
-// WithDefaults creates a RetryPolicy for execution result type R that allows 3 execution attempts max with no delay. To configure additional
-// options on a RetryPolicy, use Builder instead.
+// WithDefaults creates a RetryPolicy for execution result type R that allows 3 execution attempts max with no delay. To
+// configure additional options on a RetryPolicy, use Builder instead.
 func WithDefaults[R any]() RetryPolicy[R] {
 	return Builder[R]().Build()
 }
 
-// Builder creates a RetryPolicyBuilder for execution result type R, which by default will build a RetryPolicy that allows 3 execution
-// attempts max with no delay, unless configured otherwise.
+// Builder creates a RetryPolicyBuilder for execution result type R, which by default will build a RetryPolicy that
+// allows 3 execution attempts max with no delay, unless configured otherwise.
 func Builder[R any]() RetryPolicyBuilder[R] {
 	return &retryPolicyConfig[R]{
 		BaseFailurePolicy:   &spi.BaseFailurePolicy[R]{},

@@ -9,12 +9,19 @@ import (
 )
 
 /*
-Executor handles failures according to configured policies. An executor can be created for specific policies via:
+Executor handles failures according to configured policies. An executor can be created for a policy via:
 
-	failsafe.With(outerPolicy, policies)
+	failsafe.With(policy)
+
+An Executor can also be created for a composition of policies:
+
+	failsafe.With(outerPolicy, innerPolicy)
+
+See the [With] docs for details.
 */
 type Executor[R any] interface {
-	// Compose returns a new Executor that composes the currently configured policies around the given innerPolicy. For example, consider:
+	// Compose returns a new Executor that composes the currently configured policies around the given innerPolicy. For
+	// example, consider:
 	//
 	//     failsafe.With(fallback).Compose(retryPolicy).Compose(circuitBreaker)
 	//
@@ -23,23 +30,24 @@ type Executor[R any] interface {
 	//     Fallback(RetryPolicy(CircuitBreaker(func)))
 	Compose(innerPolicy Policy[R]) Executor[R]
 
-	// WithContext returns a new copy of the Executor with the ctx configured. Any executions created with the resulting Executor will be
-	// canceled when the ctx is done. Executions can cooperate with cancellation by checking Execution.Canceled or Execution.IsCanceled.
+	// WithContext returns a new copy of the Executor with the ctx configured. Any executions created with the resulting
+	// Executor will be canceled when the ctx is done. Executions can cooperate with cancellation by checking
+	// Execution.Canceled or Execution.IsCanceled.
 	//
-	// Note: This setting will cause a goroutine to be created for each execution, in order to propagate cancellations from the ctx to the
-	// execution.
+	// Note: This setting will cause a goroutine to be created for each execution, in order to propagate cancellations from
+	// the ctx to the execution.
 	WithContext(ctx context.Context) Executor[R]
 
 	// OnComplete registers the listener to be called when an execution is complete.
 	OnComplete(listener func(ExecutionCompletedEvent[R])) Executor[R]
 
-	// OnSuccess registers the listener to be called when an execution is successful. If multiple policies, are configured, this handler is
-	// called when execution is complete and all policies succeed. If all policies do not succeed, then the OnFailure registered listener is
-	// called instead.
+	// OnSuccess registers the listener to be called when an execution is successful. If multiple policies, are configured,
+	// this handler is called when execution is complete and all policies succeed. If all policies do not succeed, then the
+	// OnFailure registered listener is called instead.
 	OnSuccess(listener func(ExecutionCompletedEvent[R])) Executor[R]
 
-	// OnFailure registers the listener to be called when an execution fails. This occurs when the execution fails according to some policy,
-	// and all policies have been exceeded.
+	// OnFailure registers the listener to be called when an execution fails. This occurs when the execution fails according
+	// to some policy, and all policies have been exceeded.
 	OnFailure(listener func(ExecutionCompletedEvent[R])) Executor[R]
 
 	// Run executes the fn until successful or until the configured policies are exceeded.
@@ -47,8 +55,8 @@ type Executor[R any] interface {
 	// Any panic causes the execution to stop immediately without calling any event listeners.
 	Run(fn func() error) (err error)
 
-	// RunWithExecution executes the fn until successful or until the configured policies are exceeded, while providing an Execution
-	// to the fn.
+	// RunWithExecution executes the fn until successful or until the configured policies are exceeded, while providing an
+	// Execution to the fn.
 	//
 	// Any panic causes the execution to stop immediately without calling any event listeners.
 	RunWithExecution(fn func(exec Execution[R]) error) (err error)
@@ -58,8 +66,8 @@ type Executor[R any] interface {
 	// Any panic causes the execution to stop immediately without calling any event listeners.
 	Get(fn func() (R, error)) (R, error)
 
-	// GetWithExecution executes the fn until a successful result is returned or the configured policies are exceeded, while providing
-	// an Execution to the fn.
+	// GetWithExecution executes the fn until a successful result is returned or the configured policies are exceeded, while
+	// providing an Execution to the fn.
 	//
 	// Any panic causes the execution to stop immediately without calling any event listeners.
 	GetWithExecution(fn func(exec Execution[R]) (R, error)) (R, error)
@@ -74,8 +82,9 @@ type executor[R any] struct {
 }
 
 /*
-With creates and returns a new Executor for result type R that will handle failures according to the given policies. The policies are
-composed around an execution and will handle execution results in reverse, with the last policy being applied first. For example, consider:
+With creates and returns a new Executor for result type R that will handle failures according to the given policies. The
+policies are composed around an execution and will handle execution results in reverse, with the last policy being
+applied first. For example, consider:
 
 	failsafe.With(fallback, retryPolicy, circuitBreaker).Get(func)
 

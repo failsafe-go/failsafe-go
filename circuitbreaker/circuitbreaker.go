@@ -40,21 +40,22 @@ const (
 )
 
 /*
-CircuitBreaker is a policy that temporarily blocks execution when a configured number of failures are exceeded.
-Circuit breakers have three states: closed, open, and half-open. When a circuit breaker is in the ClosedState (default), executions are
-allowed. If a configurable number of failures occur, optionally over some time period, the circuit breaker transitions to OpenState.
-In the OpenState a circuit breaker will fail executions with ErrCircuitBreakerOpen. After a configurable delay, the circuit breaker will
-transition to HalfOpenState. In the HalfOpenState a configurable number of trial executions will be allowed, after which the circuit
-breaker will transition to either ClosedState or OpenState depending on how many were successful.
+CircuitBreaker is a policy that temporarily blocks execution when a configured number of failures are exceeded. Circuit
+breakers have three states: closed, open, and half-open. When a circuit breaker is in the ClosedState (default),
+executions are allowed. If a configurable number of failures occur, optionally over some time period, the circuit
+breaker transitions to OpenState. In the OpenState a circuit breaker will fail executions with ErrCircuitBreakerOpen.
+After a configurable delay, the circuit breaker will transition to HalfOpenState. In the HalfOpenState a configurable
+number of trial executions will be allowed, after which the circuit breaker will transition to either ClosedState or
+OpenState depending on how many were successful.
 
 A circuit breaker can be count based or time based:
 
   - Count based circuit breakers will transition between states when recent execution results exceed a threshold.
-  - Time based circuit breakers will transition between states when recent execution results exceed a threshold within a time period.
-    A minimum number of executions must be performed in order for a state transition to occur. Time based circuit breakers use a sliding
-    window to aggregate execution results. The window is divided into 10 time slices, each representing 1/10th of the
-    failureThresholdingPeriod. As time progresses, statistics for old time slices are gradually discarded, which smoothes the calculation
-    of success and failure rates.
+  - Time based circuit breakers will transition between states when recent execution results exceed a threshold within a time
+    period. A minimum number of executions must be performed in order for a state transition to occur. Time based circuit breakers
+    use a sliding window to aggregate execution results. The window is divided into 10 time slices, each representing 1/10th
+    of the failureThresholdingPeriod. As time progresses, statistics for old time slices are gradually discarded, which
+    smoothes the calculation of success and failure rates.
 
 This type is concurrency safe.
 */
@@ -81,8 +82,8 @@ type CircuitBreaker[R any] interface {
 	// State returns the State of the CircuitBreaker.
 	State() State
 
-	// TryAcquirePermit tries to acquire a permit to use the circuit breaker and returns whether a permit was acquired. Permission will
-	// be automatically released when a result or failure is recorded.
+	// TryAcquirePermit tries to acquire a permit to use the circuit breaker and returns whether a permit was acquired.
+	// Permission will be automatically released when a result or failure is recorded.
 	TryAcquirePermit() bool
 
 	// RecordResult records an execution result as a success or failure based on the failure handling configuration.
@@ -97,38 +98,38 @@ type CircuitBreaker[R any] interface {
 	// RecordFailure records an execution failure.
 	RecordFailure()
 
-	// ExecutionCount returns the number of executions recorded in the current state when the state is ClosedState or HalfOpenState.
-	// When the state is OpenState, this returns the executions recorded during the previous ClosedState.
+	// ExecutionCount returns the number of executions recorded in the current state when the state is ClosedState or
+	// HalfOpenState. When the state is OpenState, this returns the executions recorded during the previous ClosedState.
 	//
-	// For count based thresholding, the max number of executions is limited to the execution threshold. For time based thresholds, the
-	// number of executions may vary within the thresholding period.
+	// For count based thresholding, the max number of executions is limited to the execution threshold. For time based
+	// thresholds, the number of executions may vary within the thresholding period.
 	ExecutionCount() uint
 
-	// RemainingDelay returns the remaining delay until the circuit is half-opened and allows another execution, when in the OpenState,
-	// else returns 0 when in other states.
+	// RemainingDelay returns the remaining delay until the circuit is half-opened and allows another execution, when in the
+	// OpenState, else returns 0 when in other states.
 	RemainingDelay() time.Duration
 
-	// FailureCount returns the number of failures recorded in the current state when in a ClosedState or HalfOpenState. When in
-	// OpenState, this returns the failures recorded during the previous ClosedState.
+	// FailureCount returns the number of failures recorded in the current state when in a ClosedState or HalfOpenState. When
+	// in OpenState, this returns the failures recorded during the previous ClosedState.
 	//
-	// For count based thresholds, the max number of failures is based on the failure threshold. For time based thresholds, the number of
-	// failures may vary within the failure thresholding period.
+	// For count based thresholds, the max number of failures is based on the failure threshold. For time based thresholds,
+	// the number of failures may vary within the failure thresholding period.
 	FailureCount() uint
 
-	// FailureRate returns the percentage rate of failed executions, from 0 to 100, in the current state when in a ClosedState or
-	// HalfOpenState. When in OpenState, this returns the rate recorded during the previous ClosedState.
+	// FailureRate returns the percentage rate of failed executions, from 0 to 100, in the current state when in a
+	// ClosedState or HalfOpenState. When in OpenState, this returns the rate recorded during the previous ClosedState.
 	//
 	// The rate is based on the configured failure thresholding capacity.
 	FailureRate() uint
 
-	// SuccessCount returns the number of successes recorded in the current state when in a ClosedState or HalfOpenState. When in
-	// OpenState, this returns the successes recorded during the previous ClosedState.
+	// SuccessCount returns the number of successes recorded in the current state when in a ClosedState or HalfOpenState.
+	// When in OpenState, this returns the successes recorded during the previous ClosedState.
 	//
 	// The max number of successes is based on the success threshold.
 	SuccessCount() uint
 
-	// SuccessRate returns percentage rate of successful executions, from 0 to 100, in the current state when in a ClosedState or
-	// HalfOpenState. When in OpenState, this returns the successes recorded during the previous ClosedState.
+	// SuccessRate returns percentage rate of successful executions, from 0 to 100, in the current state when in a
+	// ClosedState or HalfOpenState. When in OpenState, this returns the successes recorded during the previous ClosedState.
 	//
 	// The rate is based on the configured success thresholding capacity.
 	SuccessRate() uint

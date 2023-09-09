@@ -8,8 +8,8 @@ import (
 )
 
 type rateLimiterStats interface {
-	// acquirePermits eagerly acquires requestedPermits and returns the time that must be waited in order to use the permits, else
-	// returns -1 if the wait time would exceed the maxWaitTime. A maxWaitTime of -1 indicates no max wait.
+	// acquirePermits eagerly acquires requestedPermits and returns the time that must be waited in order to use the permits,
+	// else returns -1 if the wait time would exceed the maxWaitTime. A maxWaitTime of -1 indicates no max wait.
 	acquirePermits(requestedPermits int, maxWaitTime time.Duration) time.Duration
 }
 

@@ -146,8 +146,9 @@ func (s *halfOpenState[R]) tryAcquirePermit() bool {
 
 /*
 Checks to determine if a threshold has been met and the circuit should be opened or closed.
-If a success threshold is configured, the circuit is opened or closed based on whether the ratio was exceeded.
-Else the circuit is opened or closed based on whether the failure threshold was exceeded.
+  - If a success threshold is configured, the circuit is opened or closed based on whether the ratio was exceeded.
+  - Else the circuit is opened or closed based on whether the failure threshold was exceeded.
+
 A permit is released before returning.
 */
 func (s *halfOpenState[R]) checkThresholdAndReleasePermit(exec failsafe.Execution[R]) {

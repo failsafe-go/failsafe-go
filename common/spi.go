@@ -1,8 +1,8 @@
 package common
 
-// ExecutionResult represents the internal result of an execution attempt for zero or more policies, before or after the policy has handled
-// the result. If a policy is done handling a result or is no longer able to handle a result, such as when retries are exceeded, the
-// ExecutionResult should be marked as complete.
+// ExecutionResult represents the internal result of an execution attempt for zero or more policies, before or after the
+// policy has handled the result. If a policy is done handling a result or is no longer able to handle a result, such as
+// when retries are exceeded, the ExecutionResult should be marked as complete.
 //
 // Part of the Failsafe-go SPI.
 type ExecutionResult[R any] struct {

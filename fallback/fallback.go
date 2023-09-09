@@ -14,17 +14,19 @@ type Fallback[R any] interface {
 
 /*
 FallbackBuilder builds Fallback instances.
-  - By default, any error is considered a failure and will be handled by the policy. You can override this by specifying your own handle
-    conditions. The default error handling condition will only be overridden by another condition that handles errors such as HandleErrors
-    or HandleIf. Specifying a condition that only handles results, such as HandleResult will not replace the default error handling condition.
-  - If multiple handle conditions are specified, any condition that matches an execution result or error will trigger policy handling.
+  - By default, any error is considered a failure and will be handled by the policy. You can override this by specifying
+    your own handle conditions. The default error handling condition will only be overridden by another condition that
+    handles errors such as HandleErrors or HandleIf. Specifying a condition that only handles results, such as HandleResult
+    will not replace the default error handling condition.
+  - If multiple handle conditions are specified, any condition that matches an execution result or error will trigger
+    policy handling.
 
 This type is not concurrency safe.
 */
 type FallbackBuilder[R any] interface {
 	failsafe.FailurePolicyBuilder[FallbackBuilder[R], R]
 
-	// OnComplete registers the listener to be called after the Fallback has completed.
+	// OnComplete registers the listener to be called when a Fallback has completed handling a failure.
 	OnComplete(listener func(event failsafe.ExecutionCompletedEvent[R])) FallbackBuilder[R]
 
 	// Build returns a new Fallback using the builder's configuration.
@@ -58,24 +60,24 @@ func WithFn[R any](fallbackFn func(exec failsafe.Execution[R]) (R, error)) Fallb
 	return BuilderWithFn(fallbackFn).Build()
 }
 
-// BuilderWithResult returns a FallbackBuilder for execution result type R which builds Fallbacks that return the result when an execution
-// fails.
+// BuilderWithResult returns a FallbackBuilder for execution result type R which builds Fallbacks that return the result
+// when an execution fails.
 func BuilderWithResult[R any](result R) FallbackBuilder[R] {
 	return BuilderWithFn(func(exec failsafe.Execution[R]) (R, error) {
 		return result, nil
 	})
 }
 
-// BuilderWithError returns a FallbackBuilder for execution result type R which builds Fallbacks that return the error when an execution
-// fails.
+// BuilderWithError returns a FallbackBuilder for execution result type R which builds Fallbacks that return the error
+// when an execution fails.
 func BuilderWithError[R any](err error) FallbackBuilder[R] {
 	return BuilderWithFn(func(exec failsafe.Execution[R]) (R, error) {
 		return *(new(R)), err
 	})
 }
 
-// BuilderWithFn returns a FallbackBuilder for execution result type R which builds Fallbacks that use the fallbackFn to handle failed
-// executions.
+// BuilderWithFn returns a FallbackBuilder for execution result type R which builds Fallbacks that use the fallbackFn to
+// handle failed executions.
 func BuilderWithFn[R any](fallbackFn func(exec failsafe.Execution[R]) (R, error)) FallbackBuilder[R] {
 	return &fallbackConfig[R]{
 		BaseFailurePolicy: &spi.BaseFailurePolicy[R]{},

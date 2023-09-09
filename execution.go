@@ -50,7 +50,8 @@ type Execution[R any] interface {
 	// IsCanceled returns whether the execution has been canceled by an external Context or a timeout.Timeout.
 	IsCanceled() bool
 
-	// Canceled returns a channel that is done when the execution is canceled, either by an external Context or a timeout.Timeout.
+	// Canceled returns a channel that is done when the execution is canceled, either by an external Context or a
+	// timeout.Timeout.
 	Canceled() <-chan any
 }
 

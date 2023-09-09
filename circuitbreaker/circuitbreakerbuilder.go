@@ -11,10 +11,10 @@ import (
 /*
 CircuitBreakerBuilder builds CircuitBreaker instances.
 
-  - By default, any error is considered a failure and will be handled by the policy. You can override this by specifying your own handle
-    conditions. The default error handling condition will only be overridden by another condition that handles error such as
-    HandleErrors or HandleIf. Specifying a condition that only handles results, such as HandleResult or HandleResultIf will not replace the default
-    error handling condition.
+  - By default, any error is considered a failure and will be handled by the policy. You can override this by specifying
+    your own handle conditions. The default error handling condition will only be overridden by another condition that handles
+    error such as HandleErrors or HandleIf. Specifying a condition that only handles results, such as HandleResult or
+    HandleResultIf will not replace the default error handling condition.
   - If multiple handle conditions are specified, any condition that matches an execution result or error will trigger policy handling.
 
 This type is not concurrency safe.
@@ -35,47 +35,49 @@ type CircuitBreakerBuilder[R any] interface {
 	// OnHalfOpen calls the listener when the CircuitBreaker state changes to half-open.
 	OnHalfOpen(listener func(StateChangedEvent)) CircuitBreakerBuilder[R]
 
-	// WithFailureThreshold configures count based failure thresholding by setting the number of consecutive failures that must occur when
-	// in a ClosedState in order to open the circuit.
+	// WithFailureThreshold configures count based failure thresholding by setting the number of consecutive failures that
+	// must occur when in a ClosedState in order to open the circuit.
 	//
-	// If WithSuccessThreshold is not configured, the failureThreshold will also be used when the circuit breaker is in a HalfOpenState to
-	// determine whether to transition back to OpenState or ClosedState.
+	// If WithSuccessThreshold is not configured, the failureThreshold will also be used when the circuit breaker is in a
+	// HalfOpenState to determine whether to transition back to OpenState or ClosedState.
 	WithFailureThreshold(failureThreshold uint) CircuitBreakerBuilder[R]
 
-	// WithFailureThresholdRatio configures count based failure thresholding by setting the ratio of failures to executions that must
-	// occur when in a ClosedState in order to open the circuit. For example: 5, 10 would open the circuit if 5 out of the last 10
-	// executions result in a failure.
+	// WithFailureThresholdRatio configures count based failure thresholding by setting the ratio of failures to executions
+	// that must occur when in a ClosedState in order to open the circuit. For example: 5, 10 would open the circuit if 5 out
+	// of the last 10 executions result in a failure.
 	//
-	// If WithSuccessThreshold is not configured, the failureThreshold and failureThresholdingCapacity will also be used when the circuit
-	// breaker is in a HalfOpenState to determine whether to transition back to OpenState or ClosedState.
+	// If WithSuccessThreshold is not configured, the failureThreshold and failureThresholdingCapacity will also be used when
+	// the circuit breaker is in a HalfOpenState to determine whether to transition back to OpenState or ClosedState.
 	WithFailureThresholdRatio(failureThreshold uint, failureThresholdingCapacity uint) CircuitBreakerBuilder[R]
 
-	// WithFailureThresholdPeriod configures time based failure thresholding by setting the number of failures that must occur within the
-	// failureThresholdingPeriod when in a ClosedState in order to open the circuit.
+	// WithFailureThresholdPeriod configures time based failure thresholding by setting the number of failures that must
+	// occur within the failureThresholdingPeriod when in a ClosedState in order to open the circuit.
 	//
-	// If WithSuccessThreshold is not configured, the failureThreshold will also be used when the circuit breaker is in a HalfOpenState to
-	// determine whether to transition back to OpenState or ClosedState.
+	// If WithSuccessThreshold is not configured, the failureThreshold will also be used when the circuit breaker is in a
+	// HalfOpenState to determine whether to transition back to OpenState or ClosedState.
 	WithFailureThresholdPeriod(failureThreshold uint, failureThresholdingPeriod time.Duration) CircuitBreakerBuilder[R]
 
-	// WithFailureExecutionThreshold configures the mininum number of executions that must occur when in the ClosedState or HalfOpenState
-	// before the circuit breaker can transition. This is often used with WithFailureThresholdPeriod.
+	// WithFailureExecutionThreshold configures the mininum number of executions that must occur when in the ClosedState or
+	// HalfOpenState before the circuit breaker can transition. This is often used with WithFailureThresholdPeriod.
 	WithFailureExecutionThreshold(failureExecutionThreshold uint) CircuitBreakerBuilder[R]
 
-	// WithFailureRateThreshold configures time based failure rate thresholding by setting the percentage rate of failures, from 1 to 100,
-	// that must occur within the rolling failureThresholdingPeriod when in a ClosedState in order to open the circuit. The number of
-	// executions must also exceed the failureExecutionThreshold within the failureThresholdingPeriod before the circuit will be opened.
+	// WithFailureRateThreshold configures time based failure rate thresholding by setting the percentage rate of failures,
+	// from 1 to 100, that must occur within the rolling failureThresholdingPeriod when in a ClosedState in order to open the
+	// circuit. The number of executions must also exceed the failureExecutionThreshold within the failureThresholdingPeriod
+	// before the circuit will be opened.
 	//
-	// If WithSuccessThreshold is not configured, the failureExecutionThreshold will also be used when the circuit breaker is in a
-	// HalfOpenSttate state to determine whether to transition back to open or closed.
+	// If WithSuccessThreshold is not configured, the failureExecutionThreshold will also be used when the circuit breaker is
+	// in a HalfOpenSttate state to determine whether to transition back to open or closed.
 	WithFailureRateThreshold(failureRateThreshold uint, failureExecutionThreshold uint, failureThresholdingPeriod time.Duration) CircuitBreakerBuilder[R]
 
-	// WithSuccessThreshold configures count based success thresholding by setting the number of consecutive successful executions that
-	// must occur when in a HalfOpenState in order to close the circuit, else the circuit is re-opened when a failure occurs.
+	// WithSuccessThreshold configures count based success thresholding by setting the number of consecutive successful
+	// executions that must occur when in a HalfOpenState in order to close the circuit, else the circuit is re-opened when a
+	// failure occurs.
 	WithSuccessThreshold(successThreshold uint) CircuitBreakerBuilder[R]
 
-	// WithSuccessThresholdRatio configures count based success thresholding by setting the ratio of successful executions that must
-	// occur when in a HalfOpenState in order to close the circuit. For example: 5, 10 would close the circuit if 5 out of the last 10
-	// executions were successful.
+	// WithSuccessThresholdRatio configures count based success thresholding by setting the ratio of successful executions
+	// that must occur when in a HalfOpenState in order to close the circuit. For example: 5, 10 would close the circuit if 5
+	// out of the last 10 executions were successful.
 	WithSuccessThresholdRatio(successThreshold uint, successThresholdingCapacity uint) CircuitBreakerBuilder[R]
 
 	// Build returns a new CircuitBreaker using the builder's configuration.
@@ -105,14 +107,16 @@ type circuitBreakerConfig[R any] struct {
 
 var _ CircuitBreakerBuilder[any] = &circuitBreakerConfig[any]{}
 
-// WithDefaults creates a count based CircuitBreaker for execution result type R that opens after a single failure, closes after a single
-// success, and has a 1 minute delay by default. To configure additional options on a CircuitBreaker, use Builder() instead.
+// WithDefaults creates a count based CircuitBreaker for execution result type R that opens after a single failure,
+// closes after a single success, and has a 1 minute delay by default. To configure additional options on a
+// CircuitBreaker, use Builder() instead.
 func WithDefaults[R any]() CircuitBreaker[R] {
 	return Builder[R]().Build()
 }
 
-// Builder creates a CircuitBreakerBuilder for execution result type R which by default will build a count based circuit breaker that opens
-// after a single failure, closes after a single success, and has a 1 minute delay, unless configured otherwise.
+// Builder creates a CircuitBreakerBuilder for execution result type R which by default will build a count based circuit
+// breaker that opens after a single failure, closes after a single success, and has a 1 minute delay, unless configured
+// otherwise.
 func Builder[R any]() CircuitBreakerBuilder[R] {
 	return &circuitBreakerConfig[R]{
 		BaseFailurePolicy: &spi.BaseFailurePolicy[R]{},

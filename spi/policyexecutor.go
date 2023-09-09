@@ -5,18 +5,20 @@ import (
 	"github.com/failsafe-go/failsafe-go/common"
 )
 
-// PolicyExecutor handles execution and execution results according to a policy. May contain pre-execution and post-execution behaviors.
-// Each PolicyExecutor makes its own determination about whether an execution result is a success or failure.
+// PolicyExecutor handles execution and execution results according to a policy. May contain pre-execution and
+// post-execution behaviors. Each PolicyExecutor makes its own determination about whether an execution result is a
+// success or failure.
 //
 // Part of the Failsafe-go SPI.
 type PolicyExecutor[R any] interface {
-	// PreExecute is called before execution to return an alternative result or error, such as if execution is not allowed or needed.
+	// PreExecute is called before execution to return an alternative result or error, such as if execution is not allowed or
+	// needed.
 	PreExecute(exec ExecutionInternal[R]) *common.ExecutionResult[R]
 
 	// Apply performs an execution by calling PreExecute and returning any result, else calling the innerFn PostExecute.
 	//
-	// If a PolicyExecutor delays or blocks during execution, it must check that the execution was not canceled in the meantime, else
-	// return the ExecutionInternal.Result if it was.
+	// If a PolicyExecutor delays or blocks during execution, it must check that the execution was not canceled in the
+	// meantime, else return the ExecutionInternal.Result if it was.
 	Apply(innerFn func(failsafe.Execution[R]) *common.ExecutionResult[R]) func(failsafe.Execution[R]) *common.ExecutionResult[R]
 
 	// PostExecute performs synchronous post-execution handling for an execution result.
@@ -28,8 +30,8 @@ type PolicyExecutor[R any] interface {
 	// OnSuccess performs post-execution handling for a result that is considered a success according to IsFailure.
 	OnSuccess(exec ExecutionInternal[R], result *common.ExecutionResult[R])
 
-	// OnFailure performs post-execution handling for a result that is considered a failure according to IsFailure, possibly creating a new
-	// result, else returning the original result.
+	// OnFailure performs post-execution handling for a result that is considered a failure according to IsFailure, possibly
+	// creating a new result, else returning the original result.
 	OnFailure(exec ExecutionInternal[R], result *common.ExecutionResult[R]) *common.ExecutionResult[R]
 }
 
@@ -92,8 +94,4 @@ func (bpe *BasePolicyExecutor[R]) OnFailure(exec ExecutionInternal[R], result *c
 		})
 	}
 	return result
-}
-
-func (bpe *BasePolicyExecutor[R]) GetPolicyIndex() int {
-	return bpe.PolicyIndex
 }

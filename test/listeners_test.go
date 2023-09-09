@@ -48,6 +48,8 @@ func TestListenersOnSuccess(t *testing.T) {
 	assert.Equal(t, 4, stats.cbFailure)
 
 	assert.Equal(t, 0, stats.fbComplete)
+	assert.Equal(t, 1, stats.fbSuccess)
+	assert.Equal(t, 0, stats.fbFailure)
 
 	assert.Equal(t, 1, stats.complete)
 	assert.Equal(t, 1, stats.success)
@@ -184,6 +186,8 @@ func TestListenersForFailingRetryPolicy(t *testing.T) {
 	assert.Equal(t, 0, stats.cbFailure)
 
 	assert.Equal(t, 0, stats.fbComplete)
+	assert.Equal(t, 1, stats.fbSuccess)
+	assert.Equal(t, 0, stats.fbFailure)
 
 	assert.Equal(t, 1, stats.complete)
 	assert.Equal(t, 0, stats.success)
@@ -217,6 +221,8 @@ func TestListenersForFailingCircuitBreaker(t *testing.T) {
 	assert.Equal(t, 1, stats.cbFailure)
 
 	assert.Equal(t, 0, stats.fbComplete)
+	assert.Equal(t, 1, stats.fbSuccess)
+	assert.Equal(t, 0, stats.fbFailure)
 
 	assert.Equal(t, 1, stats.complete)
 	assert.Equal(t, 0, stats.success)
@@ -249,6 +255,8 @@ func TestListenersForFailingFallback(t *testing.T) {
 	assert.Equal(t, 0, stats.cbFailure)
 
 	assert.Equal(t, 1, stats.fbComplete)
+	assert.Equal(t, 0, stats.fbSuccess)
+	assert.Equal(t, 1, stats.fbFailure)
 
 	assert.Equal(t, 1, stats.complete)
 	assert.Equal(t, 0, stats.success)
@@ -364,7 +372,9 @@ func TestListenersOnPanic(t *testing.T) {
 	assert.Equal(t, 0, stats.cbSuccess)
 	assert.Equal(t, 2, stats.cbFailure)
 
-	assert.Equal(t, 0, stats.fbComplete) // Failed attempt listener will not be called since the fallback is currently skipped on a panic
+	assert.Equal(t, 0, stats.fbComplete) // Complete listener will not be called since the fallback is currently skipped on a panic
+	assert.Equal(t, 0, stats.fbSuccess)
+	assert.Equal(t, 0, stats.fbFailure)
 
 	assert.Equal(t, 0, stats.complete) // Complete listener is not called on a panic
 	assert.Equal(t, 0, stats.success)  // Success listener is not called on a panic
@@ -390,6 +400,8 @@ type listenerStats struct {
 
 	// Fallback
 	fbComplete int
+	fbSuccess  int
+	fbFailure  int
 
 	// RateLimiter
 	rlExceeded int
@@ -441,6 +453,10 @@ func registerCbListeners[R any](stats *listenerStats, cbBuilder circuitbreaker.C
 func registerFbListeners[R any](stats *listenerStats, fbBuilder fallback.FallbackBuilder[R]) {
 	fbBuilder.OnComplete(func(f failsafe.ExecutionCompletedEvent[R]) {
 		stats.fbComplete++
+	}).OnFailure(func(e failsafe.ExecutionAttemptedEvent[R]) {
+		stats.fbFailure++
+	}).OnSuccess(func(e failsafe.ExecutionAttemptedEvent[R]) {
+		stats.fbSuccess++
 	})
 }
 
