@@ -33,11 +33,11 @@ type FailurePolicyBuilder[S any, R any] interface {
 	HandleIf(predicate func(R, error) bool) S
 
 	// OnSuccess registers the listener to be called when the policy determines an execution attempt was a success.
-	OnSuccess(func(event ExecutionAttemptedEvent[R])) S
+	OnSuccess(func(event ExecutionEvent[R])) S
 
 	// OnFailure registers the listener to be called when the policy determines an execution attempt was a failure, and may
 	// be handled.
-	OnFailure(func(event ExecutionAttemptedEvent[R])) S
+	OnFailure(func(event ExecutionEvent[R])) S
 }
 
 // DelayFunction returns a duration to delay for given the Execution.

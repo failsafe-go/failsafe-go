@@ -279,7 +279,7 @@ func TestGetElapsedTime(t *testing.T) {
 func TestRetryPolicyOnScheduledRetry(t *testing.T) {
 	executions := 0
 	rp := retrypolicy.Builder[any]().HandleResult(nil).WithMaxRetries(1).
-		OnFailure(func(e failsafe.ExecutionAttemptedEvent[any]) {
+		OnFailure(func(e failsafe.ExecutionEvent[any]) {
 			if executions == 1 {
 				assert.True(t, e.IsFirstAttempt())
 				assert.False(t, e.IsRetry())
@@ -288,7 +288,7 @@ func TestRetryPolicyOnScheduledRetry(t *testing.T) {
 				assert.True(t, e.IsRetry())
 			}
 		}).
-		OnRetry(func(e failsafe.ExecutionAttemptedEvent[any]) {
+		OnRetry(func(e failsafe.ExecutionEvent[any]) {
 			assert.False(t, e.IsFirstAttempt())
 			assert.True(t, e.IsRetry())
 		}).
@@ -300,10 +300,6 @@ func TestRetryPolicyOnScheduledRetry(t *testing.T) {
 				assert.False(t, e.IsFirstAttempt())
 				assert.True(t, e.IsRetry())
 			}
-		}).
-		OnRetriesExceeded(func(e failsafe.ExecutionCompletedEvent[any]) {
-			assert.False(t, e.IsFirstAttempt())
-			assert.True(t, e.IsRetry())
 		}).
 		Build()
 
@@ -417,14 +413,14 @@ func registerRpListeners[R any](stats *listenerStats, rpBuilder retrypolicy.Retr
 		stats.abort++
 	}).OnRetriesExceeded(func(f failsafe.ExecutionCompletedEvent[R]) {
 		stats.retriesExceeded++
-	}).OnRetry(func(f failsafe.ExecutionAttemptedEvent[R]) {
+	}).OnRetry(func(f failsafe.ExecutionEvent[R]) {
 		fmt.Println("RetryPolicy retry")
 		stats.retry++
 	}).OnRetryScheduled(func(f failsafe.ExecutionScheduledEvent[R]) {
 		stats.retryScheduled++
-	}).OnSuccess(func(event failsafe.ExecutionAttemptedEvent[R]) {
+	}).OnSuccess(func(event failsafe.ExecutionEvent[R]) {
 		stats.rpSuccess++
-	}).OnFailure(func(event failsafe.ExecutionAttemptedEvent[R]) {
+	}).OnFailure(func(event failsafe.ExecutionEvent[R]) {
 		stats.rpFailure++
 	})
 }
@@ -443,9 +439,9 @@ func registerCbListeners[R any](stats *listenerStats, cbBuilder circuitbreaker.C
 	}).OnHalfOpen(func(event circuitbreaker.StateChangedEvent) {
 		fmt.Println("CircuitBreaker half-open")
 		stats.halfOpen++
-	}).OnSuccess(func(event failsafe.ExecutionAttemptedEvent[R]) {
+	}).OnSuccess(func(event failsafe.ExecutionEvent[R]) {
 		stats.cbSuccess++
-	}).OnFailure(func(event failsafe.ExecutionAttemptedEvent[R]) {
+	}).OnFailure(func(event failsafe.ExecutionEvent[R]) {
 		stats.cbFailure++
 	})
 }
@@ -453,9 +449,9 @@ func registerCbListeners[R any](stats *listenerStats, cbBuilder circuitbreaker.C
 func registerFbListeners[R any](stats *listenerStats, fbBuilder fallback.FallbackBuilder[R]) {
 	fbBuilder.OnComplete(func(f failsafe.ExecutionCompletedEvent[R]) {
 		stats.fbComplete++
-	}).OnFailure(func(e failsafe.ExecutionAttemptedEvent[R]) {
+	}).OnFailure(func(e failsafe.ExecutionEvent[R]) {
 		stats.fbFailure++
-	}).OnSuccess(func(e failsafe.ExecutionAttemptedEvent[R]) {
+	}).OnSuccess(func(e failsafe.ExecutionEvent[R]) {
 		stats.fbSuccess++
 	})
 }

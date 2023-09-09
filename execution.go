@@ -18,12 +18,6 @@ type ExecutionStats interface {
 	// open, are not counted.
 	Executions() int
 
-	// IsFirstAttempt returns true when Attempts is 1, meaning this is the first execution attempt.
-	IsFirstAttempt() bool
-
-	// IsRetry returns true when Attempts is > 1, meaning the execution is being retried.
-	IsRetry() bool
-
 	// StartTime returns the time that the initial execution attempt started at.
 	StartTime() time.Time
 
@@ -40,6 +34,12 @@ type Execution[R any] interface {
 
 	// LastError returns the error, if any, from the last execution attempt.
 	LastError() error
+
+	// IsFirstAttempt returns true when Attempts is 1, meaning this is the first execution attempt.
+	IsFirstAttempt() bool
+
+	// IsRetry returns true when Attempts is > 1, meaning the execution is being retried.
+	IsRetry() bool
 
 	// AttemptStartTime returns the time that the most recent execution attempt started at.
 	AttemptStartTime() time.Time

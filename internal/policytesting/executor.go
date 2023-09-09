@@ -47,7 +47,7 @@ func WithRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *S
 }
 
 func withRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *Stats, withLogging bool) retrypolicy.RetryPolicyBuilder[R] {
-	rp.OnRetry(func(e failsafe.ExecutionAttemptedEvent[R]) {
+	rp.OnRetry(func(e failsafe.ExecutionEvent[R]) {
 		stats.RetryCount++
 		if withLogging {
 			fmt.Println(fmt.Sprintf("%s %p retrying [Result: %v, failure: %s]", testutil.GetType(rp), rp, e.LastResult(), e.LastError()))
@@ -116,7 +116,7 @@ func WithFallbackStatsAndLogs[R any](fb fallback.FallbackBuilder[R], stats *Stat
 }
 
 func withStatsAndLogs[P any, R any](policy failsafe.FailurePolicyBuilder[P, R], stats *Stats, withLogging bool) {
-	policy.OnSuccess(func(e failsafe.ExecutionAttemptedEvent[R]) {
+	policy.OnSuccess(func(e failsafe.ExecutionEvent[R]) {
 		stats.ExecutionCount++
 		stats.SuccessCount++
 		if withLogging {
@@ -124,7 +124,7 @@ func withStatsAndLogs[P any, R any](policy failsafe.FailurePolicyBuilder[P, R], 
 				testutil.GetType(policy), policy, e.LastResult(), e.Attempts(), e.Executions()))
 		}
 	})
-	policy.OnFailure(func(e failsafe.ExecutionAttemptedEvent[R]) {
+	policy.OnFailure(func(e failsafe.ExecutionEvent[R]) {
 		stats.ExecutionCount++
 		stats.FailureCount++
 		if withLogging {

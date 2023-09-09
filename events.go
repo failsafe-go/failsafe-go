@@ -6,8 +6,8 @@ import (
 	"github.com/failsafe-go/failsafe-go/common"
 )
 
-// ExecutionAttemptedEvent indicates an execution was attempted.
-type ExecutionAttemptedEvent[R any] struct {
+// ExecutionEvent indicates an execution was attempted.
+type ExecutionEvent[R any] struct {
 	Execution[R]
 }
 

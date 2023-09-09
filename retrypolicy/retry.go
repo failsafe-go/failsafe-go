@@ -97,7 +97,7 @@ type RetryPolicyBuilder[R any] interface {
 	OnRetryScheduled(listener func(failsafe.ExecutionScheduledEvent[R])) RetryPolicyBuilder[R]
 
 	// OnRetry registers the listener to be called when a retry is about to be attempted.
-	OnRetry(listener func(failsafe.ExecutionAttemptedEvent[R])) RetryPolicyBuilder[R]
+	OnRetry(listener func(failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R]
 
 	// OnRetriesExceeded registers the listener to be called when an execution fails and the max retry attempts or max
 	// duration are exceeded.
@@ -123,7 +123,7 @@ type retryPolicyConfig[R any] struct {
 	abortConditions []func(result R, err error) bool
 
 	onAbort           func(failsafe.ExecutionCompletedEvent[R])
-	onRetry           func(failsafe.ExecutionAttemptedEvent[R])
+	onRetry           func(failsafe.ExecutionEvent[R])
 	onRetryScheduled  func(failsafe.ExecutionScheduledEvent[R])
 	onRetriesExceeded func(failsafe.ExecutionCompletedEvent[R])
 }
@@ -244,12 +244,12 @@ func (c *retryPolicyConfig[R]) WithJitterFactor(jitterFactor float32) RetryPolic
 	return c
 }
 
-func (c *retryPolicyConfig[R]) OnSuccess(listener func(event failsafe.ExecutionAttemptedEvent[R])) RetryPolicyBuilder[R] {
+func (c *retryPolicyConfig[R]) OnSuccess(listener func(event failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R] {
 	c.BaseFailurePolicy.OnSuccess(listener)
 	return c
 }
 
-func (c *retryPolicyConfig[R]) OnFailure(listener func(event failsafe.ExecutionAttemptedEvent[R])) RetryPolicyBuilder[R] {
+func (c *retryPolicyConfig[R]) OnFailure(listener func(event failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R] {
 	c.BaseFailurePolicy.OnFailure(listener)
 	return c
 }
@@ -259,7 +259,7 @@ func (c *retryPolicyConfig[R]) OnAbort(listener func(failsafe.ExecutionCompleted
 	return c
 }
 
-func (c *retryPolicyConfig[R]) OnRetry(listener func(failsafe.ExecutionAttemptedEvent[R])) RetryPolicyBuilder[R] {
+func (c *retryPolicyConfig[R]) OnRetry(listener func(failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R] {
 	c.onRetry = listener
 	return c
 }

@@ -222,12 +222,12 @@ func (c *circuitBreakerConfig[R]) OnHalfOpen(listener func(event StateChangedEve
 	return c
 }
 
-func (c *circuitBreakerConfig[R]) OnSuccess(listener func(event failsafe.ExecutionAttemptedEvent[R])) CircuitBreakerBuilder[R] {
+func (c *circuitBreakerConfig[R]) OnSuccess(listener func(event failsafe.ExecutionEvent[R])) CircuitBreakerBuilder[R] {
 	c.BaseFailurePolicy.OnSuccess(listener)
 	return c
 }
 
-func (c *circuitBreakerConfig[R]) OnFailure(listener func(event failsafe.ExecutionAttemptedEvent[R])) CircuitBreakerBuilder[R] {
+func (c *circuitBreakerConfig[R]) OnFailure(listener func(event failsafe.ExecutionEvent[R])) CircuitBreakerBuilder[R] {
 	c.BaseFailurePolicy.OnFailure(listener)
 	return c
 }

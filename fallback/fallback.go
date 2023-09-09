@@ -100,12 +100,12 @@ func (c *fallbackConfig[R]) HandleIf(predicate func(R, error) bool) FallbackBuil
 	return c
 }
 
-func (c *fallbackConfig[R]) OnSuccess(listener func(event failsafe.ExecutionAttemptedEvent[R])) FallbackBuilder[R] {
+func (c *fallbackConfig[R]) OnSuccess(listener func(event failsafe.ExecutionEvent[R])) FallbackBuilder[R] {
 	c.BaseFailurePolicy.OnSuccess(listener)
 	return c
 }
 
-func (c *fallbackConfig[R]) OnFailure(listener func(event failsafe.ExecutionAttemptedEvent[R])) FallbackBuilder[R] {
+func (c *fallbackConfig[R]) OnFailure(listener func(event failsafe.ExecutionEvent[R])) FallbackBuilder[R] {
 	c.BaseFailurePolicy.OnFailure(listener)
 	return c
 }

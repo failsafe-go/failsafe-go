@@ -65,7 +65,7 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *co
 
 			// Call retry listener
 			if rpe.config.onRetry != nil {
-				rpe.config.onRetry(failsafe.ExecutionAttemptedEvent[R]{
+				rpe.config.onRetry(failsafe.ExecutionEvent[R]{
 					Execution: execInternal.ExecutionForResult(result),
 				})
 			}

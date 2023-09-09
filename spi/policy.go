@@ -15,8 +15,8 @@ type BaseFailurePolicy[R any] struct {
 	errorsChecked bool
 	// Conditions that determine whether an execution is a failure
 	failureConditions []func(result R, err error) bool
-	onSuccess         func(failsafe.ExecutionAttemptedEvent[R])
-	onFailure         func(failsafe.ExecutionAttemptedEvent[R])
+	onSuccess         func(failsafe.ExecutionEvent[R])
+	onFailure         func(failsafe.ExecutionEvent[R])
 }
 
 func (p *BaseFailurePolicy[R]) HandleErrors(errs ...error) {
@@ -39,11 +39,11 @@ func (p *BaseFailurePolicy[R]) HandleIf(predicate func(R, error) bool) {
 	p.errorsChecked = true
 }
 
-func (p *BaseFailurePolicy[R]) OnSuccess(listener func(event failsafe.ExecutionAttemptedEvent[R])) {
+func (p *BaseFailurePolicy[R]) OnSuccess(listener func(event failsafe.ExecutionEvent[R])) {
 	p.onSuccess = listener
 }
 
-func (p *BaseFailurePolicy[R]) OnFailure(listener func(event failsafe.ExecutionAttemptedEvent[R])) {
+func (p *BaseFailurePolicy[R]) OnFailure(listener func(event failsafe.ExecutionEvent[R])) {
 	p.onFailure = listener
 }
 
