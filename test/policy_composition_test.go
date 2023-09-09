@@ -27,8 +27,8 @@ func TestRetryPolicyCircuitBreaker(t *testing.T) {
 	testutil.TestGetSuccess(t, failsafe.With[bool](rp, cb),
 		testutil.ErrorNTimesThenReturn[bool](testutil.ConnectionError{}, 2, true),
 		3, 3, true)
-	assert.Equal(t, uint(1), cb.GetSuccessCount())
-	assert.Equal(t, uint(2), cb.GetFailureCount())
+	assert.Equal(t, uint(1), cb.SuccessCount())
+	assert.Equal(t, uint(2), cb.FailureCount())
 }
 
 // RetryPolicy -> CircuitBreaker
@@ -53,8 +53,8 @@ func TestCircuitBreakerRetryPolicy(t *testing.T) {
 		func(execution failsafe.Execution[any]) error {
 			return testutil.InvalidStateError{}
 		}, 3, 3, testutil.InvalidStateError{})
-	assert.Equal(t, uint(0), cb.GetSuccessCount())
-	assert.Equal(t, uint(1), cb.GetFailureCount())
+	assert.Equal(t, uint(0), cb.SuccessCount())
+	assert.Equal(t, uint(1), cb.FailureCount())
 	assert.True(t, cb.IsClosed())
 }
 
@@ -73,8 +73,8 @@ func TestFallbackRetryPolicy(t *testing.T) {
 
 	// Given
 	fb = fallback.WithFn[bool](func(exec failsafe.Execution[bool]) (bool, error) {
-		assert.False(t, exec.LastResult)
-		assert.ErrorIs(t, testutil.InvalidStateError{}, exec.LastError)
+		assert.False(t, exec.LastResult())
+		assert.ErrorIs(t, testutil.InvalidStateError{}, exec.LastError())
 		return true, nil
 	})
 
@@ -106,8 +106,8 @@ func TestRetryPolicyFallback(t *testing.T) {
 func TestFallbackCircuitBreaker(t *testing.T) {
 	// Given
 	fb := fallback.WithFn(func(exec failsafe.Execution[bool]) (bool, error) {
-		assert.False(t, exec.LastResult)
-		assert.ErrorIs(t, testutil.InvalidStateError{}, exec.LastError)
+		assert.False(t, exec.LastResult())
+		assert.ErrorIs(t, testutil.InvalidStateError{}, exec.LastError())
 		return true, nil
 	})
 	cb := circuitbreaker.Builder[bool]().WithSuccessThreshold(3).Build()
@@ -124,8 +124,8 @@ func TestFallbackCircuitBreaker(t *testing.T) {
 func TestFallbackCircuitBreakerOpen(t *testing.T) {
 	// Given
 	fb := fallback.WithFn(func(exec failsafe.Execution[bool]) (bool, error) {
-		assert.False(t, exec.LastResult)
-		assert.ErrorIs(t, circuitbreaker.ErrCircuitBreakerOpen, exec.LastError)
+		assert.False(t, exec.LastResult())
+		assert.ErrorIs(t, circuitbreaker.ErrCircuitBreakerOpen, exec.LastError())
 		return false, nil
 	})
 	cb := circuitbreaker.Builder[bool]().WithSuccessThreshold(3).Build()
@@ -159,7 +159,7 @@ func TestFallbackRetryPolicyCircuitBreaker(t *testing.T) {
 	testutil.TestGetSuccess(t, failsafe.With[string](fb).Compose(rp).Compose(cb),
 		testutil.GetWithExecutionFn[string]("", testutil.InvalidStateError{}),
 		3, 3, "test")
-	assert.Equal(t, uint(0), cb.GetSuccessCount())
-	assert.Equal(t, uint(3), cb.GetFailureCount())
+	assert.Equal(t, uint(0), cb.SuccessCount())
+	assert.Equal(t, uint(3), cb.FailureCount())
 	assert.True(t, cb.IsClosed())
 }

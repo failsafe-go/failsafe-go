@@ -57,7 +57,7 @@ func (c *timeoutConfig[R]) Build() Timeout[R] {
 	}
 }
 
-func (t *timeout[R]) ToExecutor(policyIndex int) failsafe.PolicyExecutor[R] {
+func (t *timeout[R]) ToExecutor(policyIndex int) any {
 	te := &timeoutExecutor[R]{
 		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
 			PolicyIndex: policyIndex,

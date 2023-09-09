@@ -276,7 +276,7 @@ func (c *retryPolicyConfig[R]) isAbortable(result R, err error) bool {
 	return util.AppliesToAny(c.abortConditions, result, err)
 }
 
-func (rp *retryPolicy[R]) ToExecutor(policyIndex int) failsafe.PolicyExecutor[R] {
+func (rp *retryPolicy[R]) ToExecutor(policyIndex int) any {
 	rpe := &retryPolicyExecutor[R]{
 		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
 			BaseFailurePolicy: rp.config.BaseFailurePolicy,

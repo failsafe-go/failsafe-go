@@ -120,8 +120,8 @@ func TestRejectedWithRetries(t *testing.T) {
 		7, 3, circuitbreaker.ErrCircuitBreakerOpen)
 	assert.Equal(t, 7, rpStats.ExecutionCount)
 	assert.Equal(t, 6, rpStats.RetryCount)
-	assert.Equal(t, uint(3), cb.GetExecutionCount())
-	assert.Equal(t, uint(3), cb.GetFailureCount())
+	assert.Equal(t, uint(3), cb.ExecutionCount())
+	assert.Equal(t, uint(3), cb.FailureCount())
 }
 
 // Tests circuit breaker time based failure thresholding state transitions.

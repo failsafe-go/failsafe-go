@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/common"
 	"github.com/failsafe-go/failsafe-go/internal"
 	"github.com/failsafe-go/failsafe-go/internal/util"
 	"github.com/failsafe-go/failsafe-go/spi"
@@ -21,28 +22,29 @@ type retryPolicyExecutor[R any] struct {
 	lastDelay       time.Duration // The last fixed, backoff, random, or computed delay time
 }
 
-func (rpe *retryPolicyExecutor[R]) PreExecute(exec *failsafe.ExecutionInternal[R]) *failsafe.ExecutionResult[R] {
+func (rpe *retryPolicyExecutor[R]) PreExecute(exec spi.ExecutionInternal[R]) *common.ExecutionResult[R] {
 	return rpe.BasePolicyExecutor.PreExecute(exec)
 }
 
-func (rpe *retryPolicyExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsafe.ExecutionHandler[R] {
-	return func(exec *failsafe.ExecutionInternal[R]) *failsafe.ExecutionResult[R] {
+func (rpe *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.ExecutionResult[R]) func(failsafe.Execution[R]) *common.ExecutionResult[R] {
+	return func(exec failsafe.Execution[R]) *common.ExecutionResult[R] {
+		execInternal := exec.(spi.ExecutionInternal[R])
 		for {
 			result := innerFn(exec)
-			if rpe.retriesExceeded || exec.IsCanceled(rpe.PolicyIndex) {
-				return exec.GetResult()
+			if rpe.retriesExceeded || execInternal.IsCanceledForPolicy(rpe.PolicyIndex) {
+				return execInternal.Result()
 			}
 
-			result = rpe.PostExecute(exec, result)
+			result = rpe.PostExecute(execInternal, result)
 			if result.Complete {
 				return result
 			}
 
 			// Delay
-			delay := rpe.getDelay(&exec.Execution)
+			delay := rpe.getDelay(exec)
 			if rpe.config.onRetryScheduled != nil {
 				rpe.config.onRetryScheduled(failsafe.ExecutionScheduledEvent[R]{
-					Execution: exec.ExecutionForResult(result),
+					Execution: execInternal.ExecutionForResult(result),
 					Delay:     delay,
 				})
 			}
@@ -51,20 +53,20 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) f
 			case <-timer.C:
 			case <-exec.Canceled():
 				timer.Stop()
-				if exec.IsCanceled(rpe.PolicyIndex) {
-					return exec.GetResult()
+				if execInternal.IsCanceledForPolicy(rpe.PolicyIndex) {
+					return execInternal.Result()
 				}
 			}
 
 			// Prepare for next iteration
-			if !exec.InitializeAttempt(rpe.PolicyIndex) {
+			if !execInternal.InitializeAttempt(rpe.PolicyIndex) {
 				return result
 			}
 
 			// Call retry listener
 			if rpe.config.onRetry != nil {
 				rpe.config.onRetry(failsafe.ExecutionAttemptedEvent[R]{
-					Execution: exec.ExecutionForResult(result),
+					Execution: execInternal.ExecutionForResult(result),
 				})
 			}
 		}
@@ -72,12 +74,12 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) f
 }
 
 // OnFailure updates failedAttempts and retriesExceeded, and calls event listeners
-func (rpe *retryPolicyExecutor[R]) OnFailure(exec *failsafe.ExecutionInternal[R], result *failsafe.ExecutionResult[R]) *failsafe.ExecutionResult[R] {
+func (rpe *retryPolicyExecutor[R]) OnFailure(exec spi.ExecutionInternal[R], result *common.ExecutionResult[R]) *common.ExecutionResult[R] {
 	rpe.BasePolicyExecutor.OnFailure(exec, result)
 
 	rpe.failedAttempts++
 	maxRetriesExceeded := rpe.config.maxRetries != -1 && rpe.failedAttempts > rpe.config.maxRetries
-	maxDurationExceeded := rpe.config.maxDuration != 0 && exec.GetElapsedTime() > rpe.config.maxDuration
+	maxDurationExceeded := rpe.config.maxDuration != 0 && exec.ElapsedTime() > rpe.config.maxDuration
 	rpe.retriesExceeded = maxRetriesExceeded || maxDurationExceeded
 	isAbortable := rpe.config.isAbortable(result.Result, result.Error)
 	shouldRetry := !isAbortable && !rpe.retriesExceeded && rpe.config.allowsRetries()
@@ -85,16 +87,16 @@ func (rpe *retryPolicyExecutor[R]) OnFailure(exec *failsafe.ExecutionInternal[R]
 
 	// Call listeners
 	if isAbortable && rpe.config.onAbort != nil {
-		rpe.config.onAbort(internal.NewExecutionCompletedEventForExec(&exec.Execution))
+		rpe.config.onAbort(internal.NewExecutionCompletedEventForExec[R](exec))
 	}
 	if rpe.retriesExceeded && !isAbortable && rpe.config.onRetriesExceeded != nil {
-		rpe.config.onRetriesExceeded(internal.NewExecutionCompletedEventForExec(&exec.Execution))
+		rpe.config.onRetriesExceeded(internal.NewExecutionCompletedEventForExec[R](exec))
 	}
 	return result.WithComplete(completed, false)
 }
 
 // getDelay updates lastDelay and returns the new delay
-func (rpe *retryPolicyExecutor[R]) getDelay(exec *failsafe.Execution[R]) time.Duration {
+func (rpe *retryPolicyExecutor[R]) getDelay(exec failsafe.Execution[R]) time.Duration {
 	delay := rpe.lastDelay
 	computedDelay := rpe.config.ComputeDelay(exec)
 	if computedDelay != -1 {
@@ -107,7 +109,7 @@ func (rpe *retryPolicyExecutor[R]) getDelay(exec *failsafe.Execution[R]) time.Du
 	if delay != 0 {
 		delay = adjustForJitter(rpe.config, delay)
 	}
-	delay = adjustForMaxDuration(rpe.config, delay, exec.GetElapsedTime())
+	delay = adjustForMaxDuration(rpe.config, delay, exec.ElapsedTime())
 	return delay
 }
 
@@ -121,8 +123,8 @@ func getFixedOrRandomDelay[R any](config *retryPolicyConfig[R], delay time.Durat
 	return delay
 }
 
-func adjustForBackoff[R any](config *retryPolicyConfig[R], exec *failsafe.Execution[R], delay time.Duration) time.Duration {
-	if exec.Attempts != 1 && config.maxDelay != 0 {
+func adjustForBackoff[R any](config *retryPolicyConfig[R], exec failsafe.Execution[R], delay time.Duration) time.Duration {
+	if exec.Attempts() != 1 && config.maxDelay != 0 {
 		backoffDelay := time.Duration(float32(delay) * config.delayFactor)
 		delay = util.Min(backoffDelay, config.maxDelay)
 	}

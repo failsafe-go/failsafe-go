@@ -2,6 +2,7 @@ package fallback
 
 import (
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/common"
 	"github.com/failsafe-go/failsafe-go/spi"
 )
 
@@ -11,32 +12,33 @@ type fallbackExecutor[R any] struct {
 	*fallback[R]
 }
 
-var _ failsafe.PolicyExecutor[any] = &fallbackExecutor[any]{}
+var _ spi.PolicyExecutor[any] = &fallbackExecutor[any]{}
 
 // Apply performs an execution by calling the innerFn, applying a fallback if it fails, and calling post-execute.
-func (e *fallbackExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsafe.ExecutionHandler[R] {
-	return func(exec *failsafe.ExecutionInternal[R]) *failsafe.ExecutionResult[R] {
+func (e *fallbackExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.ExecutionResult[R]) func(failsafe.Execution[R]) *common.ExecutionResult[R] {
+	return func(exec failsafe.Execution[R]) *common.ExecutionResult[R] {
+		execInternal := exec.(spi.ExecutionInternal[R])
 		result := innerFn(exec)
-		if exec.IsCanceled(e.PolicyIndex) {
+		if execInternal.IsCanceledForPolicy(e.PolicyIndex) {
 			return result
 		}
 
 		if e.IsFailure(result) {
 			// Call fallback fn
-			fallbackResult, fallbackError := e.config.fn(exec.ExecutionForResult(result))
-			if exec.IsCanceled(e.PolicyIndex) {
+			fallbackResult, fallbackError := e.config.fn(execInternal.ExecutionForResult(result))
+			if execInternal.IsCanceledForPolicy(e.PolicyIndex) {
 				return result
 			}
 
 			if e.config.onComplete != nil {
 				e.config.onComplete(failsafe.ExecutionCompletedEvent[R]{
-					ExecutionStats: exec.ExecutionStats,
+					ExecutionStats: exec,
 					Result:         fallbackResult,
 					Error:          fallbackError,
 				})
 			}
 
-			result = &failsafe.ExecutionResult[R]{
+			result = &common.ExecutionResult[R]{
 				Result:     fallbackResult,
 				Error:      fallbackError,
 				Complete:   true,
@@ -44,6 +46,6 @@ func (e *fallbackExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsa
 				SuccessAll: result.SuccessAll,
 			}
 		}
-		return e.PostExecute(exec, result)
+		return e.PostExecute(execInternal, result)
 	}
 }

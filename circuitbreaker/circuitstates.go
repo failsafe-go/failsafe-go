@@ -13,7 +13,7 @@ type circuitState[R any] interface {
 	getStats() circuitStats
 	getRemainingDelay() time.Duration
 	tryAcquirePermit() bool
-	checkThresholdAndReleasePermit(exec *failsafe.Execution[R])
+	checkThresholdAndReleasePermit(exec failsafe.Execution[R])
 }
 
 type closedState[R any] struct {
@@ -51,7 +51,7 @@ func (s *closedState[R]) tryAcquirePermit() bool {
 }
 
 // Checks to see if the executions and failure thresholds have been exceeded, opening the circuit if so.
-func (s *closedState[R]) checkThresholdAndReleasePermit(exec *failsafe.Execution[R]) {
+func (s *closedState[R]) checkThresholdAndReleasePermit(exec failsafe.Execution[R]) {
 	// Execution threshold can only be set for time based thresholding
 	if s.stats.getExecutionCount() >= s.breaker.config.failureExecutionThreshold {
 		// Failure rate threshold can only be set for time based thresholding
@@ -100,7 +100,7 @@ func (s *openState[R]) tryAcquirePermit() bool {
 	return false
 }
 
-func (s *openState[R]) checkThresholdAndReleasePermit(_ *failsafe.Execution[R]) {
+func (s *openState[R]) checkThresholdAndReleasePermit(_ failsafe.Execution[R]) {
 }
 
 type halfOpenState[R any] struct {
@@ -150,7 +150,7 @@ If a success threshold is configured, the circuit is opened or closed based on w
 Else the circuit is opened or closed based on whether the failure threshold was exceeded.
 A permit is released before returning.
 */
-func (s *halfOpenState[R]) checkThresholdAndReleasePermit(exec *failsafe.Execution[R]) {
+func (s *halfOpenState[R]) checkThresholdAndReleasePermit(exec failsafe.Execution[R]) {
 	var successesExceeded bool
 	var failuresExceeded bool
 

@@ -259,7 +259,7 @@ func TestGetElapsedTime(t *testing.T) {
 	rp := retrypolicy.Builder[any]().
 		HandleResult(false).
 		OnRetryScheduled(func(e failsafe.ExecutionScheduledEvent[any]) {
-			assert.True(t, e.GetElapsedAttemptTime().Milliseconds() >= 90)
+			assert.True(t, e.ElapsedAttemptTime().Milliseconds() >= 90)
 		}).
 		Build()
 	failsafe.With[any](rp).Get(func() (any, error) {

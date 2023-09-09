@@ -50,7 +50,7 @@ func withRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *S
 	rp.OnRetry(func(e failsafe.ExecutionAttemptedEvent[R]) {
 		stats.RetryCount++
 		if withLogging {
-			fmt.Println(fmt.Sprintf("%s %p retrying [Result: %v, failure: %s]", testutil.GetType(rp), rp, e.LastResult, e.LastError))
+			fmt.Println(fmt.Sprintf("%s %p retrying [Result: %v, failure: %s]", testutil.GetType(rp), rp, e.LastResult(), e.LastError()))
 		}
 	}).OnRetriesExceeded(func(e failsafe.ExecutionCompletedEvent[R]) {
 		stats.RetrieExceededCount++
@@ -101,7 +101,7 @@ func WithTimeoutStatsAndLogs[R any](to timeout.TimeoutBuilder[R], stats *Stats) 
 	to.OnTimeoutExceeded(func(e failsafe.ExecutionCompletedEvent[R]) {
 		stats.ExecutionCount++
 		fmt.Println(fmt.Sprintf("%s %p exceeded [attempts: %d, executions: %d]",
-			testutil.GetType(to), to, e.Attempts, e.Executions))
+			testutil.GetType(to), to, e.Attempts(), e.Executions()))
 	})
 	return to
 }
@@ -110,7 +110,7 @@ func WithFallbackStatsAndLogs[R any](fb fallback.FallbackBuilder[R], stats *Stat
 	fb.OnComplete(func(e failsafe.ExecutionCompletedEvent[R]) {
 		stats.ExecutionCount++
 		fmt.Println(fmt.Sprintf("%s %p complete [Result: %v, failure: %s, attempts: %d, executions: %d]",
-			testutil.GetType(fb), fb, e.Result, e.Error, e.Attempts, e.Executions))
+			testutil.GetType(fb), fb, e.Result, e.Error, e.Attempts(), e.Executions()))
 	})
 	return fb
 }
@@ -121,7 +121,7 @@ func withStatsAndLogs[P any, R any](policy failsafe.FailurePolicyBuilder[P, R], 
 		stats.SuccessCount++
 		if withLogging {
 			fmt.Println(fmt.Sprintf("%s %p success [Result: %v, attempts: %d, executions: %d]",
-				testutil.GetType(policy), policy, e.LastResult, e.Attempts, e.Executions))
+				testutil.GetType(policy), policy, e.LastResult(), e.Attempts(), e.Executions()))
 		}
 	})
 	policy.OnFailure(func(e failsafe.ExecutionAttemptedEvent[R]) {
@@ -129,7 +129,7 @@ func withStatsAndLogs[P any, R any](policy failsafe.FailurePolicyBuilder[P, R], 
 		stats.FailureCount++
 		if withLogging {
 			fmt.Println(fmt.Sprintf("%s %p failure [Result: %v, failure: %s, attempts: %d, executions: %d]",
-				testutil.GetType(policy), policy, e.LastResult, e.LastError, e.Attempts, e.Executions))
+				testutil.GetType(policy), policy, e.LastResult(), e.LastError(), e.Attempts(), e.Executions()))
 		}
 	})
 }

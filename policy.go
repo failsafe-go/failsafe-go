@@ -7,7 +7,7 @@ import (
 // Policy handles execution failures.
 type Policy[R any] interface {
 	// ToExecutor returns a PolicyExecutor capable of handling an execution for the Policy.
-	ToExecutor(policyIndex int) PolicyExecutor[R]
+	ToExecutor(policyIndex int) any
 }
 
 /*

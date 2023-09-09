@@ -1,6 +1,10 @@
 package testutil
 
-import "github.com/failsafe-go/failsafe-go"
+import (
+	"time"
+
+	"github.com/failsafe-go/failsafe-go"
+)
 
 type InvalidArgumentError struct {
 	Cause error
@@ -121,4 +125,56 @@ func ErrorNTimesThenError[R any](err error, errorTimes int, finalError error) fu
 		}
 		return *(new(R)), finalError
 	}
+}
+
+type TestExecution[R any] struct {
+	TheLastResult R
+}
+
+func (s TestExecution[R]) Attempts() int {
+	panic("unimplemented stub")
+}
+
+func (s TestExecution[R]) Executions() int {
+	panic("unimplemented stub")
+}
+
+func (s TestExecution[R]) StartTime() time.Time {
+	panic("unimplemented stub")
+}
+
+func (s TestExecution[R]) IsFirstAttempt() bool {
+	panic("unimplemented stub")
+}
+
+func (s TestExecution[R]) IsRetry() bool {
+	panic("unimplemented stub")
+}
+
+func (s TestExecution[R]) ElapsedTime() time.Duration {
+	panic("unimplemented stub")
+}
+
+func (s TestExecution[R]) LastResult() R {
+	return s.TheLastResult
+}
+
+func (s TestExecution[R]) LastError() error {
+	panic("unimplemented stub")
+}
+
+func (s TestExecution[R]) AttemptStartTime() time.Time {
+	panic("unimplemented stub")
+}
+
+func (s TestExecution[R]) ElapsedAttemptTime() time.Duration {
+	panic("unimplemented stub")
+}
+
+func (s TestExecution[R]) IsCanceled() bool {
+	panic("unimplemented stub")
+}
+
+func (s TestExecution[R]) Canceled() <-chan any {
+	panic("unimplemented stub")
 }

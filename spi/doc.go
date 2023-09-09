@@ -1,2 +1,2 @@
-// Package spi contains types that are part of the Service Provider Interface (SPI) for extending Failsafe-go.
+// Package spi provides types that are part of the Failsafe-go Service Provider Interface (SPI).
 package spi

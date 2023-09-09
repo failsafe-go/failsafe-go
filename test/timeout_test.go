@@ -37,7 +37,7 @@ func TestRetryTimeoutWithBlockedFunc(t *testing.T) {
 
 	testutil.TestGetSuccess(t, failsafe.With[any](rp, timeout),
 		func(exec failsafe.Execution[any]) (any, error) {
-			if exec.Attempts <= 2 {
+			if exec.Attempts() <= 2 {
 				// Block, trigginer the timeout
 				time.Sleep(100 * time.Millisecond)
 			}

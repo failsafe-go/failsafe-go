@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/internal/testutil"
 )
 
 var _ circuitState[any] = &openState[any]{}
@@ -15,7 +16,7 @@ func TestTryAcquirePermit(t *testing.T) {
 	breaker := Builder[any]().WithDelayFn(func(exec failsafe.Execution[any]) time.Duration {
 		return 100 * time.Millisecond
 	}).Build().(*circuitBreaker[any])
-	breaker.open(&failsafe.Execution[any]{})
+	breaker.open(testutil.TestExecution[any]{})
 	assert.True(t, breaker.IsOpen())
 	assert.False(t, breaker.TryAcquirePermit())
 
@@ -31,15 +32,15 @@ func TestRemainingDelay(t *testing.T) {
 	breaker := Builder[any]().WithDelayFn(func(exec failsafe.Execution[any]) time.Duration {
 		return 1 * time.Second
 	}).Build().(*circuitBreaker[any])
-	breaker.open(&failsafe.Execution[any]{})
+	breaker.open(testutil.TestExecution[any]{})
 
 	// When / Then
-	remainingDelay := breaker.GetRemainingDelay()
+	remainingDelay := breaker.RemainingDelay()
 	assert.True(t, remainingDelay > 0)
 	assert.True(t, remainingDelay.Milliseconds() < 1001)
 
 	time.Sleep(110 * time.Millisecond)
-	remainingDelay = breaker.GetRemainingDelay()
+	remainingDelay = breaker.RemainingDelay()
 	assert.True(t, remainingDelay > 0)
 	assert.True(t, remainingDelay.Milliseconds() < 900)
 }
@@ -48,13 +49,13 @@ func TestNoRemainingDelay(t *testing.T) {
 	breaker := Builder[any]().WithDelayFn(func(exec failsafe.Execution[any]) time.Duration {
 		return 10 * time.Millisecond
 	}).Build().(*circuitBreaker[any])
-	assert.Equal(t, time.Duration(0), breaker.GetRemainingDelay())
+	assert.Equal(t, time.Duration(0), breaker.RemainingDelay())
 
 	// When
-	breaker.open(&failsafe.Execution[any]{})
-	assert.True(t, breaker.GetRemainingDelay() > 0)
+	breaker.open(testutil.TestExecution[any]{})
+	assert.True(t, breaker.RemainingDelay() > 0)
 	time.Sleep(50 * time.Millisecond)
 
 	// Then
-	assert.Equal(t, time.Duration(0), breaker.GetRemainingDelay())
+	assert.Equal(t, time.Duration(0), breaker.RemainingDelay())
 }

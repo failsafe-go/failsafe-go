@@ -4,6 +4,8 @@ import (
 	"context"
 	"math"
 	"sync"
+
+	"github.com/failsafe-go/failsafe-go/common"
 )
 
 /*
@@ -121,59 +123,70 @@ func (e *executor[R]) OnFailure(listener func(ExecutionCompletedEvent[R])) Execu
 func (e *executor[R]) Run(fn func() error) (err error) {
 	_, err = e.execute(func(exec Execution[R]) (R, error) {
 		return *(new(R)), fn()
-	}, false)
+	})
 	return err
 }
 
 func (e *executor[R]) RunWithExecution(fn func(exec Execution[R]) error) (err error) {
 	_, err = e.execute(func(exec Execution[R]) (R, error) {
 		return *(new(R)), fn(exec)
-	}, true)
+	})
 	return err
 }
 
 func (e *executor[R]) Get(fn func() (R, error)) (R, error) {
 	return e.execute(func(exec Execution[R]) (R, error) {
 		return fn()
-	}, false)
+	})
 }
 
 func (e *executor[R]) GetWithExecution(fn func(exec Execution[R]) (R, error)) (R, error) {
 	return e.execute(func(exec Execution[R]) (R, error) {
 		return fn(exec)
-	}, true)
+	})
 }
 
-func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error), withExecution bool) (R, error) {
-	outerFn := func(execInternal *ExecutionInternal[R]) *ExecutionResult[R] {
-		result, err := fn(execInternal.Execution)
-		er := &ExecutionResult[R]{
+// This type mirrors part of spi.ExecutionInternal, which we don't import here to avoid a cycle.
+type executionInternal[R any] interface {
+	Record(result *common.ExecutionResult[R]) *common.ExecutionResult[R]
+}
+
+// This type mirrors part of spi.PolicyExecutor, which we don't import here to avoid a cycle.
+type policyExecutor[R any] interface {
+	Apply(innerFn func(Execution[R]) *common.ExecutionResult[R]) func(Execution[R]) *common.ExecutionResult[R]
+}
+
+func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error)) (R, error) {
+	outerFn := func(exec Execution[R]) *common.ExecutionResult[R] {
+		// Copy exec before passing to user provided func
+		execCopy := *(exec.(*execution[R]))
+		result, err := fn(&execCopy)
+		er := &common.ExecutionResult[R]{
 			Result:     result,
 			Error:      err,
 			Complete:   true,
 			Success:    true,
 			SuccessAll: true,
 		}
-		execInternal.Executions++
+		execInternal := exec.(executionInternal[R])
 		r := execInternal.Record(er)
 		return r
 	}
 
 	// Compose policy executors from the innermost policy to the outermost
 	for i, policyIndex := len(e.policies)-1, 0; i >= 0; i, policyIndex = i-1, policyIndex+1 {
-		outerFn = e.policies[i].ToExecutor(policyIndex).Apply(outerFn)
+		pp := e.policies[i].ToExecutor(policyIndex)
+		pe := pp.(policyExecutor[R])
+		outerFn = pe.Apply(outerFn)
 	}
 
 	// Prepare execution
 	canceledIndex := -1
-	execInternal := &ExecutionInternal[R]{
-		Execution: Execution[R]{
-			ExecutionStats: ExecutionStats{},
-			mtx:            &sync.Mutex{},
-			canceled:       make(chan any),
-			canceledIndex:  &canceledIndex,
-		},
-		Context: e.ctx,
+	exec := &execution[R]{
+		mtx:           &sync.Mutex{},
+		canceled:      make(chan any),
+		canceledIndex: &canceledIndex,
+		ctx:           e.ctx,
 	}
 
 	// Propagate context cancellations to the execution
@@ -185,7 +198,7 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error), withExecuti
 		go func() {
 			select {
 			case <-ctx.Done():
-				execInternal.Cancel(math.MaxInt, &ExecutionResult[R]{
+				exec.Cancel(math.MaxInt, &common.ExecutionResult[R]{
 					Error:    ctx.Err(),
 					Complete: true,
 				})
@@ -195,20 +208,20 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error), withExecuti
 	}
 
 	// Initialize first attempt and execute
-	execInternal.InitializeAttempt(canceledIndex)
-	er := outerFn(execInternal)
+	exec.InitializeAttempt(canceledIndex)
+	er := outerFn(exec)
 
 	// Stop the Context AfterFunc and call listeners
 	if executionDone != nil {
 		close(executionDone)
 	}
 	if e.onSuccess != nil && er.SuccessAll {
-		e.onSuccess(newExecutionCompletedEvent(er, &execInternal.ExecutionStats))
+		e.onSuccess(newExecutionCompletedEvent(er, exec))
 	} else if e.onFailure != nil && !er.SuccessAll {
-		e.onFailure(newExecutionCompletedEvent(er, &execInternal.ExecutionStats))
+		e.onFailure(newExecutionCompletedEvent(er, exec))
 	}
 	if e.onComplete != nil {
-		e.onComplete(newExecutionCompletedEvent(er, &execInternal.ExecutionStats))
+		e.onComplete(newExecutionCompletedEvent(er, exec))
 	}
 	return er.Result, er.Error
 }

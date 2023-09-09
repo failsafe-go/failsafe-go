@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/common"
 	"github.com/failsafe-go/failsafe-go/internal"
 	"github.com/failsafe-go/failsafe-go/spi"
 )
@@ -16,20 +17,21 @@ type timeoutExecutor[R any] struct {
 	*timeout[R]
 }
 
-var _ failsafe.PolicyExecutor[any] = &timeoutExecutor[any]{}
+var _ spi.PolicyExecutor[any] = &timeoutExecutor[any]{}
 
-func (e *timeoutExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsafe.ExecutionHandler[R] {
+func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.ExecutionResult[R]) func(failsafe.Execution[R]) *common.ExecutionResult[R] {
 	// This func sets up a race between a timeout and the innerFn returning
-	return func(exec *failsafe.ExecutionInternal[R]) *failsafe.ExecutionResult[R] {
-		var result atomic.Pointer[failsafe.ExecutionResult[R]]
+	return func(exec failsafe.Execution[R]) *common.ExecutionResult[R] {
+		execInternal := exec.(spi.ExecutionInternal[R])
+		var result atomic.Pointer[common.ExecutionResult[R]]
 
 		timer := time.AfterFunc(e.config.timeoutDelay, func() {
 			timeoutResult := internal.FailureResult[R](ErrTimeoutExceeded)
 			if result.CompareAndSwap(nil, timeoutResult) {
-				exec.Cancel(e.PolicyIndex, timeoutResult)
+				execInternal.Cancel(e.PolicyIndex, timeoutResult)
 				if e.config.onTimeoutExceeded != nil {
 					e.config.onTimeoutExceeded(failsafe.ExecutionCompletedEvent[R]{
-						ExecutionStats: exec.ExecutionStats,
+						ExecutionStats: exec,
 						Error:          ErrTimeoutExceeded,
 					})
 				}
@@ -40,10 +42,10 @@ func (e *timeoutExecutor[R]) Apply(innerFn failsafe.ExecutionHandler[R]) failsaf
 		if result.CompareAndSwap(nil, innerFn(exec)) {
 			timer.Stop()
 		}
-		return e.PostExecute(exec, result.Load())
+		return e.PostExecute(execInternal, result.Load())
 	}
 }
 
-func (e *timeoutExecutor[R]) IsFailure(result *failsafe.ExecutionResult[R]) bool {
+func (e *timeoutExecutor[R]) IsFailure(result *common.ExecutionResult[R]) bool {
 	return result.Error != nil && errors.Is(result.Error, ErrTimeoutExceeded)
 }

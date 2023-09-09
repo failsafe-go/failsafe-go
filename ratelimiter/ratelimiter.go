@@ -297,7 +297,7 @@ func (r *rateLimiter[R]) TryReservePermits(requestedPermits int, maxWaitTime tim
 	return r.stats.acquirePermits(requestedPermits, maxWaitTime)
 }
 
-func (r *rateLimiter[R]) ToExecutor(policyIndex int) failsafe.PolicyExecutor[R] {
+func (r *rateLimiter[R]) ToExecutor(policyIndex int) any {
 	rle := &rateLimiterExecutor[R]{
 		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
 			PolicyIndex: policyIndex,

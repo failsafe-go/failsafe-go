@@ -47,7 +47,7 @@ func TestFallbackRetryPolicyRetryPolicy(t *testing.T) {
 	retryPolicy2 := policytesting.WithRetryStats(retrypolicy.Builder[any]().HandleErrors(testutil.InvalidArgumentError{}).WithMaxRetries(3), retryPolicy2Stats).Build()
 	fb := fallback.WithResult[any](true)
 	fn := func(exec failsafe.Execution[any]) (any, error) {
-		if exec.Attempts%2 == 1 {
+		if exec.Attempts()%2 == 1 {
 			return false, testutil.InvalidStateError{}
 		}
 		return false, testutil.InvalidArgumentError{}

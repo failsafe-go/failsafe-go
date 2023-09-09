@@ -32,8 +32,8 @@ func testGet[R any](t *testing.T, executor failsafe.Executor[R], when WhenGet[R]
 	result, err := executor.OnComplete(func(e failsafe.ExecutionCompletedEvent[R]) {
 		completedEvent = &e
 	}).GetWithExecution(when)
-	assert.Equal(t, expectedAttempts, completedEvent.Attempts, "expected attempts did not match")
-	assert.Equal(t, expectedExecutions, completedEvent.Executions, "expected executions did not match")
+	assert.Equal(t, expectedAttempts, completedEvent.Attempts(), "expected attempts did not match")
+	assert.Equal(t, expectedExecutions, completedEvent.Executions(), "expected executions did not match")
 	assert.Equal(t, expectedResult, result, "expected result did not match")
 	assert.ErrorIs(t, expectedError, err, "expected error did not match")
 }
@@ -44,10 +44,10 @@ func testRun[R any](t *testing.T, executor failsafe.Executor[R], when WhenRun[R]
 		completedEvent = &e
 	}).RunWithExecution(when)
 	if expectedAttempts != -1 {
-		assert.Equal(t, expectedAttempts, completedEvent.Attempts, "expected attempts did not match")
+		assert.Equal(t, expectedAttempts, completedEvent.Attempts(), "expected attempts did not match")
 	}
 	if expectedExecutions != -1 {
-		assert.Equal(t, expectedExecutions, completedEvent.Executions, "expected executions did not match")
+		assert.Equal(t, expectedExecutions, completedEvent.Executions(), "expected executions did not match")
 	}
 	assert.ErrorIs(t, expectedError, err, "expected error did not match")
 }

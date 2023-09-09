@@ -49,7 +49,7 @@ func TestShouldNotRetryOnNonRetriableFailure(t *testing.T) {
 	// When / Then
 	testutil.TestRunFailure(t, failsafe.With[any](rp),
 		func(exec failsafe.Execution[any]) error {
-			if exec.Attempts <= 2 {
+			if exec.Attempts() <= 2 {
 				return testutil.ConnectionError{}
 			}
 			return testutil.TimeoutError{}
@@ -82,7 +82,7 @@ func TestScheduledRetryDelay(t *testing.T) {
 	rp := retrypolicy.Builder[any]().
 		WithDelay(delay).
 		OnRetryScheduled(func(e failsafe.ExecutionScheduledEvent[any]) {
-			assert.Equal(t, delay, e.GetDelay())
+			assert.Equal(t, delay, e.Delay)
 		}).
 		Build()
 
