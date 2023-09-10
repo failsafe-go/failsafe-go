@@ -129,15 +129,15 @@ func (e *executor[R]) OnFailure(listener func(ExecutionCompletedEvent[R])) Execu
 	return e
 }
 
-func (e *executor[R]) Run(fn func() error) (err error) {
-	_, err = e.execute(func(exec Execution[R]) (R, error) {
+func (e *executor[R]) Run(fn func() error) error {
+	_, err := e.execute(func(exec Execution[R]) (R, error) {
 		return *(new(R)), fn()
 	})
 	return err
 }
 
-func (e *executor[R]) RunWithExecution(fn func(exec Execution[R]) error) (err error) {
-	_, err = e.execute(func(exec Execution[R]) (R, error) {
+func (e *executor[R]) RunWithExecution(fn func(exec Execution[R]) error) error {
+	_, err := e.execute(func(exec Execution[R]) (R, error) {
 		return *(new(R)), fn(exec)
 	})
 	return err

@@ -111,6 +111,10 @@ type RetryPolicyBuilder[R any] interface {
 	// consecutive delays by the delayFactor. Replaces any previously configured fixed or random delays.
 	WithBackoffFactor(delay time.Duration, maxDelay time.Duration, delayFactor float32) RetryPolicyBuilder[R]
 
+	// WithRandomDelay sets a random delay between the delayMin and delayMax (inclusive) to occur between retries.
+	// Replaces any previously configured delay or backoff delay.
+	WithRandomDelay(delayMin time.Duration, delayMax time.Duration) RetryPolicyBuilder[R]
+
 	// WithJitter sets the jitter to randomly vary retry delays by. For each retry delay, a random portion of the jitter will
 	// be added or subtracted to the delay. For example: a jitter of 100 milliseconds will randomly add between -100 and 100
 	// milliseconds to each retry delay. Replaces any previously configured jitter factor.
@@ -277,6 +281,14 @@ func (c *retryPolicyConfig[R]) WithBackoffFactor(delay time.Duration, maxDelay t
 	c.BaseDelayablePolicy.WithDelay(delay)
 	c.delayMax = maxDelay
 	c.delayFactor = delayFactor
+	return c
+}
+
+func (c *retryPolicyConfig[R]) WithRandomDelay(delayMin time.Duration, delayMax time.Duration) RetryPolicyBuilder[R] {
+	c.delayMin = delayMin
+	c.delayMax = delayMax
+	c.Delay = 0
+	c.maxDelay = 0
 	return c
 }
 
