@@ -13,6 +13,10 @@ import (
 
 const defaultMaxRetries = 2
 
+// ErrRetriesExceeded is an empty RetriesExceededError instance, useful for building policies that want to handle this
+// error.
+var ErrRetriesExceeded = &RetriesExceededError{}
+
 // RetriesExceededError is returned when a RetryPolicy's max attempts or max duration are exceeded.
 type RetriesExceededError struct {
 	lastResult any
@@ -204,8 +208,9 @@ func (c *retryPolicyConfig[R]) Build() RetryPolicy[R] {
 
 func (c *retryPolicyConfig[R]) AbortOnErrors(errs ...error) RetryPolicyBuilder[R] {
 	for _, target := range errs {
+		t := target
 		c.abortConditions = append(c.abortConditions, func(result R, actualErr error) bool {
-			return errors.Is(actualErr, target)
+			return errors.Is(actualErr, t)
 		})
 	}
 	return c

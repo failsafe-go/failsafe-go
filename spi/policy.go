@@ -21,8 +21,9 @@ type BaseFailurePolicy[R any] struct {
 
 func (p *BaseFailurePolicy[R]) HandleErrors(errs ...error) {
 	for _, target := range errs {
+		t := target
 		p.failureConditions = append(p.failureConditions, func(r R, actualErr error) bool {
-			return errors.Is(actualErr, target)
+			return errors.Is(actualErr, t)
 		})
 	}
 	p.errorsChecked = true
