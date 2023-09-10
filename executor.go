@@ -14,7 +14,7 @@ func Run(fn func() error, policies ...Policy[any]) (err error) {
 }
 
 // RunWithExecution executes the fn, with failures being handled by the policies, until successful or until the policies
-// are exceeded, while providing an Execution to the fn.
+// are exceeded.
 func RunWithExecution(fn func(exec Execution[any]) error, policies ...Policy[any]) (err error) {
 	return NewExecutor[any](policies...).RunWithExecution(fn)
 }
@@ -26,22 +26,14 @@ func Get[R any](fn func() (R, error), policies ...Policy[R]) (R, error) {
 }
 
 // GetWithExecution executes the fn, with failures being handled by the policies, until a successful result is returned
-// or the policies are exceeded, while providing an Execution to the fn.
+// or the policies are exceeded.
 func GetWithExecution[R any](fn func(exec Execution[R]) (R, error), policies ...Policy[R]) (R, error) {
 	return NewExecutor[R](policies...).GetWithExecution(fn)
 }
 
-/*
-Executor handles failures according to configured policies. An executor can be created for a policy via:
-
-	failsafe.NewExecutor(policy)
-
-An Executor can also be created for a composition of policies:
-
-	failsafe.NewExecutor(outerPolicy, innerPolicy)
-
-See the [NewExecutor] docs for details.
-*/
+// Executor handles failures according to configured policies.
+//
+// See [NewExecutor] for details.
 type Executor[R any] interface {
 	// WithContext returns a new copy of the Executor with the ctx configured. Any executions created with the resulting
 	// Executor will be canceled when the ctx is done. Executions can cooperate with cancellation by checking
@@ -91,17 +83,14 @@ type executor[R any] struct {
 	onFailure  func(ExecutionCompletedEvent[R])
 }
 
-/*
-NewExecutor creates and returns a new Executor for result type R that will handle failures according to the given policies. The
-policies are composed around an execution and will handle execution results in reverse, with the last policy being
-applied first. For example, consider:
-
-	failsafe.NewExecutor(fallback, retryPolicy, circuitBreaker).Get(func)
-
-These result in the following internal composition when executing a func and handling its result:
-
-	Fallback(RetryPolicy(CircuitBreaker(func)))
-*/
+// NewExecutor creates and returns a new Executor for result type R that will handle failures according to the given
+// policies. The policies are composed around a func and will handle its results in reverse order. For example, consider:
+//
+//	failsafe.NewExecutor(fallback, retryPolicy, circuitBreaker).Get(fn)
+//
+// This creates the following composition when executing a func and handling its result:
+//
+//	Fallback(RetryPolicy(CircuitBreaker(func)))
 func NewExecutor[R any](policies ...Policy[R]) Executor[R] {
 	return &executor[R]{
 		policies: policies,
