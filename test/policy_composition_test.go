@@ -50,7 +50,7 @@ func TestCircuitBreakerRetryPolicy(t *testing.T) {
 	rp := retrypolicy.WithDefaults[any]()
 	cb := circuitbreaker.Builder[any]().WithFailureThreshold(3).Build()
 
-	testutil.TestRunFailure(t, failsafe.With[any](cb).Compose(rp),
+	testutil.TestRunFailure(t, failsafe.With[any](cb, rp),
 		func(execution failsafe.Execution[any]) error {
 			return testutil.ErrInvalidState
 		}, 3, 3, testutil.ErrInvalidState)
@@ -94,7 +94,7 @@ func TestRetryPolicyFallback(t *testing.T) {
 	fb := fallback.WithResult[string]("test")
 
 	// When / Then
-	testutil.TestGetSuccess[string](t, failsafe.With[string](rp).Compose(fb),
+	testutil.TestGetSuccess[string](t, failsafe.With[string](rp, fb),
 		func(execution failsafe.Execution[string]) (string, error) {
 			return "", testutil.ErrInvalidState
 		},
@@ -161,7 +161,7 @@ func TestFallbackRetryPolicyCircuitBreaker(t *testing.T) {
 	fb := fallback.WithResult[string]("test")
 
 	// When / Then
-	testutil.TestGetSuccess(t, failsafe.With[string](fb).Compose(rp).Compose(cb),
+	testutil.TestGetSuccess(t, failsafe.With[string](fb, rp, cb),
 		testutil.GetWithExecutionFn[string]("", testutil.ErrInvalidState),
 		3, 3, "test")
 	assert.Equal(t, uint(0), cb.SuccessCount())

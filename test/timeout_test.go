@@ -92,7 +92,7 @@ func TestTimeoutRetryWithPendingRetry(t *testing.T) {
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](100*time.Millisecond), timeoutStats).Build()
 	rp := policytesting.WithRetryStatsAndLogs[any](retrypolicy.Builder[any]().WithDelay(time.Second), rpStats).Build()
 
-	testutil.TestRunFailure(t, failsafe.With[any](to).Compose(rp),
+	testutil.TestRunFailure(t, failsafe.With[any](to, rp),
 		func(_ failsafe.Execution[any]) error {
 			return testutil.ErrInvalidArgument
 		},
@@ -108,7 +108,7 @@ func TestFallbackTimeoutWithBlockedFunc(t *testing.T) {
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](10*time.Millisecond), timeoutStats).Build()
 	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithError[any](testutil.ErrInvalidArgument), fbStats).Build()
 
-	testutil.TestRunFailure(t, failsafe.With[any](fb).Compose(to),
+	testutil.TestRunFailure(t, failsafe.With[any](fb, to),
 		func(_ failsafe.Execution[any]) error {
 			time.Sleep(100 * time.Millisecond)
 			return errors.New("test")
@@ -125,7 +125,7 @@ func TestFallbackWithInnerTimeout(t *testing.T) {
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](10*time.Millisecond), timeoutStats).Build()
 	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithError[any](testutil.ErrInvalidArgument), fbStats).Build()
 
-	testutil.TestRunFailure(t, failsafe.With[any](fb).Compose(to),
+	testutil.TestRunFailure(t, failsafe.With[any](fb, to),
 		func(_ failsafe.Execution[any]) error {
 			return errors.New("test")
 		},
@@ -141,7 +141,7 @@ func TestTimeoutFallbackWithBlockedFunc(t *testing.T) {
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](10*time.Millisecond), timeoutStats).Build()
 	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithError[any](testutil.ErrInvalidArgument), fbStats).Build()
 
-	testutil.TestRunFailure(t, failsafe.With[any](to).Compose(fb),
+	testutil.TestRunFailure(t, failsafe.With[any](to, fb),
 		func(_ failsafe.Execution[any]) error {
 			time.Sleep(100 * time.Millisecond)
 			return errors.New("test")
@@ -161,7 +161,7 @@ func TestTimeoutFallbackWithBlockedFallback(t *testing.T) {
 		return nil, testutil.ErrInvalidState
 	}), fbStats).Build()
 
-	testutil.TestRunFailure(t, failsafe.With[any](to).Compose(fb),
+	testutil.TestRunFailure(t, failsafe.With[any](to, fb),
 		func(_ failsafe.Execution[any]) error {
 			return errors.New("test")
 		},

@@ -43,16 +43,6 @@ An Executor can also be created for a composition of policies:
 See the [With] docs for details.
 */
 type Executor[R any] interface {
-	// Compose returns a new Executor that composes the currently configured policies around the given innerPolicy. For
-	// example, consider:
-	//
-	//     failsafe.With(fallback).Compose(retryPolicy).Compose(circuitBreaker)
-	//
-	// This results in the following internal composition when executing a func and handling its result:
-	//
-	//     Fallback(RetryPolicy(CircuitBreaker(func)))
-	Compose(innerPolicy Policy[R]) Executor[R]
-
 	// WithContext returns a new copy of the Executor with the ctx configured. Any executions created with the resulting
 	// Executor will be canceled when the ctx is done. Executions can cooperate with cancellation by checking
 	// Execution.Canceled or Execution.IsCanceled.
@@ -108,10 +98,6 @@ applied first. For example, consider:
 
 	failsafe.With(fallback, retryPolicy, circuitBreaker).Get(func)
 
-This is equivalent to composition using the Compose method:
-
-	failsafe.With(fallback).Compose(retryPolicy).Compose(circuitBreaker).Get(func)
-
 These result in the following internal composition when executing a func and handling its result:
 
 	Fallback(RetryPolicy(CircuitBreaker(func)))
@@ -120,11 +106,6 @@ func With[R any](policies ...Policy[R]) Executor[R] {
 	return &executor[R]{
 		policies: policies,
 	}
-}
-
-func (e *executor[R]) Compose(innerPolicy Policy[R]) Executor[R] {
-	e.policies = append(e.policies, innerPolicy)
-	return e
 }
 
 func (e *executor[R]) WithContext(ctx context.Context) Executor[R] {
