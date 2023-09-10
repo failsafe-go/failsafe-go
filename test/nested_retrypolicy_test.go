@@ -25,7 +25,7 @@ func TestNestedRetryPoliciesWhereInnerIsExceeded(t *testing.T) {
 	innerRetryPolicy := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[bool]().WithMaxRetries(1), innerRetryStats).Build()
 
 	// When / Then
-	testutil.TestGetSuccess(t, failsafe.With[bool](outerRetryPolicy, innerRetryPolicy),
+	testutil.TestGetSuccess(t, failsafe.NewExecutor[bool](outerRetryPolicy, innerRetryPolicy),
 		testutil.ErrorNTimesThenReturn[bool](testutil.ErrConnecting, 5, true),
 		6, 6, true)
 	assert.Equal(t, 5, outerRetryStats.ExecutionCount)
@@ -54,7 +54,7 @@ func TestFallbackRetryPolicyRetryPolicy(t *testing.T) {
 	}
 
 	// When / Then
-	testutil.TestGetSuccess(t, failsafe.With[any](fb, retryPolicy2, retryPolicy1), fn,
+	testutil.TestGetSuccess(t, failsafe.NewExecutor[any](fb, retryPolicy2, retryPolicy1), fn,
 		5, 5, true)
 	// Expected RetryPolicy failure sequence:
 	//    rp1 ErrInvalidState - failure, retry
@@ -75,7 +75,7 @@ func TestFallbackRetryPolicyRetryPolicy(t *testing.T) {
 	// When / Then
 	retryPolicy1Stats.Reset()
 	retryPolicy2Stats.Reset()
-	testutil.TestGetSuccess(t, failsafe.With[any](fb, retryPolicy1, retryPolicy2), fn,
+	testutil.TestGetSuccess(t, failsafe.NewExecutor[any](fb, retryPolicy1, retryPolicy2), fn,
 		5, 5, true)
 	// Expected RetryPolicy failure sequence:
 	//    rp2 ErrInvalidState - success

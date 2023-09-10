@@ -27,7 +27,7 @@ func TestCancelWithTimeoutDuringExecution(t *testing.T) {
 	}()
 
 	// When
-	err := failsafe.With[any](rp).WithContext(ctx).RunWithExecution(func(exec failsafe.Execution[any]) error {
+	err := failsafe.NewExecutor[any](rp).WithContext(ctx).RunWithExecution(func(exec failsafe.Execution[any]) error {
 		testutil.WaitAndAssertCanceled(t, time.Second, exec)
 		return nil
 	})
@@ -47,7 +47,7 @@ func TestCancelWithContextDuringExecution(t *testing.T) {
 	}()
 
 	// When
-	err := failsafe.With[any](rp).WithContext(ctx).RunWithExecution(func(exec failsafe.Execution[any]) error {
+	err := failsafe.NewExecutor[any](rp).WithContext(ctx).RunWithExecution(func(exec failsafe.Execution[any]) error {
 		testutil.WaitAndAssertCanceled(t, time.Second, exec)
 		return nil
 	})
@@ -83,7 +83,7 @@ func TestCancelWithContextDuringPendingRetry(t *testing.T) {
 	}()
 
 	// When / Then
-	testutil.TestGetFailure(t, failsafe.With[any](rp).WithContext(ctx),
+	testutil.TestGetFailure(t, failsafe.NewExecutor[any](rp).WithContext(ctx),
 		testutil.GetWithExecutionFn[any](nil, testutil.ErrInvalidState),
 		1, 1, context.Canceled)
 }
@@ -101,7 +101,7 @@ func TestCancelWithContextDuringFallbackFn(t *testing.T) {
 	}()
 
 	// When
-	err := failsafe.With[any](fb).WithContext(ctx).Run(testutil.RunFn(testutil.ErrInvalidState))
+	err := failsafe.NewExecutor[any](fb).WithContext(ctx).Run(testutil.RunFn(testutil.ErrInvalidState))
 
 	// Then
 	assert.Error(t, context.Canceled, err)
@@ -119,7 +119,7 @@ func TestCancelWithContextDuringRateLimiterDelay(t *testing.T) {
 	rl.TryAcquirePermit() // All permits used
 
 	// When
-	err := failsafe.With[any](rl).WithContext(ctx).RunWithExecution(func(exec failsafe.Execution[any]) error {
+	err := failsafe.NewExecutor[any](rl).WithContext(ctx).RunWithExecution(func(exec failsafe.Execution[any]) error {
 		return nil
 	})
 

@@ -20,7 +20,7 @@ func TestShouldRejectInitialExecutionWhenCircuitOpen(t *testing.T) {
 	cb.Open()
 
 	// When / Then
-	testutil.TestRunFailure(t, failsafe.With[any](cb),
+	testutil.TestRunFailure(t, failsafe.NewExecutor[any](cb),
 		func(execution failsafe.Execution[any]) error {
 			return testutil.ErrInvalidArgument
 		},
@@ -48,7 +48,7 @@ func TestShouldRejectExcessiveAttemptsWhenBreakerHalfOpen(t *testing.T) {
 	// Assert that the breaker does not allow any more executions at the moment
 	waiter.AwaitWithTimeout(3, 10*time.Second)
 	for i := 0; i < 5; i++ {
-		assert.ErrorIs(t, circuitbreaker.ErrCircuitBreakerOpen, failsafe.With[any](cb).Run(testutil.NoopFn))
+		assert.ErrorIs(t, circuitbreaker.ErrCircuitBreakerOpen, failsafe.NewExecutor[any](cb).Run(testutil.NoopFn))
 	}
 }
 
@@ -58,7 +58,7 @@ func TestCircuitBreakerWithoutConditions(t *testing.T) {
 	cb := circuitbreaker.Builder[bool]().WithDelay(0).Build()
 
 	// When / Then
-	testutil.TestRunFailure(t, failsafe.With[bool](cb),
+	testutil.TestRunFailure(t, failsafe.NewExecutor[bool](cb),
 		func(execution failsafe.Execution[bool]) error {
 			return testutil.ErrInvalidArgument
 		},
@@ -70,7 +70,7 @@ func TestCircuitBreakerWithoutConditions(t *testing.T) {
 	counter := 0
 
 	// When / Then
-	testutil.TestGetSuccess[bool](t, failsafe.With[bool](retryPolicy, cb),
+	testutil.TestGetSuccess[bool](t, failsafe.NewExecutor[bool](retryPolicy, cb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			counter++
 			if counter < 3 {
@@ -95,7 +95,7 @@ func TestShouldReturnErrCircuitBreakerOpenAfterFailuresExceeded(t *testing.T) {
 	failsafe.Get(testutil.GetFalseFn, cb)
 
 	// Then
-	testutil.TestGetFailure[bool](t, failsafe.With[bool](cb),
+	testutil.TestGetFailure[bool](t, failsafe.NewExecutor[bool](cb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return true, nil
 		},
@@ -112,7 +112,7 @@ func TestRejectedWithRetries(t *testing.T) {
 		WithFailureThreshold(3), cbStats).
 		Build()
 
-	testutil.TestRunFailure(t, failsafe.With[any](rp, cb),
+	testutil.TestRunFailure(t, failsafe.NewExecutor[any](rp, cb),
 		func(execution failsafe.Execution[any]) error {
 			fmt.Println("Executing")
 			return testutil.ErrInvalidArgument
@@ -133,7 +133,7 @@ func TestSthouldSupportTimeBasedFailureThresholding(t *testing.T) {
 		WithDelay(0).
 		HandleResult(false).
 		Build()
-	executor := failsafe.With[bool](cb)
+	executor := failsafe.NewExecutor[bool](cb)
 
 	// When / Then
 	executor.Get(testutil.GetFalseFn)
@@ -167,7 +167,7 @@ func TestShouldSupportTimeBasedFailureRateThresholding(t *testing.T) {
 		WithDelay(0).
 		HandleResult(false).
 		Build()
-	executor := failsafe.With[bool](cb)
+	executor := failsafe.NewExecutor[bool](cb)
 
 	// When / Then
 	executor.Get(testutil.GetFalseFn)

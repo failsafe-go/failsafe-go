@@ -60,7 +60,7 @@ func TestGetWithExecution(t *testing.T) {
 func TestWithContext(t *testing.T) {
 	ctx1 := context.Background()
 	ctx2 := context.Background()
-	executor1 := failsafe.With[any](retrypolicy.WithDefaults[any]()).WithContext(ctx1)
+	executor1 := failsafe.NewExecutor[any](retrypolicy.WithDefaults[any]()).WithContext(ctx1)
 	executor2 := executor1.WithContext(ctx2)
 	assert.NotSame(t, executor1, executor2)
 }

@@ -10,37 +10,37 @@ import (
 
 // Run executes the fn, with failures being handled by the policies, until successful or until the policies are exceeded.
 func Run(fn func() error, policies ...Policy[any]) (err error) {
-	return With[any](policies...).Run(fn)
+	return NewExecutor[any](policies...).Run(fn)
 }
 
 // RunWithExecution executes the fn, with failures being handled by the policies, until successful or until the policies
 // are exceeded, while providing an Execution to the fn.
 func RunWithExecution(fn func(exec Execution[any]) error, policies ...Policy[any]) (err error) {
-	return With[any](policies...).RunWithExecution(fn)
+	return NewExecutor[any](policies...).RunWithExecution(fn)
 }
 
 // Get executes the fn, with failures being handled by the policies, until a successful result is returned or the
 // policies are exceeded.
 func Get[R any](fn func() (R, error), policies ...Policy[R]) (R, error) {
-	return With[R](policies...).Get(fn)
+	return NewExecutor[R](policies...).Get(fn)
 }
 
 // GetWithExecution executes the fn, with failures being handled by the policies, until a successful result is returned
 // or the policies are exceeded, while providing an Execution to the fn.
 func GetWithExecution[R any](fn func(exec Execution[R]) (R, error), policies ...Policy[R]) (R, error) {
-	return With[R](policies...).GetWithExecution(fn)
+	return NewExecutor[R](policies...).GetWithExecution(fn)
 }
 
 /*
 Executor handles failures according to configured policies. An executor can be created for a policy via:
 
-	failsafe.With(policy)
+	failsafe.NewExecutor(policy)
 
 An Executor can also be created for a composition of policies:
 
-	failsafe.With(outerPolicy, innerPolicy)
+	failsafe.NewExecutor(outerPolicy, innerPolicy)
 
-See the [With] docs for details.
+See the [NewExecutor] docs for details.
 */
 type Executor[R any] interface {
 	// WithContext returns a new copy of the Executor with the ctx configured. Any executions created with the resulting
@@ -92,17 +92,17 @@ type executor[R any] struct {
 }
 
 /*
-With creates and returns a new Executor for result type R that will handle failures according to the given policies. The
+NewExecutor creates and returns a new Executor for result type R that will handle failures according to the given policies. The
 policies are composed around an execution and will handle execution results in reverse, with the last policy being
 applied first. For example, consider:
 
-	failsafe.With(fallback, retryPolicy, circuitBreaker).Get(func)
+	failsafe.NewExecutor(fallback, retryPolicy, circuitBreaker).Get(func)
 
 These result in the following internal composition when executing a func and handling its result:
 
 	Fallback(RetryPolicy(CircuitBreaker(func)))
 */
-func With[R any](policies ...Policy[R]) Executor[R] {
+func NewExecutor[R any](policies ...Policy[R]) Executor[R] {
 	return &executor[R]{
 		policies: policies,
 	}

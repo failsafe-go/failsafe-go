@@ -31,7 +31,7 @@ func TestCircuitBreakerCircuitBreaker(t *testing.T) {
 	cb1 := circuitbreaker.Builder[any]().HandleErrors(testutil.ErrInvalidState).Build()
 	cb2 := circuitbreaker.Builder[any]().HandleErrors(testutil.ErrInvalidArgument).Build()
 
-	testutil.TestRunFailure[any](t, failsafe.With[any](cb2, cb1),
+	testutil.TestRunFailure[any](t, failsafe.NewExecutor[any](cb2, cb1),
 		func(execution failsafe.Execution[any]) error {
 			return testutil.ErrInvalidState
 		},
@@ -42,7 +42,7 @@ func TestCircuitBreakerCircuitBreaker(t *testing.T) {
 	assert.True(t, cb2.IsClosed())
 
 	cb1.Close()
-	testutil.TestRunFailure[any](t, failsafe.With[any](cb2, cb1),
+	testutil.TestRunFailure[any](t, failsafe.NewExecutor[any](cb2, cb1),
 		func(execution failsafe.Execution[any]) error {
 			return testutil.ErrInvalidArgument
 		},

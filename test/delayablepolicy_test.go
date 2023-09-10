@@ -33,7 +33,7 @@ func TestShouldDelayRetryPolicy(t *testing.T) {
 		}).
 		Build()
 
-	executor := failsafe.With[bool](retryPolicy)
+	executor := failsafe.NewExecutor[bool](retryPolicy)
 	executor.Get(testutil.GetFn[bool](true, nil))
 	executor.Get(testutil.GetFn[bool](false, nil))
 	assert.Equal(t, 2, delays)
@@ -61,7 +61,7 @@ func TestShouldDelayCircuitBreaker(t *testing.T) {
 		}).
 		Build()
 
-	executor := failsafe.With[int](breaker)
+	executor := failsafe.NewExecutor[int](breaker)
 	executor.Get(testutil.GetFn[int](0, nil))
 	executor.Get(testutil.GetFn[int](1, nil))
 	assert.Equal(t, 1, delays)

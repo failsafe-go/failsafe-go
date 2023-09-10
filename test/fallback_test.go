@@ -12,7 +12,7 @@ import (
 func TestFallbackOfResult(t *testing.T) {
 	fb := fallback.WithResult[bool](true)
 
-	testutil.TestGetSuccess(t, failsafe.With[bool](fb),
+	testutil.TestGetSuccess(t, failsafe.NewExecutor[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.ErrInvalidArgument
 		},
@@ -23,7 +23,7 @@ func TestFallbackOfResult(t *testing.T) {
 func TestShouldFallbackOfError(t *testing.T) {
 	fb := fallback.WithError[bool](testutil.ErrInvalidArgument)
 
-	testutil.TestGetFailure(t, failsafe.With[bool](fb),
+	testutil.TestGetFailure(t, failsafe.NewExecutor[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.ErrInvalidArgument
 		},
@@ -38,7 +38,7 @@ func TestShouldFallbackOfFn(t *testing.T) {
 		}
 	})
 
-	testutil.TestGetFailure(t, failsafe.With[bool](fb),
+	testutil.TestGetFailure(t, failsafe.NewExecutor[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.ErrConnecting
 		},
@@ -49,7 +49,7 @@ func TestShouldFallbackOfFn(t *testing.T) {
 
 // Tests a successful execution that does not fallback
 func TestShouldNotFallback(t *testing.T) {
-	testutil.TestGetSuccess(t, failsafe.With[bool](fallback.WithResult[bool](true)),
+	testutil.TestGetSuccess(t, failsafe.NewExecutor[bool](fallback.WithResult[bool](true)),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, nil
 		},
@@ -63,14 +63,14 @@ func TestShouldFallbackWithFailureConditions(t *testing.T) {
 		Build()
 
 	// Fallback should not handle
-	testutil.TestGetFailure(t, failsafe.With[bool](fb),
+	testutil.TestGetFailure(t, failsafe.NewExecutor[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.ErrInvalidArgument
 		},
 		1, 1, testutil.ErrInvalidArgument)
 
 	// Fallback should handle
-	testutil.TestGetSuccess(t, failsafe.With[bool](fb),
+	testutil.TestGetSuccess(t, failsafe.NewExecutor[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.ErrInvalidState
 		},
