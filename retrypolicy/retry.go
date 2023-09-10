@@ -58,7 +58,7 @@ type RetryPolicy[R any] interface {
 RetryPolicyBuilder builds RetryPolicy instances.
 
   - By default, a RetryPolicy will retry a failed execution up to 2 times when any error is returned, with no delay between
-    retry attempts. If retries are exceeded, RetriesExceededError is returned by default. Alternative, WithReturnLastFailure
+    retry attempts. If retries are exceeded, RetriesExceededError is returned by default. Alternative, ReturnLastFailure
     can be used to configure the policy to return the last execution failure.
   - You can change the default number of retry attempts and delay between retries by using the with configuration methods.
   - By default, any error is considered a failure and will be handled by the policy. You can override this by specifying
@@ -88,9 +88,9 @@ type RetryPolicyBuilder[R any] interface {
 	// AbortIf specifies that retries should be aborted if the predicate matches the result or error.
 	AbortIf(predicate func(R, error) bool) RetryPolicyBuilder[R]
 
-	// WithReturnLastFailure configures the policy to return the last failure result or error after attempts are exceeded,
+	// ReturnLastFailure configures the policy to return the last failure result or error after attempts are exceeded,
 	// rather than returning RetriesExceededError.
-	WithReturnLastFailure() RetryPolicyBuilder[R]
+	ReturnLastFailure() RetryPolicyBuilder[R]
 
 	// WithMaxAttempts sets the max number of execution attempts to perform. -1 indicates no limit. This method has the same
 	// effect as setting 1 more than WithMaxRetries. For example, 2 retries equal 3 attempts.
@@ -240,7 +240,7 @@ func (c *retryPolicyConfig[R]) HandleIf(predicate func(R, error) bool) RetryPoli
 	return c
 }
 
-func (c *retryPolicyConfig[R]) WithReturnLastFailure() RetryPolicyBuilder[R] {
+func (c *retryPolicyConfig[R]) ReturnLastFailure() RetryPolicyBuilder[R] {
 	c.returnLastFailure = true
 	return c
 }
