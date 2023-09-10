@@ -1,6 +1,7 @@
 package test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -20,9 +21,21 @@ func TestShouldRetryOnFailure(t *testing.T) {
 	// When / Then
 	testutil.TestGetFailure(t, failsafe.With[bool](rp),
 		func(exec failsafe.Execution[bool]) (bool, error) {
-			return false, testutil.ConnectionError{}
+			return false, testutil.ErrConnecting
 		},
-		3, 3, testutil.ConnectionError{})
+		3, 3, testutil.ErrConnecting)
+}
+
+func TestShouldReturnRetriesExceededError(t *testing.T) {
+	// Given
+	rp := retrypolicy.WithDefaults[bool]()
+
+	// When / Then
+	testutil.TestGetFailure(t, failsafe.With[bool](rp),
+		func(exec failsafe.Execution[bool]) (bool, error) {
+			return false, testutil.ErrConnecting
+		},
+		3, 3, &retrypolicy.RetriesExceededError{})
 }
 
 // Tests a simple execution that does not retry.
@@ -43,18 +56,18 @@ func TestShouldNotRetryOnNonRetriableFailure(t *testing.T) {
 	// Given
 	rp := retrypolicy.Builder[any]().
 		WithMaxRetries(-1).
-		HandleErrors(testutil.ConnectionError{}).
+		HandleErrors(testutil.ErrConnecting).
 		Build()
 
 	// When / Then
 	testutil.TestRunFailure(t, failsafe.With[any](rp),
 		func(exec failsafe.Execution[any]) error {
 			if exec.Attempts() <= 2 {
-				return testutil.ConnectionError{}
+				return testutil.ErrConnecting
 			}
-			return testutil.TimeoutError{}
+			return testutil.ErrTimeout
 		},
-		3, 3, testutil.TimeoutError{})
+		3, 3, testutil.ErrTimeout)
 }
 
 // Asserts that an execution is failed when the max duration is exceeded.
@@ -67,12 +80,12 @@ func TestShouldCompleteWhenMaxDurationExceeded(t *testing.T) {
 		Build()
 
 	// When / Then
-	testutil.TestGetSuccess(t, failsafe.With[bool](rp),
+	testutil.TestGetFailure(t, failsafe.With[bool](rp),
 		func(exec failsafe.Execution[bool]) (bool, error) {
 			time.Sleep(120 * time.Millisecond)
-			return false, nil
+			return false, errors.New("Asdf")
 		},
-		1, 1, false)
+		1, 1, &retrypolicy.RetriesExceededError{})
 }
 
 // Asserts that the ExecutionScheduledEvent.getDelay is as expected.
@@ -88,6 +101,6 @@ func TestScheduledRetryDelay(t *testing.T) {
 
 	// When / Then
 	failsafe.With[any](rp).Run(func() error {
-		return testutil.ConnectionError{}
+		return testutil.ErrConnecting
 	})
 }

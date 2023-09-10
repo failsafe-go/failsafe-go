@@ -24,10 +24,10 @@ func TestGetWithSuccess(t *testing.T) {
 func TestGetWithFailure(t *testing.T) {
 	rp := retrypolicy.WithDefaults[string]()
 	result, err := failsafe.With[string](rp).Get(func() (string, error) {
-		return "", testutil.InvalidArgumentError{}
+		return "", testutil.ErrInvalidArgument
 	})
 	assert.Empty(t, result)
-	assert.ErrorIs(t, err, testutil.InvalidArgumentError{})
+	assert.ErrorIs(t, err, testutil.ErrInvalidArgument)
 }
 
 func TestGetWithExecution(t *testing.T) {
@@ -36,14 +36,14 @@ func TestGetWithExecution(t *testing.T) {
 	var lasteExec failsafe.Execution[string]
 	result, err := failsafe.With[string](fb, rp).GetWithExecution(func(exec failsafe.Execution[string]) (string, error) {
 		lasteExec = exec
-		return "", testutil.InvalidArgumentError{}
+		return "", testutil.ErrInvalidArgument
 	})
 	assert.Equal(t, "fallback", result)
 	assert.Nil(t, err)
 	assert.Equal(t, 3, lasteExec.Attempts())
 	assert.Equal(t, 2, lasteExec.Executions())
 	assert.Equal(t, "", lasteExec.LastResult())
-	assert.Equal(t, testutil.InvalidArgumentError{}, lasteExec.LastError())
+	assert.Equal(t, testutil.ErrInvalidArgument, lasteExec.LastError())
 }
 
 // Asserts that configuring a context returns a new copy of the Executor.

@@ -1,57 +1,36 @@
 package testutil
 
 import (
+	"errors"
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
 )
 
-type InvalidArgumentError struct {
+type CompositeError struct {
 	Cause error
 }
 
-func (ce InvalidArgumentError) Error() string {
-	return "InvalidArgumentError"
+func (ce *CompositeError) Error() string {
+	return "CompositeError"
 }
 
-func (ce InvalidArgumentError) Unwrap() error {
+func (ce *CompositeError) Unwrap() error {
 	return ce.Cause
 }
 
-type InvalidStateError struct {
-	Cause error
+func (ce *CompositeError) Is(err error) bool {
+	e, ok := err.(*CompositeError)
+	if !ok {
+		return false
+	}
+	return errors.Is(e, ce.Cause)
 }
 
-func (ce InvalidStateError) Error() string {
-	return "InvalidStateError"
-}
-
-func (ce InvalidStateError) Unwrap() error {
-	return ce.Cause
-}
-
-type ConnectionError struct {
-	Cause error
-}
-
-func (ce ConnectionError) Error() string {
-	return "ConnectionError"
-}
-func (ce ConnectionError) Unwrap() error {
-	return ce.Cause
-}
-
-type TimeoutError struct {
-	Cause error
-}
-
-func (ce TimeoutError) Error() string {
-	return "TimeoutError"
-}
-
-func (ce TimeoutError) Unwrap() error {
-	return ce.Cause
-}
+var ErrInvalidArgument = errors.New("invalid argument")
+var ErrInvalidState = errors.New("invalid state")
+var ErrConnecting = errors.New("connection error")
+var ErrTimeout = errors.New("timeout error")
 
 var NoopFn = func() error {
 	return nil

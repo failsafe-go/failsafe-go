@@ -58,8 +58,8 @@ func TestRetryTimeoutWithPendingRetry(t *testing.T) {
 
 	testutil.TestGetFailure(t, failsafe.With[any](rp, timeout),
 		func(exec failsafe.Execution[any]) (any, error) {
-			return nil, testutil.InvalidArgumentError{}
-		}, 3, 3, testutil.InvalidArgumentError{})
+			return nil, testutil.ErrInvalidArgument
+		}, 3, 3, testutil.ErrInvalidArgument)
 	assert.Equal(t, 0, timeoutStats.ExecutionCount)
 	assert.Equal(t, 2, rpStats.RetryCount)
 	assert.Equal(t, 3, rpStats.FailureCount)
@@ -76,7 +76,7 @@ func TestTimeoutRetryWithBlockedFunc(t *testing.T) {
 	testutil.TestRunFailure(t, failsafe.With[any](to, rp),
 		func(_ failsafe.Execution[any]) error {
 			time.Sleep(60 * time.Millisecond)
-			return testutil.InvalidArgumentError{}
+			return testutil.ErrInvalidArgument
 		},
 		3, 3, timeout.ErrTimeoutExceeded)
 	assert.Equal(t, 1, timeoutStats.ExecutionCount)
@@ -94,7 +94,7 @@ func TestTimeoutRetryWithPendingRetry(t *testing.T) {
 
 	testutil.TestRunFailure(t, failsafe.With[any](to).Compose(rp),
 		func(_ failsafe.Execution[any]) error {
-			return testutil.InvalidArgumentError{}
+			return testutil.ErrInvalidArgument
 		},
 		1, 1, timeout.ErrTimeoutExceeded)
 	assert.Equal(t, 1, timeoutStats.ExecutionCount)
@@ -106,14 +106,14 @@ func TestFallbackTimeoutWithBlockedFunc(t *testing.T) {
 	timeoutStats := &policytesting.Stats{}
 	fbStats := &policytesting.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](10*time.Millisecond), timeoutStats).Build()
-	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithError[any](testutil.InvalidArgumentError{}), fbStats).Build()
+	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithError[any](testutil.ErrInvalidArgument), fbStats).Build()
 
 	testutil.TestRunFailure(t, failsafe.With[any](fb).Compose(to),
 		func(_ failsafe.Execution[any]) error {
 			time.Sleep(100 * time.Millisecond)
 			return errors.New("test")
 		},
-		1, 1, testutil.InvalidArgumentError{})
+		1, 1, testutil.ErrInvalidArgument)
 	assert.Equal(t, 1, timeoutStats.ExecutionCount)
 	assert.Equal(t, 1, fbStats.ExecutionCount)
 }
@@ -123,13 +123,13 @@ func TestFallbackWithInnerTimeout(t *testing.T) {
 	timeoutStats := &policytesting.Stats{}
 	fbStats := &policytesting.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](10*time.Millisecond), timeoutStats).Build()
-	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithError[any](testutil.InvalidArgumentError{}), fbStats).Build()
+	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithError[any](testutil.ErrInvalidArgument), fbStats).Build()
 
 	testutil.TestRunFailure(t, failsafe.With[any](fb).Compose(to),
 		func(_ failsafe.Execution[any]) error {
 			return errors.New("test")
 		},
-		1, 1, testutil.InvalidArgumentError{})
+		1, 1, testutil.ErrInvalidArgument)
 	assert.Equal(t, 0, timeoutStats.ExecutionCount)
 	assert.Equal(t, 1, fbStats.ExecutionCount)
 }
@@ -139,7 +139,7 @@ func TestTimeoutFallbackWithBlockedFunc(t *testing.T) {
 	timeoutStats := &policytesting.Stats{}
 	fbStats := &policytesting.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](10*time.Millisecond), timeoutStats).Build()
-	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithError[any](testutil.InvalidArgumentError{}), fbStats).Build()
+	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithError[any](testutil.ErrInvalidArgument), fbStats).Build()
 
 	testutil.TestRunFailure(t, failsafe.With[any](to).Compose(fb),
 		func(_ failsafe.Execution[any]) error {
@@ -158,7 +158,7 @@ func TestTimeoutFallbackWithBlockedFallback(t *testing.T) {
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](100*time.Millisecond), timeoutStats).Build()
 	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithFn[any](func(_ failsafe.Execution[any]) (any, error) {
 		time.Sleep(200 * time.Millisecond)
-		return nil, testutil.InvalidStateError{}
+		return nil, testutil.ErrInvalidState
 	}), fbStats).Build()
 
 	testutil.TestRunFailure(t, failsafe.With[any](to).Compose(fb),

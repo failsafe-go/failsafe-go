@@ -22,7 +22,7 @@ func TestShouldRejectInitialExecutionWhenCircuitOpen(t *testing.T) {
 	// When / Then
 	testutil.TestRunFailure(t, failsafe.With[any](cb),
 		func(execution failsafe.Execution[any]) error {
-			return testutil.InvalidArgumentError{}
+			return testutil.ErrInvalidArgument
 		},
 		1, 0, circuitbreaker.ErrCircuitBreakerOpen)
 	assert.True(t, cb.IsOpen())
@@ -60,9 +60,9 @@ func TestCircuitBreakerWithoutConditions(t *testing.T) {
 	// When / Then
 	testutil.TestRunFailure(t, failsafe.With[bool](cb),
 		func(execution failsafe.Execution[bool]) error {
-			return testutil.InvalidArgumentError{}
+			return testutil.ErrInvalidArgument
 		},
-		1, 1, testutil.InvalidArgumentError{})
+		1, 1, testutil.ErrInvalidArgument)
 	assert.True(t, cb.IsOpen())
 
 	// Given
@@ -74,7 +74,7 @@ func TestCircuitBreakerWithoutConditions(t *testing.T) {
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			counter++
 			if counter < 3 {
-				return false, testutil.InvalidArgumentError{}
+				return false, testutil.ErrInvalidArgument
 			}
 			return true, nil
 		},
@@ -115,7 +115,7 @@ func TestRejectedWithRetries(t *testing.T) {
 	testutil.TestRunFailure(t, failsafe.With[any](rp, cb),
 		func(execution failsafe.Execution[any]) error {
 			fmt.Println("Executing")
-			return testutil.InvalidArgumentError{}
+			return testutil.ErrInvalidArgument
 		},
 		7, 3, circuitbreaker.ErrCircuitBreakerOpen)
 	assert.Equal(t, 7, rpStats.ExecutionCount)

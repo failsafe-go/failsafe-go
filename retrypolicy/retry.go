@@ -2,6 +2,7 @@ package retrypolicy
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -11,6 +12,39 @@ import (
 )
 
 const defaultMaxRetries = 2
+
+// RetriesExceededError is returned when a RetryPolicy's max attempts or max duration are exceeded.
+type RetriesExceededError struct {
+	lastResult any
+	lastError  error
+}
+
+// LastResult returns the last result that caused the RetriesExceededError.
+func (e *RetriesExceededError) LastResult() any {
+	return e.lastResult
+}
+
+// LastError returns the last error that caused the RetriesExceededError.
+func (e *RetriesExceededError) LastError() error {
+	return e.lastError
+}
+
+func (e *RetriesExceededError) Error() string {
+	return fmt.Sprintf("retries exceeded. last result: %v, last error: %v", e.lastResult, e.lastError)
+}
+
+func (e *RetriesExceededError) Unwrap() error {
+	if e.lastError != nil {
+		return e.lastError
+	}
+	return errors.New(fmt.Sprintf("failure: %v", e.lastResult))
+}
+
+// Is returns whether err is of the type RetriesExceededError.
+func (e *RetriesExceededError) Is(err error) bool {
+	_, ok := err.(*RetriesExceededError)
+	return ok
+}
 
 // RetryPolicy is a policy that defines when retries should be performed. See RetryPolicyBuilder for configuration
 // options.
@@ -23,7 +57,9 @@ type RetryPolicy[R any] interface {
 /*
 RetryPolicyBuilder builds RetryPolicy instances.
 
-  - By default, a RetryPolicy will retry up to 2 times when any error is returned, with no delay between retry attempts.
+  - By default, a RetryPolicy will retry a failed execution up to 2 times when any error is returned, with no delay between
+    retry attempts. If retries are exceeded, RetriesExceededError is returned by default. Alternative, WithReturnLastFailure
+    can be used to configure the policy to return the last execution failure.
   - You can change the default number of retry attempts and delay between retries by using the with configuration methods.
   - By default, any error is considered a failure and will be handled by the policy. You can override this by specifying
     your own HandleErrors conditions. The default error handling condition will only be overridden by another condition
@@ -51,6 +87,10 @@ type RetryPolicyBuilder[R any] interface {
 
 	// AbortIf specifies that retries should be aborted if the predicate matches the result or error.
 	AbortIf(predicate func(R, error) bool) RetryPolicyBuilder[R]
+
+	// WithReturnLastFailure configures the policy to return the last failure result or error after attempts are exceeded,
+	// rather than returning RetriesExceededError.
+	WithReturnLastFailure() RetryPolicyBuilder[R]
 
 	// WithMaxAttempts sets the max number of execution attempts to perform. -1 indicates no limit. This method has the same
 	// effect as setting 1 more than WithMaxRetries. For example, 2 retries equal 3 attempts.
@@ -100,7 +140,7 @@ type RetryPolicyBuilder[R any] interface {
 	OnRetry(listener func(failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R]
 
 	// OnRetriesExceeded registers the listener to be called when an execution fails and the max retry attempts or max
-	// duration are exceeded.
+	// duration are exceeded. The failsafe.ExecutionCompletedEvent will contain the last execution result and error.
 	OnRetriesExceeded(listener func(failsafe.ExecutionCompletedEvent[R])) RetryPolicyBuilder[R]
 
 	// Build returns a new RetryPolicy using the builder's configuration.
@@ -111,14 +151,15 @@ type retryPolicyConfig[R any] struct {
 	*spi.BaseFailurePolicy[R]
 	*spi.BaseDelayablePolicy[R]
 
-	delayMin     time.Duration
-	delayMax     time.Duration
-	delayFactor  float32
-	maxDelay     time.Duration
-	jitter       time.Duration
-	jitterFactor float32
-	maxDuration  time.Duration
-	maxRetries   int
+	returnLastFailure bool
+	delayMin          time.Duration
+	delayMax          time.Duration
+	delayFactor       float32
+	maxDelay          time.Duration
+	jitter            time.Duration
+	jitterFactor      float32
+	maxDuration       time.Duration
+	maxRetries        int
 	// Conditions that determine whether retries should be aborted
 	abortConditions []func(result R, err error) bool
 
@@ -192,6 +233,11 @@ func (c *retryPolicyConfig[R]) HandleResult(result R) RetryPolicyBuilder[R] {
 
 func (c *retryPolicyConfig[R]) HandleIf(predicate func(R, error) bool) RetryPolicyBuilder[R] {
 	c.BaseFailurePolicy.HandleIf(predicate)
+	return c
+}
+
+func (c *retryPolicyConfig[R]) WithReturnLastFailure() RetryPolicyBuilder[R] {
+	c.returnLastFailure = true
 	return c
 }
 

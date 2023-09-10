@@ -84,7 +84,7 @@ func TestCancelWithContextDuringPendingRetry(t *testing.T) {
 
 	// When / Then
 	testutil.TestGetFailure(t, failsafe.With[any](rp).WithContext(ctx),
-		testutil.GetWithExecutionFn[any](nil, testutil.InvalidStateError{}),
+		testutil.GetWithExecutionFn[any](nil, testutil.ErrInvalidState),
 		1, 1, context.Canceled)
 }
 
@@ -101,7 +101,7 @@ func TestCancelWithContextDuringFallbackFn(t *testing.T) {
 	}()
 
 	// When
-	err := failsafe.With[any](fb).WithContext(ctx).Run(testutil.RunFn(testutil.InvalidStateError{}))
+	err := failsafe.With[any](fb).WithContext(ctx).Run(testutil.RunFn(testutil.ErrInvalidState))
 
 	// Then
 	assert.Error(t, context.Canceled, err)

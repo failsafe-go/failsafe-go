@@ -14,36 +14,36 @@ func TestFallbackOfResult(t *testing.T) {
 
 	testutil.TestGetSuccess(t, failsafe.With[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
-			return false, testutil.InvalidArgumentError{}
+			return false, testutil.ErrInvalidArgument
 		},
 		1, 1, true)
 }
 
 // Tests Fallback.WithError
 func TestShouldFallbackOfError(t *testing.T) {
-	fb := fallback.WithError[bool](testutil.InvalidArgumentError{})
+	fb := fallback.WithError[bool](testutil.ErrInvalidArgument)
 
 	testutil.TestGetFailure(t, failsafe.With[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
-			return false, testutil.InvalidArgumentError{}
+			return false, testutil.ErrInvalidArgument
 		},
-		1, 1, testutil.InvalidArgumentError{})
+		1, 1, testutil.ErrInvalidArgument)
 }
 
 // Tests Fallback.WithFn
 func TestShouldFallbackOfFn(t *testing.T) {
 	fb := fallback.WithFn[bool](func(exec failsafe.Execution[bool]) (bool, error) {
-		return false, testutil.InvalidArgumentError{
+		return false, &testutil.CompositeError{
 			Cause: exec.LastError(),
 		}
 	})
 
 	testutil.TestGetFailure(t, failsafe.With[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
-			return false, testutil.ConnectionError{}
+			return false, testutil.ErrConnecting
 		},
-		1, 1, testutil.InvalidArgumentError{
-			Cause: testutil.ConnectionError{},
+		1, 1, &testutil.CompositeError{
+			Cause: testutil.ErrConnecting,
 		})
 }
 
@@ -59,20 +59,20 @@ func TestShouldNotFallback(t *testing.T) {
 // Tests a fallback with failure conditions
 func TestShouldFallbackWithFailureConditions(t *testing.T) {
 	fb := fallback.BuilderWithResult[bool](true).
-		HandleErrors(testutil.InvalidStateError{}).
+		HandleErrors(testutil.ErrInvalidState).
 		Build()
 
 	// Fallback should not handle
 	testutil.TestGetFailure(t, failsafe.With[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
-			return false, testutil.InvalidArgumentError{}
+			return false, testutil.ErrInvalidArgument
 		},
-		1, 1, testutil.InvalidArgumentError{})
+		1, 1, testutil.ErrInvalidArgument)
 
 	// Fallback should handle
 	testutil.TestGetSuccess(t, failsafe.With[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
-			return false, testutil.InvalidStateError{}
+			return false, testutil.ErrInvalidState
 		},
 		1, 1, true)
 }

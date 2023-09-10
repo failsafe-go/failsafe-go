@@ -18,13 +18,13 @@ func TestIsAbortableNil(t *testing.T) {
 }
 
 func TestIsAbortableForError(t *testing.T) {
-	rp := Builder[any]().AbortOnErrors(testutil.InvalidArgumentError{}).Build().(*retryPolicy[any])
+	rp := Builder[any]().AbortOnErrors(testutil.ErrInvalidArgument).Build().(*retryPolicy[any])
 
-	assert.True(t, rp.config.isAbortable(nil, testutil.InvalidArgumentError{}))
-	assert.True(t, rp.config.isAbortable(nil, testutil.InvalidStateError{
-		Cause: testutil.InvalidArgumentError{},
+	assert.True(t, rp.config.isAbortable(nil, testutil.ErrInvalidArgument))
+	assert.True(t, rp.config.isAbortable(nil, &testutil.CompositeError{
+		Cause: testutil.ErrInvalidArgument,
 	}))
-	assert.False(t, rp.config.isAbortable(nil, testutil.ConnectionError{}))
+	assert.False(t, rp.config.isAbortable(nil, testutil.ErrConnecting))
 }
 
 func TestIsAbortableForResult(t *testing.T) {
@@ -32,16 +32,29 @@ func TestIsAbortableForResult(t *testing.T) {
 
 	assert.True(t, rp.config.isAbortable(10, nil))
 	assert.False(t, rp.config.isAbortable(5, nil))
-	assert.False(t, rp.config.isAbortable(5, testutil.InvalidStateError{}))
+	assert.False(t, rp.config.isAbortable(5, testutil.ErrInvalidState))
 }
 
 func TestIsAbortableForPredicate(t *testing.T) {
 	rp := Builder[any]().AbortIf(func(s any, err error) bool {
-		return s == "test" || errors.Is(err, testutil.InvalidArgumentError{})
+		return s == "test" || errors.Is(err, testutil.ErrInvalidArgument)
 	}).Build().(*retryPolicy[any])
 
 	assert.True(t, rp.config.isAbortable("test", nil))
 	assert.False(t, rp.config.isAbortable(0, nil))
-	assert.True(t, rp.config.isAbortable("", testutil.InvalidArgumentError{}))
-	assert.False(t, rp.config.isAbortable("", testutil.InvalidStateError{}))
+	assert.True(t, rp.config.isAbortable("", testutil.ErrInvalidArgument))
+	assert.False(t, rp.config.isAbortable("", testutil.ErrInvalidState))
+}
+
+func TestRetriesExceededErrorComparison(t *testing.T) {
+	e := errors.New("test")
+	e1 := &RetriesExceededError{
+		lastResult: false,
+		lastError:  e,
+	}
+	e2 := &RetriesExceededError{
+		lastResult: false,
+		lastError:  e,
+	}
+	assert.ErrorIs(t, e1, e2)
 }

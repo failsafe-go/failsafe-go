@@ -60,7 +60,7 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *co
 
 			// Prepare for next iteration
 			if !execInternal.InitializeAttempt(rpe.PolicyIndex) {
-				return result
+				return execInternal.Result()
 			}
 
 			// Call retry listener
@@ -89,8 +89,18 @@ func (rpe *retryPolicyExecutor[R]) OnFailure(exec spi.ExecutionInternal[R], resu
 	if isAbortable && rpe.config.onAbort != nil {
 		rpe.config.onAbort(internal.NewExecutionCompletedEventForExec[R](exec))
 	}
-	if rpe.retriesExceeded && !isAbortable && rpe.config.onRetriesExceeded != nil {
-		rpe.config.onRetriesExceeded(internal.NewExecutionCompletedEventForExec[R](exec))
+	if rpe.retriesExceeded {
+		if !isAbortable && rpe.config.onRetriesExceeded != nil {
+			rpe.config.onRetriesExceeded(internal.NewExecutionCompletedEventForExec[R](exec))
+		}
+		if rpe.config.returnLastFailure {
+			return result.WithComplete(false, false)
+		} else {
+			return internal.FailureResult[R](&RetriesExceededError{
+				lastResult: result.Result,
+				lastError:  result.Error,
+			})
+		}
 	}
 	return result.WithComplete(completed, false)
 }

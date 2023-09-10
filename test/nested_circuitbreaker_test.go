@@ -12,15 +12,15 @@ import (
 
 // Tests that multiple circuit breakers handle failures as expected, regardless of order.
 func TestNestedCircuitBreakers(t *testing.T) {
-	innerCb := circuitbreaker.Builder[any]().HandleErrors(testutil.InvalidArgumentError{}).Build()
-	outerCb := circuitbreaker.Builder[any]().HandleErrors(testutil.InvalidStateError{}).Build()
+	innerCb := circuitbreaker.Builder[any]().HandleErrors(testutil.ErrInvalidArgument).Build()
+	outerCb := circuitbreaker.Builder[any]().HandleErrors(testutil.ErrInvalidState).Build()
 
-	failsafe.With[any](outerCb, innerCb).Run(testutil.RunFn(testutil.InvalidArgumentError{}))
+	failsafe.With[any](outerCb, innerCb).Run(testutil.RunFn(testutil.ErrInvalidArgument))
 	assert.True(t, innerCb.IsOpen())
 	assert.True(t, outerCb.IsClosed())
 
 	innerCb.Close()
-	failsafe.With[any](innerCb, outerCb).Run(testutil.RunFn(testutil.InvalidArgumentError{}))
+	failsafe.With[any](innerCb, outerCb).Run(testutil.RunFn(testutil.ErrInvalidArgument))
 	assert.True(t, innerCb.IsOpen())
 	assert.True(t, outerCb.IsClosed())
 }
@@ -28,14 +28,14 @@ func TestNestedCircuitBreakers(t *testing.T) {
 // CircuitBreaker -> CircuitBreaker
 func TestCircuitBreakerCircuitBreaker(t *testing.T) {
 	// Given
-	cb1 := circuitbreaker.Builder[any]().HandleErrors(testutil.InvalidStateError{}).Build()
-	cb2 := circuitbreaker.Builder[any]().HandleErrors(testutil.InvalidArgumentError{}).Build()
+	cb1 := circuitbreaker.Builder[any]().HandleErrors(testutil.ErrInvalidState).Build()
+	cb2 := circuitbreaker.Builder[any]().HandleErrors(testutil.ErrInvalidArgument).Build()
 
 	testutil.TestRunFailure[any](t, failsafe.With[any](cb2, cb1),
 		func(execution failsafe.Execution[any]) error {
-			return testutil.InvalidStateError{}
+			return testutil.ErrInvalidState
 		},
-		1, 1, testutil.InvalidStateError{})
+		1, 1, testutil.ErrInvalidState)
 	assert.Equal(t, uint(1), cb1.FailureCount())
 	assert.Equal(t, uint(0), cb2.FailureCount())
 	assert.True(t, cb1.IsOpen())
@@ -44,9 +44,9 @@ func TestCircuitBreakerCircuitBreaker(t *testing.T) {
 	cb1.Close()
 	testutil.TestRunFailure[any](t, failsafe.With[any](cb2, cb1),
 		func(execution failsafe.Execution[any]) error {
-			return testutil.InvalidArgumentError{}
+			return testutil.ErrInvalidArgument
 		},
-		1, 1, testutil.InvalidArgumentError{})
+		1, 1, testutil.ErrInvalidArgument)
 	assert.Equal(t, uint(0), cb1.FailureCount())
 	assert.Equal(t, uint(1), cb2.FailureCount())
 	assert.True(t, cb1.IsClosed())

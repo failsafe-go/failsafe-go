@@ -20,10 +20,10 @@ func TestIsFailureForNil(t *testing.T) {
 func TestIsFailureForError(t *testing.T) {
 	policy := BaseFailurePolicy[any]{}
 	assert.True(t, policy.IsFailure(nil, errors.New("test")))
-	assert.True(t, policy.IsFailure(nil, testutil.InvalidStateError{}))
+	assert.True(t, policy.IsFailure(nil, testutil.ErrInvalidState))
 
-	policy.HandleErrors(testutil.InvalidArgumentError{})
-	assert.True(t, policy.IsFailure(nil, testutil.InvalidArgumentError{}))
+	policy.HandleErrors(testutil.ErrInvalidArgument)
+	assert.True(t, policy.IsFailure(nil, testutil.ErrInvalidArgument))
 	assert.False(t, policy.IsFailure(nil, errors.New("test")))
 }
 
@@ -38,13 +38,13 @@ func TestIsFailureForResult(t *testing.T) {
 func TestIsFailureForPredicate(t *testing.T) {
 	policy := BaseFailurePolicy[any]{}
 	policy.HandleIf(func(result any, err error) bool {
-		return result == "test" || errors.Is(err, testutil.InvalidArgumentError{})
+		return result == "test" || errors.Is(err, testutil.ErrInvalidArgument)
 	})
 
 	assert.True(t, policy.IsFailure("test", nil))
 	assert.False(t, policy.IsFailure(0, nil))
-	assert.True(t, policy.IsFailure(nil, testutil.InvalidArgumentError{}))
-	assert.False(t, policy.IsFailure(nil, testutil.InvalidStateError{}))
+	assert.True(t, policy.IsFailure(nil, testutil.ErrInvalidArgument))
+	assert.False(t, policy.IsFailure(nil, testutil.ErrInvalidState))
 }
 
 func TestShouldComputeDelay(t *testing.T) {

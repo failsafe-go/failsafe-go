@@ -18,7 +18,7 @@ import (
 // Asserts that listeners are called the expected number of times for a successful completion.
 func TestListenersOnSuccess(t *testing.T) {
 	// Given - Fail 4 times then succeed
-	stub := testutil.ErrorNTimesThenReturn[bool](testutil.InvalidStateError{}, 2, false, false, true)
+	stub := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 2, false, false, true)
 	rpBuilder := retrypolicy.Builder[bool]().HandleResult(false).WithMaxAttempts(10)
 	cbBuilder := circuitbreaker.Builder[bool]().HandleResult(false).WithDelay(0)
 	fbBuilder := fallback.BuilderWithResult(false)
@@ -59,8 +59,8 @@ func TestListenersOnSuccess(t *testing.T) {
 // Asserts that listeners are called the expected number of times for an unhandled failure.
 func TestListenersForUnhandledFailure(t *testing.T) {
 	// Given - Fail 2 times then don't match policy
-	stub := testutil.ErrorNTimesThenError[bool](testutil.InvalidStateError{}, 2, testutil.InvalidArgumentError{})
-	rpBuilder := retrypolicy.Builder[bool]().HandleErrors(testutil.InvalidStateError{}).WithMaxAttempts(10)
+	stub := testutil.ErrorNTimesThenError[bool](testutil.ErrInvalidState, 2, testutil.ErrInvalidArgument)
+	rpBuilder := retrypolicy.Builder[bool]().HandleErrors(testutil.ErrInvalidState).WithMaxAttempts(10)
 	cbBuilder := circuitbreaker.Builder[bool]().WithDelay(0)
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
@@ -94,7 +94,7 @@ func TestListenersForUnhandledFailure(t *testing.T) {
 // Asserts that listeners are called the expected number of times when retries are exceeded.
 func TestListenersForRetriesExceeded(t *testing.T) {
 	// Given - Fail 4 times and exceed retries
-	stub := testutil.ErrorNTimesThenReturn[bool](testutil.InvalidStateError{}, 10)
+	stub := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 10)
 	rpBuilder := retrypolicy.Builder[bool]().WithMaxRetries(3)
 	cbBuilder := circuitbreaker.Builder[bool]().WithDelay(0)
 	stats := &listenerStats{}
@@ -128,8 +128,8 @@ func TestListenersForRetriesExceeded(t *testing.T) {
 
 func TestListenersForAbort(t *testing.T) {
 	// Given - Fail twice then abort
-	stub := testutil.ErrorNTimesThenError[bool](testutil.InvalidStateError{}, 3, testutil.InvalidArgumentError{})
-	rpBuilder := retrypolicy.Builder[bool]().AbortOnErrors(testutil.InvalidArgumentError{}).WithMaxRetries(3)
+	stub := testutil.ErrorNTimesThenError[bool](testutil.ErrInvalidState, 3, testutil.ErrInvalidArgument)
+	rpBuilder := retrypolicy.Builder[bool]().AbortOnErrors(testutil.ErrInvalidArgument).WithMaxRetries(3)
 	cbBuilder := circuitbreaker.Builder[bool]().WithDelay(0)
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
@@ -162,12 +162,12 @@ func TestListenersForAbort(t *testing.T) {
 
 func TestListenersForFailingRetryPolicy(t *testing.T) {
 	// Given - Fail 10 times
-	stub := testutil.ErrorNTimesThenReturn[bool](testutil.InvalidStateError{}, 10)
+	stub := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 10)
 	// With failing RetryPolicy
 	rpBuilder := retrypolicy.Builder[bool]()
 	// And successful CircuitBreaker and Fallback
-	cbBuilder := circuitbreaker.Builder[bool]().HandleErrors(testutil.InvalidArgumentError{}).WithDelay(0)
-	fbBuilder := fallback.BuilderWithResult[bool](true).HandleErrors(testutil.InvalidArgumentError{})
+	cbBuilder := circuitbreaker.Builder[bool]().HandleErrors(testutil.ErrInvalidArgument).WithDelay(0)
+	fbBuilder := fallback.BuilderWithResult[bool](true).HandleErrors(testutil.ErrInvalidArgument)
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
@@ -196,13 +196,13 @@ func TestListenersForFailingRetryPolicy(t *testing.T) {
 
 func TestListenersForFailingCircuitBreaker(t *testing.T) {
 	// Given - Fail 10 times
-	stub := testutil.ErrorNTimesThenReturn[bool](testutil.InvalidStateError{}, 10)
+	stub := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 10)
 	// With successful RetryPolicy
-	rpBuilder := retrypolicy.Builder[bool]().HandleErrors(testutil.InvalidArgumentError{})
+	rpBuilder := retrypolicy.Builder[bool]().HandleErrors(testutil.ErrInvalidArgument)
 	// And failing CircuitBreaker
 	cbBuilder := circuitbreaker.Builder[bool]().WithDelay(0)
 	// And successful Fallback
-	fbBuilder := fallback.BuilderWithResult[bool](true).HandleErrors(testutil.InvalidArgumentError{})
+	fbBuilder := fallback.BuilderWithResult[bool](true).HandleErrors(testutil.ErrInvalidArgument)
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
@@ -231,12 +231,12 @@ func TestListenersForFailingCircuitBreaker(t *testing.T) {
 
 func TestListenersForFailingFallback(t *testing.T) {
 	// Given - Fail 10 times
-	stub := testutil.ErrorNTimesThenReturn[bool](testutil.InvalidStateError{}, 10)
+	stub := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 10)
 	// Given successful RetryPolicy and CircuitBreaker
-	rpBuilder := retrypolicy.Builder[bool]().HandleErrors(testutil.InvalidArgumentError{})
-	cbBuilder := circuitbreaker.Builder[bool]().HandleErrors(testutil.InvalidArgumentError{}).WithDelay(0)
+	rpBuilder := retrypolicy.Builder[bool]().HandleErrors(testutil.ErrInvalidArgument)
+	cbBuilder := circuitbreaker.Builder[bool]().HandleErrors(testutil.ErrInvalidArgument).WithDelay(0)
 	// And failing Fallback
-	fbBuilder := fallback.BuilderWithError[bool](testutil.ConnectionError{})
+	fbBuilder := fallback.BuilderWithError[bool](testutil.ErrConnecting)
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
@@ -337,7 +337,7 @@ func TestListenersForRateLimiter(t *testing.T) {
 func TestListenersOnPanic(t *testing.T) {
 	// Given - Fail 2 times then panic
 	panicValue := "test panic"
-	stub := testutil.ErrorNTimesThenPanic[bool](testutil.InvalidStateError{}, 2, panicValue)
+	stub := testutil.ErrorNTimesThenPanic[bool](testutil.ErrInvalidState, 2, panicValue)
 	rpBuilder := retrypolicy.Builder[bool]().WithMaxAttempts(10)
 	cbBuilder := circuitbreaker.Builder[bool]().WithDelay(0)
 	fbBuilder := fallback.BuilderWithResult(true)
