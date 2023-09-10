@@ -52,12 +52,12 @@ func withRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *S
 		if withLogging {
 			fmt.Println(fmt.Sprintf("%s %p retrying [Result: %v, failure: %s]", testutil.GetType(rp), rp, e.LastResult(), e.LastError()))
 		}
-	}).OnRetriesExceeded(func(e failsafe.ExecutionCompletedEvent[R]) {
+	}).OnRetriesExceeded(func(e failsafe.ExecutionEvent[R]) {
 		stats.RetrieExceededCount++
 		if withLogging {
 			fmt.Println(fmt.Sprintf("%s %p retries exceeded", testutil.GetType(rp), rp))
 		}
-	}).OnAbort(func(e failsafe.ExecutionCompletedEvent[R]) {
+	}).OnAbort(func(e failsafe.ExecutionEvent[R]) {
 		stats.AbortCount++
 		if withLogging {
 			fmt.Println(fmt.Sprintf("%s %p abort", testutil.GetType(rp), rp))
@@ -107,7 +107,7 @@ func WithTimeoutStatsAndLogs[R any](to timeout.TimeoutBuilder[R], stats *Stats) 
 }
 
 func WithFallbackStatsAndLogs[R any](fb fallback.FallbackBuilder[R], stats *Stats) fallback.FallbackBuilder[R] {
-	fb.OnComplete(func(e failsafe.ExecutionCompletedEvent[R]) {
+	fb.OnFallbackExecuted(func(e failsafe.ExecutionCompletedEvent[R]) {
 		stats.ExecutionCount++
 		fmt.Println(fmt.Sprintf("%s %p complete [Result: %v, failure: %s, attempts: %d, executions: %d]",
 			testutil.GetType(fb), fb, e.Result, e.Error, e.Attempts(), e.Executions()))

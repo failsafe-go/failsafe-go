@@ -30,8 +30,8 @@ func (e *fallbackExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.
 				return result
 			}
 
-			if e.config.onComplete != nil {
-				e.config.onComplete(failsafe.ExecutionCompletedEvent[R]{
+			if e.config.onFallbackExecuted != nil {
+				e.config.onFallbackExecuted(failsafe.ExecutionCompletedEvent[R]{
 					ExecutionStats: exec,
 					Result:         fallbackResult,
 					Error:          fallbackError,

@@ -13,7 +13,7 @@ type ExecutionEvent[R any] struct {
 
 // ExecutionScheduledEvent indicates an execution was scheduled.
 type ExecutionScheduledEvent[R any] struct {
-	Execution[R]
+	ExecutionAttempt[R]
 	// The delay before the next execution attempt.
 	Delay time.Duration
 }

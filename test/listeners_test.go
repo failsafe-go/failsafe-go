@@ -409,9 +409,9 @@ type listenerStats struct {
 }
 
 func registerRpListeners[R any](stats *listenerStats, rpBuilder retrypolicy.RetryPolicyBuilder[R]) {
-	rpBuilder.OnAbort(func(f failsafe.ExecutionCompletedEvent[R]) {
+	rpBuilder.OnAbort(func(f failsafe.ExecutionEvent[R]) {
 		stats.abort++
-	}).OnRetriesExceeded(func(f failsafe.ExecutionCompletedEvent[R]) {
+	}).OnRetriesExceeded(func(f failsafe.ExecutionEvent[R]) {
 		stats.retriesExceeded++
 	}).OnRetry(func(f failsafe.ExecutionEvent[R]) {
 		fmt.Println("RetryPolicy retry")
@@ -447,7 +447,7 @@ func registerCbListeners[R any](stats *listenerStats, cbBuilder circuitbreaker.C
 }
 
 func registerFbListeners[R any](stats *listenerStats, fbBuilder fallback.FallbackBuilder[R]) {
-	fbBuilder.OnComplete(func(f failsafe.ExecutionCompletedEvent[R]) {
+	fbBuilder.OnFallbackExecuted(func(f failsafe.ExecutionCompletedEvent[R]) {
 		stats.fbComplete++
 	}).OnFailure(func(e failsafe.ExecutionEvent[R]) {
 		stats.fbFailure++

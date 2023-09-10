@@ -26,8 +26,9 @@ This type is not concurrency safe.
 type FallbackBuilder[R any] interface {
 	failsafe.FailurePolicyBuilder[FallbackBuilder[R], R]
 
-	// OnComplete registers the listener to be called when a Fallback has completed handling a failure.
-	OnComplete(listener func(event failsafe.ExecutionCompletedEvent[R])) FallbackBuilder[R]
+	// OnFallbackExecuted registers the listener to be called when a Fallback has executed. The provided event will contain
+	// the execution result and error returned by the Fallback.
+	OnFallbackExecuted(listener func(event failsafe.ExecutionCompletedEvent[R])) FallbackBuilder[R]
 
 	// Build returns a new Fallback using the builder's configuration.
 	Build() Fallback[R]
@@ -35,8 +36,8 @@ type FallbackBuilder[R any] interface {
 
 type fallbackConfig[R any] struct {
 	*spi.BaseFailurePolicy[R]
-	fn         func(failsafe.Execution[R]) (R, error)
-	onComplete func(failsafe.ExecutionCompletedEvent[R])
+	fn                 func(failsafe.Execution[R]) (R, error)
+	onFallbackExecuted func(failsafe.ExecutionCompletedEvent[R])
 }
 
 var _ FallbackBuilder[any] = &fallbackConfig[any]{}
@@ -110,8 +111,8 @@ func (c *fallbackConfig[R]) OnFailure(listener func(event failsafe.ExecutionEven
 	return c
 }
 
-func (c *fallbackConfig[R]) OnComplete(listener func(event failsafe.ExecutionCompletedEvent[R])) FallbackBuilder[R] {
-	c.onComplete = listener
+func (c *fallbackConfig[R]) OnFallbackExecuted(listener func(event failsafe.ExecutionCompletedEvent[R])) FallbackBuilder[R] {
+	c.onFallbackExecuted = listener
 	return c
 }
 
