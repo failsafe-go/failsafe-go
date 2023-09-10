@@ -63,10 +63,10 @@ func TestCancelWithContextDeadlingDuringExecution(t *testing.T) {
 	to := timeout.With[any](100 * time.Millisecond)
 
 	// When
-	err := failsafe.With[any](to, rp).RunWithExecution(func(exec failsafe.Execution[any]) error {
+	err := failsafe.RunWithExecution(func(exec failsafe.Execution[any]) error {
 		testutil.WaitAndAssertCanceled(t, time.Second, exec)
 		return nil
-	})
+	}, to, rp)
 
 	// Then
 	assert.Error(t, timeout.ErrTimeoutExceeded, err)
@@ -135,9 +135,9 @@ func TestCancelWithTimeoutDuringRateLimiterDelay(t *testing.T) {
 	rl.TryAcquirePermit() // All permits used
 
 	// When
-	err := failsafe.With[any](to, rl).RunWithExecution(func(exec failsafe.Execution[any]) error {
+	err := failsafe.RunWithExecution(func(exec failsafe.Execution[any]) error {
 		return nil
-	})
+	}, to, rl)
 
 	// Then
 	assert.Error(t, timeout.ErrTimeoutExceeded, err)

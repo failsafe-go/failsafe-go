@@ -12,20 +12,29 @@ import (
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
 )
 
+func TestRunWithSuccess(t *testing.T) {
+	rp := retrypolicy.WithDefaults[any]()
+	err := failsafe.Run(func() error {
+		return nil
+	}, rp)
+	assert.Nil(t, err)
+}
+
 func TestGetWithSuccess(t *testing.T) {
 	rp := retrypolicy.WithDefaults[string]()
-	result, err := failsafe.With[string](rp).Get(func() (string, error) {
+	result, err := failsafe.Get(func() (string, error) {
 		return "test", nil
-	})
+	}, rp)
 	assert.Equal(t, "test", result)
 	assert.Nil(t, err)
 }
 
 func TestGetWithFailure(t *testing.T) {
 	rp := retrypolicy.WithDefaults[string]()
-	result, err := failsafe.With[string](rp).Get(func() (string, error) {
+	result, err := failsafe.Get(func() (string, error) {
 		return "", testutil.ErrInvalidArgument
-	})
+	}, rp)
+
 	assert.Empty(t, result)
 	assert.ErrorIs(t, err, testutil.ErrInvalidArgument)
 }
@@ -34,10 +43,11 @@ func TestGetWithExecution(t *testing.T) {
 	rp := retrypolicy.WithDefaults[string]()
 	fb := fallback.WithResult[string]("fallback")
 	var lasteExec failsafe.Execution[string]
-	result, err := failsafe.With[string](fb, rp).GetWithExecution(func(exec failsafe.Execution[string]) (string, error) {
+	result, err := failsafe.GetWithExecution(func(exec failsafe.Execution[string]) (string, error) {
 		lasteExec = exec
 		return "", testutil.ErrInvalidArgument
-	})
+	}, fb, rp)
+
 	assert.Equal(t, "fallback", result)
 	assert.Nil(t, err)
 	assert.Equal(t, 3, lasteExec.Attempts())
@@ -53,4 +63,13 @@ func TestWithContext(t *testing.T) {
 	executor1 := failsafe.With[any](retrypolicy.WithDefaults[any]()).WithContext(ctx1)
 	executor2 := executor1.WithContext(ctx2)
 	assert.NotSame(t, executor1, executor2)
+}
+
+func TestExecutionWithNoPolicies(t *testing.T) {
+	result, err := failsafe.Get(func() (string, error) {
+		return "test", testutil.ErrInvalidArgument
+	})
+
+	assert.Equal(t, "test", result)
+	assert.ErrorIs(t, testutil.ErrInvalidArgument, err)
 }

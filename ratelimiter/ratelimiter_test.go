@@ -49,6 +49,28 @@ func TestTryAcquirePermit(t *testing.T) {
 	assert.False(t, limiter.TryAcquirePermit())
 }
 
+func TestReservePermit(t *testing.T) {
+	// Given
+	limiter := SmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
+
+	// When / Then
+	assert.Equal(t, time.Duration(0), limiter.ReservePermit())
+	assert.True(t, limiter.ReservePermit() > 0)
+	assert.True(t, limiter.ReservePermit() > 100)
+}
+
+func TestTryReservePermit(t *testing.T) {
+	// Given
+	limiter := SmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
+
+	// When / Then
+	assert.Equal(t, time.Duration(0), limiter.TryReservePermit(1*time.Millisecond))
+	assert.Equal(t, time.Duration(-1), limiter.TryReservePermit(10*time.Millisecond))
+	assert.True(t, limiter.TryReservePermit(100*time.Millisecond).Milliseconds() > 0)
+	assert.True(t, limiter.TryReservePermit(200*time.Millisecond).Milliseconds() > 100)
+	assert.Equal(t, time.Duration(-1), limiter.TryReservePermit(100*time.Millisecond))
+}
+
 func setTestStopwatch[R any](limiter RateLimiter[R]) *testutil.TestStopwatch {
 	stopwatch := &testutil.TestStopwatch{}
 	limiter.(*rateLimiter[R]).stats.(*smoothRateLimiterStats[R]).stopwatch = stopwatch

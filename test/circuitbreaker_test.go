@@ -37,11 +37,11 @@ func TestShouldRejectExcessiveAttemptsWhenBreakerHalfOpen(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		go func() {
-			failsafe.With[any](cb).Run(func() error {
+			failsafe.Run(func() error {
 				waiter.Resume()
 				time.Sleep(1 * time.Minute)
 				return nil
-			})
+			}, cb)
 		}()
 	}
 
@@ -91,8 +91,8 @@ func TestShouldReturnErrCircuitBreakerOpenAfterFailuresExceeded(t *testing.T) {
 		Build()
 
 	// When
-	failsafe.With[bool](cb).Get(testutil.GetFalseFn)
-	failsafe.With[bool](cb).Get(testutil.GetFalseFn)
+	failsafe.Get(testutil.GetFalseFn, cb)
+	failsafe.Get(testutil.GetFalseFn, cb)
 
 	// Then
 	testutil.TestGetFailure[bool](t, failsafe.With[bool](cb),

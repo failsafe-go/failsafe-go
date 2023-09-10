@@ -270,10 +270,10 @@ func TestGetElapsedTime(t *testing.T) {
 			assert.True(t, e.ElapsedAttemptTime().Milliseconds() >= 90)
 		}).
 		Build()
-	failsafe.With[any](rp).Get(func() (any, error) {
+	failsafe.Get(func() (any, error) {
 		time.Sleep(100 * time.Millisecond)
 		return false, nil
-	})
+	}, rp)
 }
 
 func TestRetryPolicyOnScheduledRetry(t *testing.T) {

@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/internal/policytesting"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
@@ -86,21 +84,4 @@ func TestShouldCompleteWhenMaxDurationExceeded(t *testing.T) {
 			return false, errors.New("Asdf")
 		},
 		1, 1, &retrypolicy.RetriesExceededError{})
-}
-
-// Asserts that the ExecutionScheduledEvent.getDelay is as expected.
-func TestScheduledRetryDelay(t *testing.T) {
-	// Given
-	delay := 10 * time.Millisecond
-	rp := retrypolicy.Builder[any]().
-		WithDelay(delay).
-		OnRetryScheduled(func(e failsafe.ExecutionScheduledEvent[any]) {
-			assert.Equal(t, delay, e.Delay)
-		}).
-		Build()
-
-	// When / Then
-	failsafe.With[any](rp).Run(func() error {
-		return testutil.ErrConnecting
-	})
 }

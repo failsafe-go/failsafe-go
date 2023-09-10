@@ -8,6 +8,29 @@ import (
 	"github.com/failsafe-go/failsafe-go/common"
 )
 
+// Run executes the fn, with failures being handled by the policies, until successful or until the policies are exceeded.
+func Run(fn func() error, policies ...Policy[any]) (err error) {
+	return With[any](policies...).Run(fn)
+}
+
+// RunWithExecution executes the fn, with failures being handled by the policies, until successful or until the policies
+// are exceeded, while providing an Execution to the fn.
+func RunWithExecution(fn func(exec Execution[any]) error, policies ...Policy[any]) (err error) {
+	return With[any](policies...).RunWithExecution(fn)
+}
+
+// Get executes the fn, with failures being handled by the policies, until a successful result is returned or the
+// policies are exceeded.
+func Get[R any](fn func() (R, error), policies ...Policy[R]) (R, error) {
+	return With[R](policies...).Get(fn)
+}
+
+// GetWithExecution executes the fn, with failures being handled by the policies, until a successful result is returned
+// or the policies are exceeded, while providing an Execution to the fn.
+func GetWithExecution[R any](fn func(exec Execution[R]) (R, error), policies ...Policy[R]) (R, error) {
+	return With[R](policies...).GetWithExecution(fn)
+}
+
 /*
 Executor handles failures according to configured policies. An executor can be created for a policy via:
 
@@ -33,9 +56,6 @@ type Executor[R any] interface {
 	// WithContext returns a new copy of the Executor with the ctx configured. Any executions created with the resulting
 	// Executor will be canceled when the ctx is done. Executions can cooperate with cancellation by checking
 	// Execution.Canceled or Execution.IsCanceled.
-	//
-	// Note: This setting will cause a goroutine to be created for each execution, in order to propagate cancellations from
-	// the ctx to the execution.
 	WithContext(ctx context.Context) Executor[R]
 
 	// OnComplete registers the listener to be called when an execution is complete.
@@ -96,10 +116,9 @@ These result in the following internal composition when executing a func and han
 
 	Fallback(RetryPolicy(CircuitBreaker(func)))
 */
-func With[R any](outerPolicy Policy[R], innerPolicies ...Policy[R]) Executor[R] {
-	innerPolicies = append([]Policy[R]{outerPolicy}, innerPolicies...)
+func With[R any](policies ...Policy[R]) Executor[R] {
 	return &executor[R]{
-		policies: innerPolicies,
+		policies: policies,
 	}
 }
 
@@ -200,20 +219,14 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error)) (R, error) 
 
 	// Propagate context cancellations to the execution
 	ctx := e.ctx
-	var executionDone chan any
+	var stopAfterFunc func() bool
 	if ctx != nil {
-		// This can be replaced with context.AfterFunc in 1.21
-		executionDone = make(chan any)
-		go func() {
-			select {
-			case <-ctx.Done():
-				exec.Cancel(math.MaxInt, &common.ExecutionResult[R]{
-					Error:    ctx.Err(),
-					Complete: true,
-				})
-			case <-executionDone:
-			}
-		}()
+		stopAfterFunc = context.AfterFunc(ctx, func() {
+			exec.Cancel(math.MaxInt, &common.ExecutionResult[R]{
+				Error:    ctx.Err(),
+				Complete: true,
+			})
+		})
 	}
 
 	// Initialize first attempt and execute
@@ -221,8 +234,8 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error)) (R, error) 
 	er := outerFn(exec)
 
 	// Stop the Context AfterFunc and call listeners
-	if executionDone != nil {
-		close(executionDone)
+	if stopAfterFunc != nil {
+		stopAfterFunc()
 	}
 	if e.onSuccess != nil && er.SuccessAll {
 		e.onSuccess(newExecutionCompletedEvent(er, exec))
