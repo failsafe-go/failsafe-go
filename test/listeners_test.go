@@ -457,7 +457,7 @@ func registerFbListeners[R any](stats *listenerStats, fbBuilder fallback.Fallbac
 }
 
 func registerRlListeners[R any](stats *listenerStats, rlBuilder ratelimiter.RateLimiterBuilder[R]) {
-	rlBuilder.OnRateLimitExceeded(func(event failsafe.ExecutionCompletedEvent[R]) {
+	rlBuilder.OnRateLimitExceeded(func(event failsafe.ExecutionEvent[R]) {
 		stats.rlExceeded++
 	})
 }

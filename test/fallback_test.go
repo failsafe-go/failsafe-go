@@ -10,7 +10,7 @@ import (
 
 // Tests Fallback.WithResult
 func TestFallbackOfResult(t *testing.T) {
-	fb := fallback.WithResult[bool](true)
+	fb := fallback.WithResult(true)
 
 	testutil.TestGetSuccess(t, failsafe.NewExecutor[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
@@ -32,7 +32,7 @@ func TestShouldFallbackOfError(t *testing.T) {
 
 // Tests Fallback.WithFn
 func TestShouldFallbackOfFn(t *testing.T) {
-	fb := fallback.WithFn[bool](func(exec failsafe.Execution[bool]) (bool, error) {
+	fb := fallback.WithFn(func(exec failsafe.Execution[bool]) (bool, error) {
 		return false, &testutil.CompositeError{
 			Cause: exec.LastError(),
 		}
@@ -49,7 +49,7 @@ func TestShouldFallbackOfFn(t *testing.T) {
 
 // Tests a successful execution that does not fallback
 func TestShouldNotFallback(t *testing.T) {
-	testutil.TestGetSuccess(t, failsafe.NewExecutor[bool](fallback.WithResult[bool](true)),
+	testutil.TestGetSuccess(t, failsafe.NewExecutor[bool](fallback.WithResult(true)),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, nil
 		},

@@ -41,7 +41,7 @@ func TestGetWithFailure(t *testing.T) {
 
 func TestGetWithExecution(t *testing.T) {
 	rp := retrypolicy.WithDefaults[string]()
-	fb := fallback.WithResult[string]("fallback")
+	fb := fallback.WithResult("fallback")
 	var lasteExec failsafe.Execution[string]
 	result, err := failsafe.GetWithExecution(func(exec failsafe.Execution[string]) (string, error) {
 		lasteExec = exec

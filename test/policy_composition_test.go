@@ -62,7 +62,7 @@ func TestCircuitBreakerRetryPolicy(t *testing.T) {
 // Fallback -> RetryPolicy
 func TestFallbackRetryPolicy(t *testing.T) {
 	// Given
-	fb := fallback.WithResult[bool](true)
+	fb := fallback.WithResult(true)
 	rp := retrypolicy.WithDefaults[bool]()
 
 	// When / Then
@@ -73,7 +73,7 @@ func TestFallbackRetryPolicy(t *testing.T) {
 		3, 3, true)
 
 	// Given
-	fb = fallback.WithFn[bool](func(exec failsafe.Execution[bool]) (bool, error) {
+	fb = fallback.WithFn(func(exec failsafe.Execution[bool]) (bool, error) {
 		assert.False(t, exec.LastResult())
 		assert.ErrorIs(t, exec.LastError(), testutil.ErrInvalidState)
 		return true, nil
@@ -91,7 +91,7 @@ func TestFallbackRetryPolicy(t *testing.T) {
 func TestRetryPolicyFallback(t *testing.T) {
 	// Given
 	rp := retrypolicy.WithDefaults[string]()
-	fb := fallback.WithResult[string]("test")
+	fb := fallback.WithResult("test")
 
 	// When / Then
 	testutil.TestGetSuccess[string](t, failsafe.NewExecutor[string](rp, fb),
@@ -158,7 +158,7 @@ func TestFallbackRetryPolicyCircuitBreaker(t *testing.T) {
 	// Given
 	rp := retrypolicy.WithDefaults[string]()
 	cb := circuitbreaker.Builder[string]().WithFailureThreshold(5).Build()
-	fb := fallback.WithResult[string]("test")
+	fb := fallback.WithResult("test")
 
 	// When / Then
 	testutil.TestGetSuccess(t, failsafe.NewExecutor[string](fb, rp, cb),
@@ -214,7 +214,7 @@ func TestCircuitBreakerTimeout(t *testing.T) {
 func TestFallbackTimeout(t *testing.T) {
 	// Given
 	to := timeout.With[bool](10 * time.Millisecond)
-	fb := fallback.WithFn[bool](func(e failsafe.Execution[bool]) (bool, error) {
+	fb := fallback.WithFn(func(e failsafe.Execution[bool]) (bool, error) {
 		assert.ErrorIs(t, e.LastError(), timeout.ErrTimeoutExceeded)
 		return true, nil
 	})

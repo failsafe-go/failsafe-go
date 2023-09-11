@@ -90,7 +90,7 @@ func TestCancelWithContextDuringPendingRetry(t *testing.T) {
 
 func TestCancelWithContextDuringFallbackFn(t *testing.T) {
 	// Given
-	fb := fallback.WithFn[any](func(exec failsafe.Execution[any]) (any, error) {
+	fb := fallback.WithFn(func(exec failsafe.Execution[any]) (any, error) {
 		testutil.WaitAndAssertCanceled(t, time.Second, exec)
 		return nil, nil
 	})

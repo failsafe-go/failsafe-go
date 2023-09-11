@@ -20,9 +20,8 @@ func (rle *rateLimiterExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *co
 		execInternal := exec.(spi.ExecutionInternal[R])
 		if err := rle.rateLimiter.acquirePermitsWithMaxWait(execInternal.Context(), exec.Canceled(), 1, rle.config.maxWaitTime); err != nil {
 			if rle.config.onRateLimitExceeded != nil {
-				rle.config.onRateLimitExceeded(failsafe.ExecutionCompletedEvent[R]{
-					ExecutionStats: exec,
-					Error:          err,
+				rle.config.onRateLimitExceeded(failsafe.ExecutionEvent[R]{
+					ExecutionAttempt: exec,
 				})
 			}
 			return internal.FailureResult[R](err)

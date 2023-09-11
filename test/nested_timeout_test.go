@@ -44,7 +44,7 @@ func TestFallbackRetryPolicyTimeoutTimeout(t *testing.T) {
 	innerTimeout := policytesting.WithTimeoutStatsAndLogs[bool](timeout.Builder[bool](100*time.Millisecond), innerTimeoutStats).Build()
 	outerTimeout := policytesting.WithTimeoutStatsAndLogs[bool](timeout.Builder[bool](50*time.Millisecond), outerTimeoutStats).Build()
 	rp := retrypolicy.WithDefaults[bool]()
-	fb := fallback.WithResult[bool](true)
+	fb := fallback.WithResult(true)
 
 	testutil.TestGetSuccess(t, failsafe.NewExecutor[bool](fb, rp, outerTimeout, innerTimeout),
 		func(exec failsafe.Execution[bool]) (bool, error) {
