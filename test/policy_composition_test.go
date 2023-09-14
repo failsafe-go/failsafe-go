@@ -29,8 +29,8 @@ func TestRetryPolicyCircuitBreaker(t *testing.T) {
 	testutil.TestGetSuccess(t, failsafe.NewExecutor[bool](rp, cb),
 		testutil.ErrorNTimesThenReturn[bool](testutil.ErrConnecting, 2, true),
 		3, 3, true)
-	assert.Equal(t, uint(1), cb.SuccessCount())
-	assert.Equal(t, uint(2), cb.FailureCount())
+	assert.Equal(t, uint(1), cb.Metrics().SuccessCount())
+	assert.Equal(t, uint(2), cb.Metrics().FailureCount())
 }
 
 // RetryPolicy -> CircuitBreaker
@@ -55,8 +55,8 @@ func TestCircuitBreakerRetryPolicy(t *testing.T) {
 		func(execution failsafe.Execution[any]) error {
 			return testutil.ErrInvalidState
 		}, 3, 3, testutil.ErrInvalidState)
-	assert.Equal(t, uint(0), cb.SuccessCount())
-	assert.Equal(t, uint(1), cb.FailureCount())
+	assert.Equal(t, uint(0), cb.Metrics().SuccessCount())
+	assert.Equal(t, uint(1), cb.Metrics().FailureCount())
 	assert.True(t, cb.IsClosed())
 }
 
@@ -165,8 +165,8 @@ func TestFallbackRetryPolicyCircuitBreaker(t *testing.T) {
 	testutil.TestGetSuccess(t, failsafe.NewExecutor[string](fb, rp, cb),
 		testutil.GetWithExecutionFn[string]("", testutil.ErrInvalidState),
 		3, 3, "test")
-	assert.Equal(t, uint(0), cb.SuccessCount())
-	assert.Equal(t, uint(3), cb.FailureCount())
+	assert.Equal(t, uint(0), cb.Metrics().SuccessCount())
+	assert.Equal(t, uint(3), cb.Metrics().FailureCount())
 	assert.True(t, cb.IsClosed())
 }
 

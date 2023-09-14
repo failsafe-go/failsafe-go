@@ -3,7 +3,6 @@ package circuitbreaker
 import (
 	"errors"
 	"sync"
-	"time"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/spi"
@@ -64,14 +63,11 @@ type CircuitBreaker[R any] interface {
 	// Open opens the CircuitBreaker.
 	Open()
 
-	// Close closes the CircuitBreaker.
-	Close()
-
 	// HalfOpen half-opens the CircuitBreaker.
 	HalfOpen()
 
-	// IsClosed returns whether the CircuitBreaker is closed.
-	IsClosed() bool
+	// Close closes the CircuitBreaker.
+	Close()
 
 	// IsOpen returns whether the CircuitBreaker is open.
 	IsOpen() bool
@@ -79,8 +75,14 @@ type CircuitBreaker[R any] interface {
 	// IsHalfOpen returns whether the CircuitBreaker is half-open.
 	IsHalfOpen() bool
 
+	// IsClosed returns whether the CircuitBreaker is closed.
+	IsClosed() bool
+
 	// State returns the State of the CircuitBreaker.
 	State() State
+
+	// Metrics returns metrics for the CircuitBreaker.
+	Metrics() Metrics
 
 	// TryAcquirePermit tries to acquire a permit to use the circuit breaker and returns whether a permit was acquired.
 	// Permission will be automatically released when a result or failure is recorded.
@@ -97,17 +99,15 @@ type CircuitBreaker[R any] interface {
 
 	// RecordFailure records an execution failure.
 	RecordFailure()
+}
 
+type Metrics interface {
 	// ExecutionCount returns the number of executions recorded in the current state when the state is ClosedState or
 	// HalfOpenState. When the state is OpenState, this returns the executions recorded during the previous ClosedState.
 	//
 	// For count based thresholding, the max number of executions is limited to the execution threshold. For time based
 	// thresholds, the number of executions may vary within the thresholding period.
 	ExecutionCount() uint
-
-	// RemainingDelay returns the remaining delay until the circuit is half-opened and allows another execution, when in the
-	// OpenState, else returns 0 when in other states.
-	RemainingDelay() time.Duration
 
 	// FailureCount returns the number of failures recorded in the current state when in a ClosedState or HalfOpenState. When
 	// in OpenState, this returns the failures recorded during the previous ClosedState.
@@ -160,16 +160,16 @@ func (cb *circuitBreaker[R]) Open() {
 	cb.open(nil)
 }
 
-func (cb *circuitBreaker[R]) Close() {
-	cb.mtx.Lock()
-	defer cb.mtx.Unlock()
-	cb.close()
-}
-
 func (cb *circuitBreaker[R]) HalfOpen() {
 	cb.mtx.Lock()
 	defer cb.mtx.Unlock()
 	cb.halfOpen()
+}
+
+func (cb *circuitBreaker[R]) Close() {
+	cb.mtx.Lock()
+	defer cb.mtx.Unlock()
+	cb.close()
 }
 
 func (cb *circuitBreaker[R]) State() State {
@@ -178,8 +178,10 @@ func (cb *circuitBreaker[R]) State() State {
 	return cb.state.getState()
 }
 
-func (cb *circuitBreaker[R]) IsClosed() bool {
-	return cb.State() == ClosedState
+func (cb *circuitBreaker[R]) Metrics() Metrics {
+	cb.mtx.Lock()
+	defer cb.mtx.Unlock()
+	return cb
 }
 
 func (cb *circuitBreaker[R]) IsOpen() bool {
@@ -190,16 +192,14 @@ func (cb *circuitBreaker[R]) IsHalfOpen() bool {
 	return cb.State() == HalfOpenState
 }
 
+func (cb *circuitBreaker[R]) IsClosed() bool {
+	return cb.State() == ClosedState
+}
+
 func (cb *circuitBreaker[R]) ExecutionCount() uint {
 	cb.mtx.Lock()
 	defer cb.mtx.Unlock()
 	return cb.state.getStats().getExecutionCount()
-}
-
-func (cb *circuitBreaker[R]) RemainingDelay() time.Duration {
-	cb.mtx.Lock()
-	defer cb.mtx.Unlock()
-	return cb.state.getRemainingDelay()
 }
 
 func (cb *circuitBreaker[R]) FailureCount() uint {
