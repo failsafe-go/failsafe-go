@@ -16,20 +16,20 @@ func TestAcquirePermit(t *testing.T) {
 	setTestStopwatch(limiter)
 
 	elapsed := testutil.Timed(func() {
-		limiter.AcquirePermit(nil) // waits 0
-		limiter.AcquirePermit(nil) // waits 100
-		limiter.AcquirePermit(nil) // waits 200
+		assert.Nil(t, limiter.AcquirePermit(nil)) // waits 0
+		assert.Nil(t, limiter.AcquirePermit(nil)) // waits 100
+		assert.Nil(t, limiter.AcquirePermit(nil)) // waits 200
 	})
 	assert.True(t, elapsed.Milliseconds() >= 300 && elapsed.Milliseconds() <= 400)
 }
 
-func TestAcquireWithMaxWaitTime(t *testing.T) {
+func TestAcquirePermitWithMaxWaitTime(t *testing.T) {
 	limiter := SmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
 	setTestStopwatch(limiter)
 
-	limiter.AcquirePermitWithMaxWait(nil, 100*time.Millisecond)        // waits 0
-	limiter.AcquirePermitWithMaxWait(nil, 1000*time.Millisecond)       // waits 100
-	err := limiter.AcquirePermitWithMaxWait(nil, 100*time.Millisecond) // waits 200
+	assert.Nil(t, limiter.AcquirePermitWithMaxWait(nil, 100*time.Millisecond))  // waits 0
+	assert.Nil(t, limiter.AcquirePermitWithMaxWait(nil, 1000*time.Millisecond)) // waits 100
+	err := limiter.AcquirePermitWithMaxWait(nil, 100*time.Millisecond)          // waits 200
 	assert.ErrorIs(t, ErrRateLimitExceeded, err)
 }
 

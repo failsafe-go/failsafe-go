@@ -12,7 +12,7 @@ import (
 	"github.com/failsafe-go/failsafe-go/ratelimiter"
 )
 
-func TestPermitAcquiredAfterWait(t *testing.T) {
+func TestRateLimiterPermitAcquiredAfterWait(t *testing.T) {
 	// Given
 	limiter := ratelimiter.SmoothBuilderWithMaxRate[string](50 * time.Millisecond).
 		WithMaxWaitTime(2 * time.Second).
@@ -41,7 +41,7 @@ func TestShouldReturnRateLimitExceededError(t *testing.T) {
 }
 
 // Asserts that an exceeded maxWaitTime causes ErrRateLimitExceeded.
-func TestMaxWaitTimeExceeded(t *testing.T) {
+func TestRateLimiterMaxWaitTimeExceeded(t *testing.T) {
 	// Given
 	limiter := ratelimiter.SmoothBuilderWithMaxRate[any](10 * time.Millisecond).Build()
 

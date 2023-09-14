@@ -34,6 +34,7 @@ type timeout[R any] struct {
 	config *timeoutConfig[R]
 }
 
+// With returns a new Timeout for execution result type R and the timeoutDelay.
 func With[R any](timeoutDelay time.Duration) Timeout[R] {
 	return Builder[R](timeoutDelay).Build()
 }

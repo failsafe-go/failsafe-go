@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/bulkhead"
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
 	"github.com/failsafe-go/failsafe-go/fallback"
 	"github.com/failsafe-go/failsafe-go/internal/policytesting"
@@ -226,4 +227,17 @@ func TestFallbackTimeout(t *testing.T) {
 			return false, nil
 		},
 		1, 1, true)
+}
+
+// RetryPolicy -> Bulkhead
+func TestRetryPolicyBulkhead(t *testing.T) {
+	rp := retrypolicy.Builder[any]().WithMaxAttempts(7).Build()
+	bh := bulkhead.With[any](2)
+	bh.TryAcquirePermit()
+	bh.TryAcquirePermit() // bulkhead should be full
+
+	testutil.TestRunFailure(t, failsafe.NewExecutor[any](rp, bh),
+		func(execution failsafe.Execution[any]) error {
+			return errors.New("test")
+		}, 7, 0, bulkhead.ErrBulkheadFull)
 }

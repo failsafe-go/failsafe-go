@@ -1,4 +1,4 @@
-# Failsafe-Go
+# Failsafe-go
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/failsafe-go/failsafe-go/test.yml)](https://github.com/failsafe-go/failsafe-go/actions/workflows/test.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/failsafe-go/failsafe-go)](https://goreportcard.com/report/github.com/failsafe-go/failsafe-go)
@@ -8,7 +8,7 @@
 
 Failsafe-go is a library for building fault tolerant Go applications. It works by wrapping executable logic with one or more resilience policies, which can be combined and composed as needed. 
 
-Policies include [Retry](https://failsafe-go.dev/retry/), [CircuitBreaker](https://failsafe-go.dev/circuit-breaker/), [RateLimiter](https://failsafe-go.dev/rate-limiter/), [Timeout](https://failsafe-go.dev/timeout/), and [Fallback](https://failsafe-go.dev/fallback/).
+Policies include [Retry](https://failsafe-go.dev/retry/), [CircuitBreaker](https://failsafe-go.dev/circuit-breaker/), [RateLimiter](https://failsafe-go.dev/rate-limiter/), [Timeout](https://failsafe-go.dev/timeout/), [Bulkhead](https://failsafe-go.dev/bulkhead/), and [Fallback](https://failsafe-go.dev/fallback/).
 
 ## Usage
 

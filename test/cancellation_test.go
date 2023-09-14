@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/bulkhead"
 	"github.com/failsafe-go/failsafe-go/fallback"
 	"github.com/failsafe-go/failsafe-go/internal/policytesting"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
@@ -138,6 +139,22 @@ func TestCancelWithTimeoutDuringRateLimiterDelay(t *testing.T) {
 	err := failsafe.RunWithExecution(func(exec failsafe.Execution[any]) error {
 		return nil
 	}, to, rl)
+
+	// Then
+	assert.Error(t, timeout.ErrTimeoutExceeded, err)
+}
+
+func TestCancelWithTimeoutDuringBulkheadDelay(t *testing.T) {
+	// Given
+	to := timeout.With[any](100 * time.Millisecond)
+	bh := bulkhead.Builder[any](2).Build()
+	bh.TryAcquirePermit()
+	bh.TryAcquirePermit() // bulkhead should be full
+
+	// When
+	err := failsafe.RunWithExecution(func(exec failsafe.Execution[any]) error {
+		return nil
+	}, to, bh)
 
 	// Then
 	assert.Error(t, timeout.ErrTimeoutExceeded, err)
