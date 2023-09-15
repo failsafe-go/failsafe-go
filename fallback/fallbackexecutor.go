@@ -23,7 +23,8 @@ func (e *fallbackExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.
 			return result
 		}
 
-		if e.IsFailure(result) {
+		result = e.PostExecute(execInternal, result)
+		if !result.Success {
 			// Call fallback fn
 			fallbackResult, fallbackError := e.config.fn(execInternal.ExecutionForResult(result))
 			if execInternal.IsCanceledForPolicy(e.PolicyIndex) {
@@ -38,14 +39,15 @@ func (e *fallbackExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.
 				})
 			}
 
+			success := e.IsFailure(fallbackResult, fallbackError)
 			result = &common.ExecutionResult[R]{
 				Result:     fallbackResult,
 				Error:      fallbackError,
 				Complete:   true,
-				Success:    true,
-				SuccessAll: result.SuccessAll,
+				Success:    success,
+				SuccessAll: success && result.SuccessAll,
 			}
 		}
-		return e.PostExecute(execInternal, result)
+		return result
 	}
 }

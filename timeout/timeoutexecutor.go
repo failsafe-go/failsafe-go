@@ -46,6 +46,6 @@ func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.E
 	}
 }
 
-func (e *timeoutExecutor[R]) IsFailure(result *common.ExecutionResult[R]) bool {
-	return result.Error != nil && errors.Is(result.Error, ErrTimeoutExceeded)
+func (e *timeoutExecutor[R]) IsFailure(_ R, err error) bool {
+	return err != nil && errors.Is(err, ErrTimeoutExceeded)
 }

@@ -1,6 +1,7 @@
 package test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/failsafe-go/failsafe-go"
@@ -75,4 +76,21 @@ func TestShouldFallbackWithFailureConditions(t *testing.T) {
 			return false, testutil.ErrInvalidState
 		},
 		1, 1, true)
+}
+
+// Asserts that the fallback result itself can cause an execution to be considered a failure.
+func TestShouldVerifyFallbackResult(t *testing.T) {
+	// Assert a failure is still a failure
+	fb := fallback.WithError[any](testutil.ErrInvalidArgument)
+	testutil.TestGetFailure[any](t, failsafe.NewExecutor[any](fb),
+		func(execution failsafe.Execution[any]) (any, error) {
+			return false, errors.New("test")
+		}, 1, 1, testutil.ErrInvalidArgument)
+
+	// Assert a success after a failure is a success
+	fb = fallback.WithResult[any](true)
+	testutil.TestGetSuccess[any](t, failsafe.NewExecutor[any](fb),
+		func(execution failsafe.Execution[any]) (any, error) {
+			return false, errors.New("test")
+		}, 1, 1, true)
 }
