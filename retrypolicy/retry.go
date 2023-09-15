@@ -347,12 +347,12 @@ func (c *retryPolicyConfig[R]) isAbortable(result R, err error) bool {
 
 func (rp *retryPolicy[R]) ToExecutor(policyIndex int, _ R) any {
 	rpe := &retryPolicyExecutor[R]{
-		BasePolicyExecutor: &policy.BasePolicyExecutor[R]{
+		BaseExecutor: &policy.BaseExecutor[R]{
 			BaseFailurePolicy: rp.config.BaseFailurePolicy,
 			PolicyIndex:       policyIndex,
 		},
 		retryPolicy: rp,
 	}
-	rpe.PolicyExecutor = rpe
+	rpe.Executor = rpe
 	return rpe
 }

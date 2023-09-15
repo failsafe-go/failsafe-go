@@ -6,13 +6,13 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// fallbackExecutor is a failsafe.PolicyExecutor that handles failures according to a Fallback.
+// fallbackExecutor is a failsafe.Executor that handles failures according to a Fallback.
 type fallbackExecutor[R any] struct {
-	*policy.BasePolicyExecutor[R]
+	*policy.BaseExecutor[R]
 	*fallback[R]
 }
 
-var _ policy.PolicyExecutor[any] = &fallbackExecutor[any]{}
+var _ policy.Executor[any] = &fallbackExecutor[any]{}
 
 // Apply performs an execution by calling the innerFn, applying a fallback if it fails, and calling post-execute.
 func (e *fallbackExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.ExecutionResult[R]) func(failsafe.Execution[R]) *common.ExecutionResult[R] {

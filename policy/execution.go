@@ -21,7 +21,7 @@ type ExecutionInternal[R any] interface {
 	ExecutionForResult(result *common.ExecutionResult[R]) failsafe.Execution[R]
 
 	// InitializeAttempt prepares a new execution attempt. Returns false if the attempt could not be initialized since it was
-	// canceled by an external Context or a timeout.Timeout composed outside the policyExecutor.
+	// canceled by an external Context or a timeout.Timeout composed outside the Executor.
 	InitializeAttempt(policyIndex int) bool
 
 	// Record records the result of an execution attempt, if a result was not already recorded, and returns the recorded
@@ -34,6 +34,6 @@ type ExecutionInternal[R any] interface {
 	Cancel(policyIndex int, result *common.ExecutionResult[R])
 
 	// IsCanceledForPolicy returns whether the execution has been canceled by an external Context or a policy composed
-	// outside the policyExecutor.
+	// outside the Executor.
 	IsCanceledForPolicy(policyIndex int) bool
 }

@@ -6,7 +6,7 @@ import (
 
 // Policy handles execution failures.
 type Policy[R any] interface {
-	// ToExecutor returns a PolicyExecutor capable of handling an execution for the Policy.
+	// ToExecutor returns a policy.Executor capable of handling an execution for the Policy.
 	// The typeToken parameter helps catch mismatches between R types when composing policies.
 	ToExecutor(policyIndex int, typeToken R) any
 }

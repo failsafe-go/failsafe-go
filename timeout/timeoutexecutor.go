@@ -11,13 +11,13 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// timeoutExecutor is a failsafe.PolicyExecutor that handles failures according to a Timeout.
+// timeoutExecutor is a failsafe.Executor that handles failures according to a Timeout.
 type timeoutExecutor[R any] struct {
-	*policy.BasePolicyExecutor[R]
+	*policy.BaseExecutor[R]
 	*timeout[R]
 }
 
-var _ policy.PolicyExecutor[any] = &timeoutExecutor[any]{}
+var _ policy.Executor[any] = &timeoutExecutor[any]{}
 
 func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.ExecutionResult[R]) func(failsafe.Execution[R]) *common.ExecutionResult[R] {
 	// This func sets up a race between a timeout and the innerFn returning

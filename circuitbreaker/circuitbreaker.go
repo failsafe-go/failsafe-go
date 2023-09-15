@@ -252,13 +252,13 @@ func (cb *circuitBreaker[R]) RecordSuccess() {
 
 func (cb *circuitBreaker[R]) ToExecutor(policyIndex int, _ R) any {
 	cbe := &circuitBreakerExecutor[R]{
-		BasePolicyExecutor: &policy.BasePolicyExecutor[R]{
+		BaseExecutor: &policy.BaseExecutor[R]{
 			BaseFailurePolicy: cb.config.BaseFailurePolicy,
 			PolicyIndex:       policyIndex,
 		},
 		circuitBreaker: cb,
 	}
-	cbe.PolicyExecutor = cbe
+	cbe.Executor = cbe
 	return cbe
 }
 

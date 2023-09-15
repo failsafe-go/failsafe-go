@@ -7,13 +7,13 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// bulkheadExecutor is a failsafe.PolicyExecutor that handles failures according to a Bulkhead.
+// bulkheadExecutor is a failsafe.Executor that handles failures according to a Bulkhead.
 type bulkheadExecutor[R any] struct {
-	*policy.BasePolicyExecutor[R]
+	*policy.BaseExecutor[R]
 	*bulkhead[R]
 }
 
-var _ policy.PolicyExecutor[any] = &bulkheadExecutor[any]{}
+var _ policy.Executor[any] = &bulkheadExecutor[any]{}
 
 func (be *bulkheadExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.ExecutionResult[R]) func(failsafe.Execution[R]) *common.ExecutionResult[R] {
 	return func(exec failsafe.Execution[R]) *common.ExecutionResult[R] {

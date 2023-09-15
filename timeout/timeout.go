@@ -60,11 +60,11 @@ func (c *timeoutConfig[R]) Build() Timeout[R] {
 
 func (t *timeout[R]) ToExecutor(policyIndex int, _ R) any {
 	te := &timeoutExecutor[R]{
-		BasePolicyExecutor: &policy.BasePolicyExecutor[R]{
+		BaseExecutor: &policy.BaseExecutor[R]{
 			PolicyIndex: policyIndex,
 		},
 		timeout: t,
 	}
-	te.PolicyExecutor = te
+	te.Executor = te
 	return te
 }

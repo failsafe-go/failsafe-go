@@ -11,9 +11,9 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// retryPolicyExecutor is a failsafe.PolicyExecutor that handles failures according to a RetryPolicy.
+// retryPolicyExecutor is a failsafe.Executor that handles failures according to a RetryPolicy.
 type retryPolicyExecutor[R any] struct {
-	*policy.BasePolicyExecutor[R]
+	*policy.BaseExecutor[R]
 	*retryPolicy[R]
 
 	// Mutable state
@@ -23,7 +23,7 @@ type retryPolicyExecutor[R any] struct {
 }
 
 func (rpe *retryPolicyExecutor[R]) PreExecute(exec policy.ExecutionInternal[R]) *common.ExecutionResult[R] {
-	return rpe.BasePolicyExecutor.PreExecute(exec)
+	return rpe.BaseExecutor.PreExecute(exec)
 }
 
 func (rpe *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.ExecutionResult[R]) func(failsafe.Execution[R]) *common.ExecutionResult[R] {
@@ -75,7 +75,7 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *co
 
 // OnFailure updates failedAttempts and retriesExceeded, and calls event listeners
 func (rpe *retryPolicyExecutor[R]) OnFailure(exec policy.ExecutionInternal[R], result *common.ExecutionResult[R]) *common.ExecutionResult[R] {
-	rpe.BasePolicyExecutor.OnFailure(exec, result)
+	rpe.BaseExecutor.OnFailure(exec, result)
 
 	rpe.failedAttempts++
 	maxRetriesExceeded := rpe.config.maxRetries != -1 && rpe.failedAttempts > rpe.config.maxRetries

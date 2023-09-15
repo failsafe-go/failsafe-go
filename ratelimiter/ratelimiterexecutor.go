@@ -7,13 +7,13 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// rateLimiterExecutor is a failsafe.PolicyExecutor that handles failures according to a RateLimiter.
+// rateLimiterExecutor is a failsafe.Executor that handles failures according to a RateLimiter.
 type rateLimiterExecutor[R any] struct {
-	*policy.BasePolicyExecutor[R]
+	*policy.BaseExecutor[R]
 	*rateLimiter[R]
 }
 
-var _ policy.PolicyExecutor[any] = &rateLimiterExecutor[any]{}
+var _ policy.Executor[any] = &rateLimiterExecutor[any]{}
 
 func (rle *rateLimiterExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.ExecutionResult[R]) func(failsafe.Execution[R]) *common.ExecutionResult[R] {
 	return func(exec failsafe.Execution[R]) *common.ExecutionResult[R] {

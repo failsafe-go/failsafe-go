@@ -133,11 +133,11 @@ func (b *bulkhead[R]) ReleasePermit() {
 
 func (b *bulkhead[R]) ToExecutor(policyIndex int, _ R) any {
 	be := &bulkheadExecutor[R]{
-		BasePolicyExecutor: &policy.BasePolicyExecutor[R]{
+		BaseExecutor: &policy.BaseExecutor[R]{
 			PolicyIndex: policyIndex,
 		},
 		bulkhead: b,
 	}
-	be.PolicyExecutor = be
+	be.Executor = be
 	return be
 }

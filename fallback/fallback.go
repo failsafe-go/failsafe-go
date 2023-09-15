@@ -125,12 +125,12 @@ func (c *fallbackConfig[R]) Build() Fallback[R] {
 
 func (fb *fallback[R]) ToExecutor(policyIndex int, _ R) any {
 	fbe := &fallbackExecutor[R]{
-		BasePolicyExecutor: &policy.BasePolicyExecutor[R]{
+		BaseExecutor: &policy.BaseExecutor[R]{
 			BaseFailurePolicy: fb.config.BaseFailurePolicy,
 			PolicyIndex:       policyIndex,
 		},
 		fallback: fb,
 	}
-	fbe.PolicyExecutor = fbe
+	fbe.Executor = fbe
 	return fbe
 }
