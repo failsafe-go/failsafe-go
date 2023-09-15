@@ -57,10 +57,6 @@ type CircuitBreakerBuilder[R any] interface {
 	// HalfOpenState to determine whether to transition back to OpenState or ClosedState.
 	WithFailureThresholdPeriod(failureThreshold uint, failureThresholdingPeriod time.Duration) CircuitBreakerBuilder[R]
 
-	// WithFailureExecutionThreshold configures the mininum number of executions that must occur when in the ClosedState or
-	// HalfOpenState before the circuit breaker can transition. This is often used with WithFailureThresholdPeriod.
-	WithFailureExecutionThreshold(failureExecutionThreshold uint) CircuitBreakerBuilder[R]
-
 	// WithFailureRateThreshold configures time based failure rate thresholding by setting the percentage rate of failures,
 	// from 1 to 100, that must occur within the rolling failureThresholdingPeriod when in a ClosedState in order to open the
 	// circuit. The number of executions must also exceed the failureExecutionThreshold within the failureThresholdingPeriod
@@ -167,11 +163,6 @@ func (c *circuitBreakerConfig[R]) WithFailureThresholdPeriod(failureThreshold ui
 	c.failureThresholdingCapacity = failureThreshold
 	c.failureExecutionThreshold = failureThreshold
 	c.failureThresholdingPeriod = failureThresholdingPeriod
-	return c
-}
-
-func (c *circuitBreakerConfig[R]) WithFailureExecutionThreshold(failureExecutionThreshold uint) CircuitBreakerBuilder[R] {
-	c.failureExecutionThreshold = failureExecutionThreshold
 	return c
 }
 

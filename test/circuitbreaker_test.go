@@ -129,7 +129,6 @@ func TestSthouldSupportTimeBasedFailureThresholding(t *testing.T) {
 	// Given
 	cb := circuitbreaker.Builder[bool]().
 		WithFailureThresholdPeriod(2, 200*time.Millisecond).
-		WithFailureExecutionThreshold(3).
 		WithDelay(0).
 		HandleResult(false).
 		Build()
