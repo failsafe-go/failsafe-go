@@ -8,7 +8,7 @@ import (
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/internal/util"
-	"github.com/failsafe-go/failsafe-go/spi"
+	"github.com/failsafe-go/failsafe-go/policy"
 )
 
 const defaultMaxRetries = 2
@@ -156,8 +156,8 @@ type RetryPolicyBuilder[R any] interface {
 }
 
 type retryPolicyConfig[R any] struct {
-	*spi.BaseFailurePolicy[R]
-	*spi.BaseDelayablePolicy[R]
+	*policy.BaseFailurePolicy[R]
+	*policy.BaseDelayablePolicy[R]
 
 	returnLastFailure bool
 	delayMin          time.Duration
@@ -193,8 +193,8 @@ func WithDefaults[R any]() RetryPolicy[R] {
 // allows 3 execution attempts max with no delay, unless configured otherwise.
 func Builder[R any]() RetryPolicyBuilder[R] {
 	return &retryPolicyConfig[R]{
-		BaseFailurePolicy:   &spi.BaseFailurePolicy[R]{},
-		BaseDelayablePolicy: &spi.BaseDelayablePolicy[R]{},
+		BaseFailurePolicy:   &policy.BaseFailurePolicy[R]{},
+		BaseDelayablePolicy: &policy.BaseDelayablePolicy[R]{},
 		maxRetries:          defaultMaxRetries,
 	}
 }
@@ -347,7 +347,7 @@ func (c *retryPolicyConfig[R]) isAbortable(result R, err error) bool {
 
 func (rp *retryPolicy[R]) ToExecutor(policyIndex int, _ R) any {
 	rpe := &retryPolicyExecutor[R]{
-		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
+		BasePolicyExecutor: &policy.BasePolicyExecutor[R]{
 			BaseFailurePolicy: rp.config.BaseFailurePolicy,
 			PolicyIndex:       policyIndex,
 		},

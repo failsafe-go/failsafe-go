@@ -5,7 +5,7 @@ import (
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/internal/util"
-	"github.com/failsafe-go/failsafe-go/spi"
+	"github.com/failsafe-go/failsafe-go/policy"
 )
 
 /*
@@ -81,8 +81,8 @@ type CircuitBreakerBuilder[R any] interface {
 }
 
 type circuitBreakerConfig[R any] struct {
-	*spi.BaseFailurePolicy[R]
-	*spi.BaseDelayablePolicy[R]
+	*policy.BaseFailurePolicy[R]
+	*policy.BaseDelayablePolicy[R]
 	clock                util.Clock
 	stateChangedListener func(StateChangedEvent)
 	openListener         func(StateChangedEvent)
@@ -115,8 +115,8 @@ func WithDefaults[R any]() CircuitBreaker[R] {
 // otherwise.
 func Builder[R any]() CircuitBreakerBuilder[R] {
 	return &circuitBreakerConfig[R]{
-		BaseFailurePolicy: &spi.BaseFailurePolicy[R]{},
-		BaseDelayablePolicy: &spi.BaseDelayablePolicy[R]{
+		BaseFailurePolicy: &policy.BaseFailurePolicy[R]{},
+		BaseDelayablePolicy: &policy.BaseDelayablePolicy[R]{
 			Delay: 1 * time.Minute,
 		},
 		clock:                       util.NewClock(),

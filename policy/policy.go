@@ -1,4 +1,4 @@
-package spi
+package policy
 
 import (
 	"errors"

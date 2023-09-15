@@ -144,12 +144,12 @@ func (e *executor[R]) GetWithExecution(fn func(exec Execution[R]) (R, error)) (R
 	})
 }
 
-// This type mirrors part of spi.ExecutionInternal, which we don't import here to avoid a cycle.
+// This type mirrors part of policy.ExecutionInternal, which we don't import here to avoid a cycle.
 type executionInternal[R any] interface {
 	Record(result *common.ExecutionResult[R]) *common.ExecutionResult[R]
 }
 
-// This type mirrors part of spi.PolicyExecutor, which we don't import here to avoid a cycle.
+// This type mirrors part of policy.PolicyExecutor, which we don't import here to avoid a cycle.
 type policyExecutor[R any] interface {
 	Apply(innerFn func(Execution[R]) *common.ExecutionResult[R]) func(Execution[R]) *common.ExecutionResult[R]
 }

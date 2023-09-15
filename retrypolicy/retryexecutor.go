@@ -8,12 +8,12 @@ import (
 	"github.com/failsafe-go/failsafe-go/common"
 	"github.com/failsafe-go/failsafe-go/internal"
 	"github.com/failsafe-go/failsafe-go/internal/util"
-	"github.com/failsafe-go/failsafe-go/spi"
+	"github.com/failsafe-go/failsafe-go/policy"
 )
 
 // retryPolicyExecutor is a failsafe.PolicyExecutor that handles failures according to a RetryPolicy.
 type retryPolicyExecutor[R any] struct {
-	*spi.BasePolicyExecutor[R]
+	*policy.BasePolicyExecutor[R]
 	*retryPolicy[R]
 
 	// Mutable state
@@ -22,13 +22,13 @@ type retryPolicyExecutor[R any] struct {
 	lastDelay       time.Duration // The last fixed, backoff, random, or computed delay time
 }
 
-func (rpe *retryPolicyExecutor[R]) PreExecute(exec spi.ExecutionInternal[R]) *common.ExecutionResult[R] {
+func (rpe *retryPolicyExecutor[R]) PreExecute(exec policy.ExecutionInternal[R]) *common.ExecutionResult[R] {
 	return rpe.BasePolicyExecutor.PreExecute(exec)
 }
 
 func (rpe *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.ExecutionResult[R]) func(failsafe.Execution[R]) *common.ExecutionResult[R] {
 	return func(exec failsafe.Execution[R]) *common.ExecutionResult[R] {
-		execInternal := exec.(spi.ExecutionInternal[R])
+		execInternal := exec.(policy.ExecutionInternal[R])
 		for {
 			result := innerFn(exec)
 			if rpe.retriesExceeded || execInternal.IsCanceledForPolicy(rpe.PolicyIndex) {
@@ -74,7 +74,7 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *co
 }
 
 // OnFailure updates failedAttempts and retriesExceeded, and calls event listeners
-func (rpe *retryPolicyExecutor[R]) OnFailure(exec spi.ExecutionInternal[R], result *common.ExecutionResult[R]) *common.ExecutionResult[R] {
+func (rpe *retryPolicyExecutor[R]) OnFailure(exec policy.ExecutionInternal[R], result *common.ExecutionResult[R]) *common.ExecutionResult[R] {
 	rpe.BasePolicyExecutor.OnFailure(exec, result)
 
 	rpe.failedAttempts++

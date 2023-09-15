@@ -1,4 +1,4 @@
-// Package policytesting is needed to avoid a circular dependency with the spi package.
+// Package policytesting is needed to avoid a circular dependency with the policy package.
 package policytesting
 
 import (

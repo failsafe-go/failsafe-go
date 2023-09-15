@@ -1,4 +1,4 @@
-package spi
+package policy
 
 import (
 	"github.com/failsafe-go/failsafe-go"
@@ -8,8 +8,6 @@ import (
 // PolicyExecutor handles execution and execution results according to a policy. May contain pre-execution and
 // post-execution behaviors. Each PolicyExecutor makes its own determination about whether an execution result is a
 // success or failure.
-//
-// Part of the Failsafe-go SPI.
 type PolicyExecutor[R any] interface {
 	// PreExecute is called before execution to return an alternative result or error, such as if execution is not allowed or
 	// needed.

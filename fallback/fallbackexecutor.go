@@ -3,21 +3,21 @@ package fallback
 import (
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/common"
-	"github.com/failsafe-go/failsafe-go/spi"
+	"github.com/failsafe-go/failsafe-go/policy"
 )
 
 // fallbackExecutor is a failsafe.PolicyExecutor that handles failures according to a Fallback.
 type fallbackExecutor[R any] struct {
-	*spi.BasePolicyExecutor[R]
+	*policy.BasePolicyExecutor[R]
 	*fallback[R]
 }
 
-var _ spi.PolicyExecutor[any] = &fallbackExecutor[any]{}
+var _ policy.PolicyExecutor[any] = &fallbackExecutor[any]{}
 
 // Apply performs an execution by calling the innerFn, applying a fallback if it fails, and calling post-execute.
 func (e *fallbackExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.ExecutionResult[R]) func(failsafe.Execution[R]) *common.ExecutionResult[R] {
 	return func(exec failsafe.Execution[R]) *common.ExecutionResult[R] {
-		execInternal := exec.(spi.ExecutionInternal[R])
+		execInternal := exec.(policy.ExecutionInternal[R])
 		result := innerFn(exec)
 		if execInternal.IsCanceledForPolicy(e.PolicyIndex) {
 			return result

@@ -8,7 +8,7 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"github.com/failsafe-go/failsafe-go"
-	"github.com/failsafe-go/failsafe-go/spi"
+	"github.com/failsafe-go/failsafe-go/policy"
 )
 
 // ErrBulkheadFull is returned when an execution is attempted against a Bulkhead that is full.
@@ -133,7 +133,7 @@ func (b *bulkhead[R]) ReleasePermit() {
 
 func (b *bulkhead[R]) ToExecutor(policyIndex int, _ R) any {
 	be := &bulkheadExecutor[R]{
-		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
+		BasePolicyExecutor: &policy.BasePolicyExecutor[R]{
 			PolicyIndex: policyIndex,
 		},
 		bulkhead: b,

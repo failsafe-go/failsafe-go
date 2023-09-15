@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
-	"github.com/failsafe-go/failsafe-go/spi"
+	"github.com/failsafe-go/failsafe-go/policy"
 )
 
 // ErrTimeoutExceeded is returned when an execution exceeds a configured timeout.
@@ -60,7 +60,7 @@ func (c *timeoutConfig[R]) Build() Timeout[R] {
 
 func (t *timeout[R]) ToExecutor(policyIndex int, _ R) any {
 	te := &timeoutExecutor[R]{
-		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
+		BasePolicyExecutor: &policy.BasePolicyExecutor[R]{
 			PolicyIndex: policyIndex,
 		},
 		timeout: t,

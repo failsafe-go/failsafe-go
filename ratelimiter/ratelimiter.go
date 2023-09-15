@@ -7,7 +7,7 @@ import (
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/internal/util"
-	"github.com/failsafe-go/failsafe-go/spi"
+	"github.com/failsafe-go/failsafe-go/policy"
 )
 
 // ErrRateLimitExceeded is returned when an execution exceeds a configured rate limit.
@@ -341,7 +341,7 @@ func (r *rateLimiter[R]) TryReservePermits(requestedPermits int, maxWaitTime tim
 
 func (r *rateLimiter[R]) ToExecutor(policyIndex int, _ R) any {
 	rle := &rateLimiterExecutor[R]{
-		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
+		BasePolicyExecutor: &policy.BasePolicyExecutor[R]{
 			PolicyIndex: policyIndex,
 		},
 		rateLimiter: r,

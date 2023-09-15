@@ -8,21 +8,21 @@ import (
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/common"
 	"github.com/failsafe-go/failsafe-go/internal"
-	"github.com/failsafe-go/failsafe-go/spi"
+	"github.com/failsafe-go/failsafe-go/policy"
 )
 
 // timeoutExecutor is a failsafe.PolicyExecutor that handles failures according to a Timeout.
 type timeoutExecutor[R any] struct {
-	*spi.BasePolicyExecutor[R]
+	*policy.BasePolicyExecutor[R]
 	*timeout[R]
 }
 
-var _ spi.PolicyExecutor[any] = &timeoutExecutor[any]{}
+var _ policy.PolicyExecutor[any] = &timeoutExecutor[any]{}
 
 func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.ExecutionResult[R]) func(failsafe.Execution[R]) *common.ExecutionResult[R] {
 	// This func sets up a race between a timeout and the innerFn returning
 	return func(exec failsafe.Execution[R]) *common.ExecutionResult[R] {
-		execInternal := exec.(spi.ExecutionInternal[R])
+		execInternal := exec.(policy.ExecutionInternal[R])
 		var result atomic.Pointer[common.ExecutionResult[R]]
 
 		timer := time.AfterFunc(e.config.timeoutDelay, func() {

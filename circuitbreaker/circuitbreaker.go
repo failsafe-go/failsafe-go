@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/failsafe-go/failsafe-go"
-	"github.com/failsafe-go/failsafe-go/spi"
+	"github.com/failsafe-go/failsafe-go/policy"
 )
 
 // ErrCircuitBreakerOpen is returned when an execution is attempted against a circuit breaker that is open.
@@ -252,7 +252,7 @@ func (cb *circuitBreaker[R]) RecordSuccess() {
 
 func (cb *circuitBreaker[R]) ToExecutor(policyIndex int, _ R) any {
 	cbe := &circuitBreakerExecutor[R]{
-		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
+		BasePolicyExecutor: &policy.BasePolicyExecutor[R]{
 			BaseFailurePolicy: cb.config.BaseFailurePolicy,
 			PolicyIndex:       policyIndex,
 		},

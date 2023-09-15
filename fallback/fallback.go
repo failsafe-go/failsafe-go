@@ -2,7 +2,7 @@ package fallback
 
 import (
 	"github.com/failsafe-go/failsafe-go"
-	"github.com/failsafe-go/failsafe-go/spi"
+	"github.com/failsafe-go/failsafe-go/policy"
 )
 
 // Fallback is a Policy that handles failures using a fallback function, result, or error.
@@ -35,7 +35,7 @@ type FallbackBuilder[R any] interface {
 }
 
 type fallbackConfig[R any] struct {
-	*spi.BaseFailurePolicy[R]
+	*policy.BaseFailurePolicy[R]
 	fn                 func(failsafe.Execution[R]) (R, error)
 	onFallbackExecuted func(failsafe.ExecutionCompletedEvent[R])
 }
@@ -81,7 +81,7 @@ func BuilderWithError[R any](err error) FallbackBuilder[R] {
 // handle failed executions.
 func BuilderWithFn[R any](fallbackFn func(exec failsafe.Execution[R]) (R, error)) FallbackBuilder[R] {
 	return &fallbackConfig[R]{
-		BaseFailurePolicy: &spi.BaseFailurePolicy[R]{},
+		BaseFailurePolicy: &policy.BaseFailurePolicy[R]{},
 		fn:                fallbackFn,
 	}
 }
@@ -125,7 +125,7 @@ func (c *fallbackConfig[R]) Build() Fallback[R] {
 
 func (fb *fallback[R]) ToExecutor(policyIndex int, _ R) any {
 	fbe := &fallbackExecutor[R]{
-		BasePolicyExecutor: &spi.BasePolicyExecutor[R]{
+		BasePolicyExecutor: &policy.BasePolicyExecutor[R]{
 			BaseFailurePolicy: fb.config.BaseFailurePolicy,
 			PolicyIndex:       policyIndex,
 		},
