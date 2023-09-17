@@ -4,6 +4,7 @@ package policytesting
 import (
 	"fmt"
 	"reflect"
+	"sync/atomic"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
@@ -13,28 +14,6 @@ import (
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
 	"github.com/failsafe-go/failsafe-go/timeout"
 )
-
-type Stats struct {
-	ExecutionCount int
-	SuccessCount   int
-	FailureCount   int
-
-	// Retry specific stats
-	RetryCount          int
-	RetrieExceededCount int
-	AbortCount          int
-}
-
-func (s *Stats) Reset() {
-	s.ExecutionCount = 0
-	s.SuccessCount = 0
-	s.FailureCount = 0
-
-	// Retry specific stats
-	s.RetryCount = 0
-	s.RetrieExceededCount = 0
-	s.AbortCount = 0
-}
 
 func ResetRateLimiter[R any](cb ratelimiter.RateLimiter[R]) {
 	cbElem := reflect.ValueOf(cb)
@@ -62,17 +41,17 @@ func WithRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *S
 
 func withRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *Stats, withLogging bool) retrypolicy.RetryPolicyBuilder[R] {
 	rp.OnRetry(func(e failsafe.ExecutionEvent[R]) {
-		stats.RetryCount++
+		stats.retryCount.Add(1)
 		if withLogging {
 			fmt.Println(fmt.Sprintf("%s %p retrying [result: %v, error: %s]", testutil.GetType(rp), rp, e.LastResult(), e.LastError()))
 		}
 	}).OnRetriesExceeded(func(e failsafe.ExecutionEvent[R]) {
-		stats.RetrieExceededCount++
+		stats.retriesExceededCount.Add(1)
 		if withLogging {
 			fmt.Println(fmt.Sprintf("%s %p retries exceeded", testutil.GetType(rp), rp))
 		}
 	}).OnAbort(func(e failsafe.ExecutionEvent[R]) {
-		stats.AbortCount++
+		stats.abortCount.Add(1)
 		if withLogging {
 			fmt.Println(fmt.Sprintf("%s %p abort", testutil.GetType(rp), rp))
 		}
@@ -113,7 +92,7 @@ func withBreakerStatsAndLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R], 
 
 func WithTimeoutStatsAndLogs[R any](to timeout.TimeoutBuilder[R], stats *Stats) timeout.TimeoutBuilder[R] {
 	to.OnTimeoutExceeded(func(e failsafe.ExecutionCompletedEvent[R]) {
-		stats.ExecutionCount++
+		stats.executionCount.Add(1)
 		fmt.Println(fmt.Sprintf("%s %p exceeded [attempts: %d, executions: %d]",
 			testutil.GetType(to), to, e.Attempts(), e.Executions()))
 	})
@@ -122,7 +101,7 @@ func WithTimeoutStatsAndLogs[R any](to timeout.TimeoutBuilder[R], stats *Stats) 
 
 func WithFallbackStatsAndLogs[R any](fb fallback.FallbackBuilder[R], stats *Stats) fallback.FallbackBuilder[R] {
 	fb.OnFallbackExecuted(func(e failsafe.ExecutionCompletedEvent[R]) {
-		stats.ExecutionCount++
+		stats.executionCount.Add(1)
 		fmt.Println(fmt.Sprintf("%s %p complete [result: %v, error: %s, attempts: %d, executions: %d]",
 			testutil.GetType(fb), fb, e.Result, e.Error, e.Attempts(), e.Executions()))
 	})
@@ -131,19 +110,65 @@ func WithFallbackStatsAndLogs[R any](fb fallback.FallbackBuilder[R], stats *Stat
 
 func withStatsAndLogs[P any, R any](policy failsafe.FailurePolicyBuilder[P, R], stats *Stats, withLogging bool) {
 	policy.OnSuccess(func(e failsafe.ExecutionEvent[R]) {
-		stats.ExecutionCount++
-		stats.SuccessCount++
+		stats.executionCount.Add(1)
+		stats.successCount.Add(1)
 		if withLogging {
 			fmt.Println(fmt.Sprintf("%s %p success [result: %v, attempts: %d, executions: %d]",
 				testutil.GetType(policy), policy, e.LastResult(), e.Attempts(), e.Executions()))
 		}
 	})
 	policy.OnFailure(func(e failsafe.ExecutionEvent[R]) {
-		stats.ExecutionCount++
-		stats.FailureCount++
+		stats.executionCount.Add(1)
+		stats.failureCount.Add(1)
 		if withLogging {
 			fmt.Println(fmt.Sprintf("%s %p failure [result: %v, error: %s, attempts: %d, executions: %d]",
 				testutil.GetType(policy), policy, e.LastResult(), e.LastError(), e.Attempts(), e.Executions()))
 		}
 	})
+}
+
+type Stats struct {
+	executionCount atomic.Int32
+	successCount   atomic.Int32
+	failureCount   atomic.Int32
+
+	// Retry specific stats
+	retryCount           atomic.Int32
+	retriesExceededCount atomic.Int32
+	abortCount           atomic.Int32
+}
+
+func (s *Stats) ExecutionCount() int {
+	return int(s.executionCount.Load())
+}
+
+func (s *Stats) SuccessCount() int {
+	return int(s.successCount.Load())
+}
+
+func (s *Stats) FailureCount() int {
+	return int(s.failureCount.Load())
+}
+
+func (s *Stats) RetryCount() int {
+	return int(s.retryCount.Load())
+}
+
+func (s *Stats) RetriesExceededCount() int {
+	return int(s.retriesExceededCount.Load())
+}
+
+func (s *Stats) AbortCount() int {
+	return int(s.abortCount.Load())
+}
+
+func (s *Stats) Reset() {
+	s.executionCount.Store(0)
+	s.successCount.Store(0)
+	s.failureCount.Store(0)
+
+	// Retry specific stats
+	s.retryCount.Store(0)
+	s.retriesExceededCount.Store(0)
+	s.abortCount.Store(0)
 }

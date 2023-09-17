@@ -135,13 +135,6 @@ func (e *execution[_]) Canceled() <-chan any {
 	return e.canceled
 }
 
-func (e *execution[R]) ExecutionForResult(result *common.PolicyResult[R]) Execution[R] {
-	c := e
-	c.lastResult = result.Result
-	c.lastError = result.Error
-	return c
-}
-
 func (e *execution[R]) InitializeAttempt(policyIndex int) bool {
 	// Lock to guard against a race with a Timeout canceling the execution
 	e.mtx.Lock()
@@ -194,6 +187,22 @@ func (e *execution[R]) IsCanceledForPolicy(policyIndex int) bool {
 // Requires locking externally.
 func (e *execution[R]) isCanceledForPolicy(policyIndex int) bool {
 	return *e.canceledIndex > policyIndex
+}
+
+func (e *execution[R]) CopyWithResult(result *common.PolicyResult[R]) Execution[R] {
+	e.mtx.Lock()
+	c := *e
+	e.mtx.Unlock()
+	c.lastResult = result.Result
+	c.lastError = result.Error
+	return &c
+}
+
+func (e *execution[R]) Copy() Execution[R] {
+	e.mtx.Lock()
+	c := *e
+	e.mtx.Unlock()
+	return &c
 }
 
 func (e *execution[R]) Result() *common.PolicyResult[R] {

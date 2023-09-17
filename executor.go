@@ -241,8 +241,11 @@ func (e *executor[R]) executeAsync(fn func(exec Execution[R]) (R, error)) Execut
 
 func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error)) *common.PolicyResult[R] {
 	outerFn := func(exec Execution[R]) *common.PolicyResult[R] {
+		ex := exec.(*execution[R])
 		// Copy exec before passing to user provided func
-		execCopy := *(exec.(*execution[R]))
+		ex.mtx.Lock()
+		execCopy := *ex
+		ex.mtx.Unlock()
 		result, err := fn(&execCopy)
 		er := &common.PolicyResult[R]{
 			Result:     result,
@@ -251,8 +254,7 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error)) *common.Pol
 			Success:    true,
 			SuccessAll: true,
 		}
-		execInternal := exec.(executionInternal[R])
-		r := execInternal.Record(er)
+		r := exec.(executionInternal[R]).Record(er)
 		return r
 	}
 

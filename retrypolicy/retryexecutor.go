@@ -44,7 +44,7 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *co
 			delay := rpe.getDelay(exec)
 			if rpe.config.onRetryScheduled != nil {
 				rpe.config.onRetryScheduled(failsafe.ExecutionScheduledEvent[R]{
-					ExecutionAttempt: execInternal.ExecutionForResult(result),
+					ExecutionAttempt: execInternal.CopyWithResult(result),
 					Delay:            delay,
 				})
 			}
@@ -66,7 +66,7 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *co
 			// Call retry listener
 			if rpe.config.onRetry != nil {
 				rpe.config.onRetry(failsafe.ExecutionEvent[R]{
-					ExecutionAttempt: execInternal.ExecutionForResult(result),
+					ExecutionAttempt: execInternal.CopyWithResult(result),
 				})
 			}
 		}
@@ -87,11 +87,11 @@ func (rpe *retryPolicyExecutor[R]) OnFailure(exec policy.ExecutionInternal[R], r
 
 	// Call listeners
 	if isAbortable && rpe.config.onAbort != nil {
-		rpe.config.onAbort(failsafe.ExecutionEvent[R]{ExecutionAttempt: exec})
+		rpe.config.onAbort(failsafe.ExecutionEvent[R]{ExecutionAttempt: exec.Copy()})
 	}
 	if rpe.retriesExceeded {
 		if !isAbortable && rpe.config.onRetriesExceeded != nil {
-			rpe.config.onRetriesExceeded(failsafe.ExecutionEvent[R]{ExecutionAttempt: exec})
+			rpe.config.onRetriesExceeded(failsafe.ExecutionEvent[R]{ExecutionAttempt: exec.Copy()})
 		}
 		if rpe.config.returnLastFailure {
 			return result.WithComplete(false, false)

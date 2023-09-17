@@ -173,8 +173,8 @@ func TestRetryPolicyRateLimiter(t *testing.T) {
 	testutil.TestGetFailure(t, setup, failsafe.NewExecutor[any](rp, rl),
 		testutil.GetWithExecutionFn[any](nil, testutil.ErrInvalidState),
 		7, 3, ratelimiter.ErrRateLimitExceeded)
-	assert.Equal(t, 7, rpStats.ExecutionCount)
-	assert.Equal(t, 6, rpStats.RetryCount)
+	assert.Equal(t, 7, rpStats.ExecutionCount())
+	assert.Equal(t, 6, rpStats.RetryCount())
 }
 
 // Fallback -> RetryPolicy -> CircuitBreaker
@@ -223,7 +223,7 @@ func TestRetryPolicyTimeout(t *testing.T) {
 			}
 			return "success", nil
 		}, 3, 3, "success")
-	assert.Equal(t, 2, toStats.ExecutionCount)
+	assert.Equal(t, 2, toStats.ExecutionCount())
 }
 
 // CircuitBreaker -> Timeout

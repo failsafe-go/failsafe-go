@@ -81,7 +81,7 @@ func TestShouldCompleteWhenMaxDurationExceeded(t *testing.T) {
 	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[bool](rp),
 		func(exec failsafe.Execution[bool]) (bool, error) {
 			time.Sleep(120 * time.Millisecond)
-			return false, errors.New("Asdf")
+			return false, errors.New("test")
 		},
 		1, 1, &retrypolicy.RetriesExceededError{})
 }

@@ -80,7 +80,7 @@ func (e *BaseExecutor[R]) IsFailure(result R, err error) bool {
 func (e *BaseExecutor[R]) OnSuccess(exec ExecutionInternal[R], result *common.PolicyResult[R]) {
 	if e.BaseFailurePolicy != nil && e.onSuccess != nil {
 		e.onSuccess(failsafe.ExecutionEvent[R]{
-			ExecutionAttempt: exec.ExecutionForResult(result),
+			ExecutionAttempt: exec.CopyWithResult(result),
 		})
 	}
 }
@@ -88,7 +88,7 @@ func (e *BaseExecutor[R]) OnSuccess(exec ExecutionInternal[R], result *common.Po
 func (e *BaseExecutor[R]) OnFailure(exec ExecutionInternal[R], result *common.PolicyResult[R]) *common.PolicyResult[R] {
 	if e.BaseFailurePolicy != nil && e.onFailure != nil {
 		e.onFailure(failsafe.ExecutionEvent[R]{
-			ExecutionAttempt: exec.ExecutionForResult(result),
+			ExecutionAttempt: exec.CopyWithResult(result),
 		})
 	}
 	return result

@@ -26,14 +26,14 @@ func (e *fallbackExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.
 		result = e.PostExecute(execInternal, result)
 		if !result.Success {
 			// Call fallback fn
-			fallbackResult, fallbackError := e.config.fn(execInternal.ExecutionForResult(result))
+			fallbackResult, fallbackError := e.config.fn(execInternal.CopyWithResult(result))
 			if execInternal.IsCanceledForPolicy(e.PolicyIndex) {
 				return result
 			}
 
 			if e.config.onFallbackExecuted != nil {
 				e.config.onFallbackExecuted(failsafe.ExecutionCompletedEvent[R]{
-					ExecutionStats: exec,
+					ExecutionStats: execInternal.Copy(),
 					Result:         fallbackResult,
 					Error:          fallbackError,
 				})
