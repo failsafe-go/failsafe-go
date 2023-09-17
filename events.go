@@ -27,7 +27,7 @@ type ExecutionCompletedEvent[R any] struct {
 	Error error
 }
 
-func newExecutionCompletedEvent[R any](er *common.ExecutionResult[R], stats ExecutionStats) ExecutionCompletedEvent[R] {
+func newExecutionCompletedEvent[R any](er *common.PolicyResult[R], stats ExecutionStats) ExecutionCompletedEvent[R] {
 	return ExecutionCompletedEvent[R]{
 		Result:         er.Result,
 		Error:          er.Error,

@@ -1,12 +1,14 @@
 package test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
+	"github.com/failsafe-go/failsafe-go/internal/policytesting"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
 )
 
@@ -30,8 +32,13 @@ func TestCircuitBreakerCircuitBreaker(t *testing.T) {
 	// Given
 	cb1 := circuitbreaker.Builder[any]().HandleErrors(testutil.ErrInvalidState).Build()
 	cb2 := circuitbreaker.Builder[any]().HandleErrors(testutil.ErrInvalidArgument).Build()
+	setup := func() context.Context {
+		policytesting.ResetCircuitBreaker(cb1)
+		policytesting.ResetCircuitBreaker(cb2)
+		return nil
+	}
 
-	testutil.TestRunFailure[any](t, failsafe.NewExecutor[any](cb2, cb1),
+	testutil.TestRunFailure[any](t, setup, failsafe.NewExecutor[any](cb2, cb1),
 		func(execution failsafe.Execution[any]) error {
 			return testutil.ErrInvalidState
 		},
@@ -41,8 +48,7 @@ func TestCircuitBreakerCircuitBreaker(t *testing.T) {
 	assert.True(t, cb1.IsOpen())
 	assert.True(t, cb2.IsClosed())
 
-	cb1.Close()
-	testutil.TestRunFailure[any](t, failsafe.NewExecutor[any](cb2, cb1),
+	testutil.TestRunFailure[any](t, setup, failsafe.NewExecutor[any](cb2, cb1),
 		func(execution failsafe.Execution[any]) error {
 			return testutil.ErrInvalidArgument
 		},

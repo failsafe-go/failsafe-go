@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -20,7 +21,7 @@ func TestShouldRejectInitialExecutionWhenCircuitOpen(t *testing.T) {
 	cb.Open()
 
 	// When / Then
-	testutil.TestRunFailure(t, failsafe.NewExecutor[any](cb),
+	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[any](cb),
 		func(execution failsafe.Execution[any]) error {
 			return testutil.ErrInvalidArgument
 		},
@@ -57,8 +58,8 @@ func TestCircuitBreakerWithoutConditions(t *testing.T) {
 	// Given
 	cb := circuitbreaker.Builder[bool]().WithDelay(0).Build()
 
-	// When / Then
-	testutil.TestRunFailure(t, failsafe.NewExecutor[bool](cb),
+	//	When / Then
+	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[bool](cb),
 		func(execution failsafe.Execution[bool]) error {
 			return testutil.ErrInvalidArgument
 		},
@@ -66,11 +67,15 @@ func TestCircuitBreakerWithoutConditions(t *testing.T) {
 	assert.True(t, cb.IsOpen())
 
 	// Given
+	var counter int
 	retryPolicy := retrypolicy.WithDefaults[bool]()
-	counter := 0
+	setup := func() context.Context {
+		counter = 0
+		return nil
+	}
 
 	// When / Then
-	testutil.TestGetSuccess[bool](t, failsafe.NewExecutor[bool](retryPolicy, cb),
+	testutil.TestGetSuccess[bool](t, setup, failsafe.NewExecutor[bool](retryPolicy, cb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			counter++
 			if counter < 3 {
@@ -95,7 +100,7 @@ func TestShouldReturnErrCircuitBreakerOpenAfterFailuresExceeded(t *testing.T) {
 	failsafe.Get(testutil.GetFalseFn, cb)
 
 	// Then
-	testutil.TestGetFailure[bool](t, failsafe.NewExecutor[bool](cb),
+	testutil.TestGetFailure[bool](t, nil, failsafe.NewExecutor[bool](cb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return true, nil
 		},
@@ -106,13 +111,15 @@ func TestShouldReturnErrCircuitBreakerOpenAfterFailuresExceeded(t *testing.T) {
 // Tests a scenario where CircuitBreaker rejects some retried executions, which prevents the user's Supplier from being called.
 func TestRejectedWithRetries(t *testing.T) {
 	rpStats := &policytesting.Stats{}
-	cbStats := &policytesting.Stats{}
 	rp := policytesting.WithRetryStats(retrypolicy.Builder[any]().WithMaxAttempts(7), rpStats).Build()
-	cb := policytesting.WithBreakerStats(circuitbreaker.Builder[any]().
-		WithFailureThreshold(3), cbStats).
-		Build()
+	cb := circuitbreaker.Builder[any]().WithFailureThreshold(3).Build()
+	setup := func() context.Context {
+		policytesting.ResetCircuitBreaker(cb)
+		rpStats.Reset()
+		return nil
+	}
 
-	testutil.TestRunFailure(t, failsafe.NewExecutor[any](rp, cb),
+	testutil.TestRunFailure(t, setup, failsafe.NewExecutor[any](rp, cb),
 		func(execution failsafe.Execution[any]) error {
 			fmt.Println("Executing")
 			return testutil.ErrInvalidArgument

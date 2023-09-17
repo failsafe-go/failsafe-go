@@ -65,7 +65,7 @@ type execution[R any] struct {
 	executions       int
 	startTime        time.Time
 	attemptStartTime time.Time
-	result           *common.ExecutionResult[R]
+	result           *common.PolicyResult[R]
 	ctx              context.Context
 	mtx              *sync.Mutex
 
@@ -135,7 +135,7 @@ func (e *execution[_]) Canceled() <-chan any {
 	return e.canceled
 }
 
-func (e *execution[R]) ExecutionForResult(result *common.ExecutionResult[R]) Execution[R] {
+func (e *execution[R]) ExecutionForResult(result *common.PolicyResult[R]) Execution[R] {
 	c := e
 	c.lastResult = result.Result
 	c.lastError = result.Error
@@ -158,7 +158,7 @@ func (e *execution[R]) InitializeAttempt(policyIndex int) bool {
 	return true
 }
 
-func (e *execution[R]) Record(result *common.ExecutionResult[R]) *common.ExecutionResult[R] {
+func (e *execution[R]) Record(result *common.PolicyResult[R]) *common.PolicyResult[R] {
 	e.mtx.Lock()
 	defer e.mtx.Unlock()
 	e.executions++
@@ -170,7 +170,7 @@ func (e *execution[R]) Record(result *common.ExecutionResult[R]) *common.Executi
 	return e.result
 }
 
-func (e *execution[R]) Cancel(policyIndex int, result *common.ExecutionResult[R]) {
+func (e *execution[R]) Cancel(policyIndex int, result *common.PolicyResult[R]) {
 	e.mtx.Lock()
 	defer e.mtx.Unlock()
 	if e.isCanceledForPolicy(-1) {
@@ -196,7 +196,7 @@ func (e *execution[R]) isCanceledForPolicy(policyIndex int) bool {
 	return *e.canceledIndex > policyIndex
 }
 
-func (e *execution[R]) Result() *common.ExecutionResult[R] {
+func (e *execution[R]) Result() *common.PolicyResult[R] {
 	e.mtx.Lock()
 	defer e.mtx.Unlock()
 	return e.result

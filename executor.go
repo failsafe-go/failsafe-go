@@ -9,13 +9,13 @@ import (
 )
 
 // Run executes the fn, with failures being handled by the policies, until successful or until the policies are exceeded.
-func Run(fn func() error, policies ...Policy[any]) (err error) {
+func Run(fn func() error, policies ...Policy[any]) error {
 	return NewExecutor[any](policies...).Run(fn)
 }
 
 // RunWithExecution executes the fn, with failures being handled by the policies, until successful or until the policies
 // are exceeded.
-func RunWithExecution(fn func(exec Execution[any]) error, policies ...Policy[any]) (err error) {
+func RunWithExecution(fn func(exec Execution[any]) error, policies ...Policy[any]) error {
 	return NewExecutor[any](policies...).RunWithExecution(fn)
 }
 
@@ -31,9 +31,33 @@ func GetWithExecution[R any](fn func(exec Execution[R]) (R, error), policies ...
 	return NewExecutor[R](policies...).GetWithExecution(fn)
 }
 
-// Executor handles failures according to configured policies.
+// RunAsync executes the fn in a goroutine, with failures being handled by the policies, until successful or until the
+// policies are exceeded.
+func RunAsync(fn func() error, policies ...Policy[any]) ExecutionResult[any] {
+	return NewExecutor[any](policies...).RunAsync(fn)
+}
+
+// RunWithExecutionAsync executes the fn in a goroutine, with failures being handled by the policies, until successful or
+// until the policies are exceeded.
+func RunWithExecutionAsync(fn func(exec Execution[any]) error, policies ...Policy[any]) ExecutionResult[any] {
+	return NewExecutor[any](policies...).RunWithExecutionAsync(fn)
+}
+
+// GetAsync executes the fn in a goroutine, with failures being handled by the policies, until a successful result is returned
+// or the policies are exceeded.
+func GetAsync[R any](fn func() (R, error), policies ...Policy[R]) ExecutionResult[R] {
+	return NewExecutor[R](policies...).GetAsync(fn)
+}
+
+// GetWithExecutionAsync executes the fn in a goroutine, with failures being handled by the policies, until a successful
+// result is returned or the policies are exceeded.
+func GetWithExecutionAsync[R any](fn func(exec Execution[R]) (R, error), policies ...Policy[R]) ExecutionResult[R] {
+	return NewExecutor[R](policies...).GetWithExecutionAsync(fn)
+}
+
+// Executor handles failures according to configured policies. See [NewExecutor] for details.
 //
-// See [NewExecutor] for details.
+// This type is concurrency safe.
 type Executor[R any] interface {
 	// WithContext returns a new copy of the Executor with the ctx configured. Any executions created with the resulting
 	// Executor will be canceled when the ctx is done. Executions can cooperate with cancellation by checking
@@ -55,13 +79,13 @@ type Executor[R any] interface {
 	// Run executes the fn until successful or until the configured policies are exceeded.
 	//
 	// Any panic causes the execution to stop immediately without calling any event listeners.
-	Run(fn func() error) (err error)
+	Run(fn func() error) error
 
 	// RunWithExecution executes the fn until successful or until the configured policies are exceeded, while providing an
 	// Execution to the fn.
 	//
 	// Any panic causes the execution to stop immediately without calling any event listeners.
-	RunWithExecution(fn func(exec Execution[R]) error) (err error)
+	RunWithExecution(fn func(exec Execution[R]) error) error
 
 	// Get executes the fn until a successful result is returned or the configured policies are exceeded.
 	//
@@ -73,6 +97,28 @@ type Executor[R any] interface {
 	//
 	// Any panic causes the execution to stop immediately without calling any event listeners.
 	GetWithExecution(fn func(exec Execution[R]) (R, error)) (R, error)
+
+	// RunAsync executes the fn in a goroutine until successful or until the configured policies are exceeded.
+	//
+	// Any panic causes the execution to stop immediately without calling any event listeners.
+	RunAsync(fn func() error) ExecutionResult[R]
+
+	// RunWithExecutionAsync executes the fn in a goroutine until successful or until the configured policies are exceeded,
+	// while providing an Execution to the fn.
+	//
+	// Any panic causes the execution to stop immediately without calling any event listeners.
+	RunWithExecutionAsync(fn func(exec Execution[R]) error) ExecutionResult[R]
+
+	// GetAsync executes the fn in a goroutine until a successful result is returned or the configured policies are exceeded.
+	//
+	// Any panic causes the execution to stop immediately without calling any event listeners.
+	GetAsync(fn func() (R, error)) ExecutionResult[R]
+
+	// GetWithExecutionAsync executes the fn in a goroutine until a successful result is returned or the configured policies
+	// are exceeded, while providing an Execution to the fn.
+	//
+	// Any panic causes the execution to stop immediately without calling any event listeners.
+	GetWithExecutionAsync(fn func(exec Execution[R]) (R, error)) ExecutionResult[R]
 }
 
 type executor[R any] struct {
@@ -119,47 +165,86 @@ func (e *executor[R]) OnFailure(listener func(ExecutionCompletedEvent[R])) Execu
 }
 
 func (e *executor[R]) Run(fn func() error) error {
-	_, err := e.execute(func(exec Execution[R]) (R, error) {
+	_, err := e.executeSync(func(_ Execution[R]) (R, error) {
 		return *(new(R)), fn()
 	})
 	return err
 }
 
 func (e *executor[R]) RunWithExecution(fn func(exec Execution[R]) error) error {
-	_, err := e.execute(func(exec Execution[R]) (R, error) {
+	_, err := e.executeSync(func(exec Execution[R]) (R, error) {
 		return *(new(R)), fn(exec)
 	})
 	return err
 }
 
 func (e *executor[R]) Get(fn func() (R, error)) (R, error) {
-	return e.execute(func(exec Execution[R]) (R, error) {
+	return e.executeSync(func(_ Execution[R]) (R, error) {
 		return fn()
 	})
 }
 
 func (e *executor[R]) GetWithExecution(fn func(exec Execution[R]) (R, error)) (R, error) {
-	return e.execute(func(exec Execution[R]) (R, error) {
+	return e.executeSync(func(exec Execution[R]) (R, error) {
+		return fn(exec)
+	})
+}
+
+func (e *executor[R]) RunAsync(fn func() error) ExecutionResult[R] {
+	return e.executeAsync(func(_ Execution[R]) (R, error) {
+		return *(new(R)), fn()
+	})
+}
+
+func (e *executor[R]) RunWithExecutionAsync(fn func(exec Execution[R]) error) ExecutionResult[R] {
+	return e.executeAsync(func(exec Execution[R]) (R, error) {
+		return *(new(R)), fn(exec)
+	})
+}
+
+func (e *executor[R]) GetAsync(fn func() (R, error)) ExecutionResult[R] {
+	return e.executeAsync(func(_ Execution[R]) (R, error) {
+		return fn()
+	})
+}
+
+func (e *executor[R]) GetWithExecutionAsync(fn func(exec Execution[R]) (R, error)) ExecutionResult[R] {
+	return e.executeAsync(func(exec Execution[R]) (R, error) {
 		return fn(exec)
 	})
 }
 
 // This type mirrors part of policy.ExecutionInternal, which we don't import here to avoid a cycle.
 type executionInternal[R any] interface {
-	Record(result *common.ExecutionResult[R]) *common.ExecutionResult[R]
+	Record(result *common.PolicyResult[R]) *common.PolicyResult[R]
 }
 
 // This type mirrors part of policy.Executor, which we don't import here to avoid a cycle.
 type policyExecutor[R any] interface {
-	Apply(innerFn func(Execution[R]) *common.ExecutionResult[R]) func(Execution[R]) *common.ExecutionResult[R]
+	Apply(innerFn func(Execution[R]) *common.PolicyResult[R]) func(Execution[R]) *common.PolicyResult[R]
 }
 
-func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error)) (R, error) {
-	outerFn := func(exec Execution[R]) *common.ExecutionResult[R] {
+func (e *executor[R]) executeSync(fn func(exec Execution[R]) (R, error)) (R, error) {
+	er := e.execute(fn)
+	return er.Result, er.Error
+}
+
+func (e *executor[R]) executeAsync(fn func(exec Execution[R]) (R, error)) ExecutionResult[R] {
+	result := &executionResult[R]{
+		doneChan: make(chan any, 1),
+	}
+	go func() {
+		result.complete(e.execute(fn))
+	}()
+	return result
+}
+
+func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error)) *common.PolicyResult[R] {
+	outerFn := func(exec Execution[R]) *common.PolicyResult[R] {
 		// Copy exec before passing to user provided func
 		execCopy := *(exec.(*execution[R]))
 		result, err := fn(&execCopy)
-		er := &common.ExecutionResult[R]{
+		er := &common.PolicyResult[R]{
 			Result:     result,
 			Error:      err,
 			Complete:   true,
@@ -191,7 +276,7 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error)) (R, error) 
 	var stopAfterFunc func() bool
 	if ctx != nil {
 		stopAfterFunc = context.AfterFunc(ctx, func() {
-			exec.Cancel(math.MaxInt, &common.ExecutionResult[R]{
+			exec.Cancel(math.MaxInt, &common.PolicyResult[R]{
 				Error:    ctx.Err(),
 				Complete: true,
 			})
@@ -214,5 +299,5 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error)) (R, error) 
 	if e.onComplete != nil {
 		e.onComplete(newExecutionCompletedEvent(er, exec))
 	}
-	return er.Result, er.Error
+	return er
 }

@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -25,9 +26,14 @@ func TestRetryPolicyCircuitBreaker(t *testing.T) {
 		WithFailureThreshold(3).
 		WithDelay(10 * time.Minute).
 		Build()
+	stub, reset := testutil.ErrorNTimesThenReturn[bool](testutil.ErrConnecting, 2, true)
+	setup := func() context.Context {
+		reset()
+		policytesting.ResetCircuitBreaker(cb)
+		return nil
+	}
 
-	testutil.TestGetSuccess(t, failsafe.NewExecutor[bool](rp, cb),
-		testutil.ErrorNTimesThenReturn[bool](testutil.ErrConnecting, 2, true),
+	testutil.TestGetSuccess(t, setup, failsafe.NewExecutor[bool](rp, cb), stub,
 		3, 3, true)
 	assert.Equal(t, uint(1), cb.Metrics().SuccessCount())
 	assert.Equal(t, uint(2), cb.Metrics().FailureCount())
@@ -39,8 +45,12 @@ func TestRetryPolicyCircuitBreaker(t *testing.T) {
 func TestRetryPolicyCircuitBreakerOpen(t *testing.T) {
 	rp := policytesting.WithRetryLogs(retrypolicy.Builder[any]()).Build()
 	cb := policytesting.WithBreakerLogs(circuitbreaker.Builder[any]()).Build()
+	setup := func() context.Context {
+		policytesting.ResetCircuitBreaker(cb)
+		return nil
+	}
 
-	testutil.TestRunFailure(t, failsafe.NewExecutor[any](rp, cb),
+	testutil.TestRunFailure(t, setup, failsafe.NewExecutor[any](rp, cb),
 		func(execution failsafe.Execution[any]) error {
 			return errors.New("test")
 		}, 3, 1, circuitbreaker.ErrCircuitBreakerOpen)
@@ -50,8 +60,12 @@ func TestRetryPolicyCircuitBreakerOpen(t *testing.T) {
 func TestCircuitBreakerRetryPolicy(t *testing.T) {
 	rp := retrypolicy.WithDefaults[any]()
 	cb := circuitbreaker.Builder[any]().WithFailureThreshold(3).Build()
+	setup := func() context.Context {
+		policytesting.ResetCircuitBreaker(cb)
+		return nil
+	}
 
-	testutil.TestRunFailure(t, failsafe.NewExecutor[any](cb, rp),
+	testutil.TestRunFailure(t, setup, failsafe.NewExecutor[any](cb, rp),
 		func(execution failsafe.Execution[any]) error {
 			return testutil.ErrInvalidState
 		}, 3, 3, testutil.ErrInvalidState)
@@ -67,7 +81,7 @@ func TestFallbackRetryPolicy(t *testing.T) {
 	rp := retrypolicy.WithDefaults[bool]()
 
 	// When / Then
-	testutil.TestGetSuccess[bool](t, failsafe.NewExecutor[bool](fb, rp),
+	testutil.TestGetSuccess[bool](t, nil, failsafe.NewExecutor[bool](fb, rp),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.ErrInvalidArgument
 		},
@@ -81,7 +95,7 @@ func TestFallbackRetryPolicy(t *testing.T) {
 	})
 
 	// When / Then
-	testutil.TestGetSuccess[bool](t, failsafe.NewExecutor[bool](fb, rp),
+	testutil.TestGetSuccess[bool](t, nil, failsafe.NewExecutor[bool](fb, rp),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.ErrInvalidState
 		},
@@ -95,7 +109,7 @@ func TestRetryPolicyFallback(t *testing.T) {
 	fb := fallback.WithResult("test")
 
 	// When / Then
-	testutil.TestGetSuccess[string](t, failsafe.NewExecutor[string](rp, fb),
+	testutil.TestGetSuccess[string](t, nil, failsafe.NewExecutor[string](rp, fb),
 		func(execution failsafe.Execution[string]) (string, error) {
 			return "", testutil.ErrInvalidState
 		},
@@ -113,9 +127,13 @@ func TestFallbackCircuitBreaker(t *testing.T) {
 		return true, nil
 	})
 	cb := circuitbreaker.Builder[bool]().WithSuccessThreshold(3).Build()
+	setup := func() context.Context {
+		policytesting.ResetCircuitBreaker(cb)
+		return nil
+	}
 
 	// When / Then
-	testutil.TestGetSuccess(t, failsafe.NewExecutor[bool](fb, cb),
+	testutil.TestGetSuccess(t, setup, failsafe.NewExecutor[bool](fb, cb),
 		testutil.GetWithExecutionFn[bool](false, testutil.ErrInvalidState),
 		1, 1, true)
 }
@@ -134,7 +152,7 @@ func TestFallbackCircuitBreakerOpen(t *testing.T) {
 
 	// When / Then
 	cb.Open()
-	testutil.TestGetSuccess(t, failsafe.NewExecutor[bool](fb, cb),
+	testutil.TestGetSuccess(t, nil, failsafe.NewExecutor[bool](fb, cb),
 		testutil.GetWithExecutionFn[bool](true, nil),
 		1, 0, false)
 }
@@ -145,9 +163,14 @@ func TestRetryPolicyRateLimiter(t *testing.T) {
 	rpStats := &policytesting.Stats{}
 	rp := policytesting.WithRetryStats(retrypolicy.Builder[any](), rpStats).WithMaxAttempts(7).Build()
 	rl := ratelimiter.BurstyBuilder[any](3, 1*time.Second).Build()
+	setup := func() context.Context {
+		rpStats.Reset()
+		policytesting.ResetRateLimiter(rl)
+		return nil
+	}
 
 	// When / Then
-	testutil.TestGetFailure(t, failsafe.NewExecutor[any](rp, rl),
+	testutil.TestGetFailure(t, setup, failsafe.NewExecutor[any](rp, rl),
 		testutil.GetWithExecutionFn[any](nil, testutil.ErrInvalidState),
 		7, 3, ratelimiter.ErrRateLimitExceeded)
 	assert.Equal(t, 7, rpStats.ExecutionCount)
@@ -160,9 +183,13 @@ func TestFallbackRetryPolicyCircuitBreaker(t *testing.T) {
 	rp := retrypolicy.WithDefaults[string]()
 	cb := circuitbreaker.Builder[string]().WithFailureThreshold(5).Build()
 	fb := fallback.WithResult("test")
+	setup := func() context.Context {
+		policytesting.ResetCircuitBreaker(cb)
+		return nil
+	}
 
 	// When / Then
-	testutil.TestGetSuccess(t, failsafe.NewExecutor[string](fb, rp, cb),
+	testutil.TestGetSuccess(t, setup, failsafe.NewExecutor[string](fb, rp, cb),
 		testutil.GetWithExecutionFn[string]("", testutil.ErrInvalidState),
 		3, 3, "test")
 	assert.Equal(t, uint(0), cb.Metrics().SuccessCount())
@@ -180,9 +207,13 @@ func TestRetryPolicyTimeout(t *testing.T) {
 	}).Build()
 	toStats := &policytesting.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](50*time.Millisecond), toStats).Build()
+	setup := func() context.Context {
+		toStats.Reset()
+		return nil
+	}
 
 	// When / Then
-	testutil.TestGetSuccess(t, failsafe.NewExecutor[any](rp, to),
+	testutil.TestGetSuccess(t, setup, failsafe.NewExecutor[any](rp, to),
 		func(e failsafe.Execution[any]) (any, error) {
 			if e.Attempts() <= 2 {
 				time.Sleep(100 * time.Millisecond)
@@ -201,9 +232,13 @@ func TestCircuitBreakerTimeout(t *testing.T) {
 	to := timeout.With[string](50 * time.Millisecond)
 	cb := circuitbreaker.WithDefaults[string]()
 	assert.True(t, cb.IsClosed())
+	setup := func() context.Context {
+		policytesting.ResetCircuitBreaker(cb)
+		return nil
+	}
 
 	// When / Then
-	testutil.TestRunFailure(t, failsafe.NewExecutor[string](cb, to),
+	testutil.TestRunFailure(t, setup, failsafe.NewExecutor[string](cb, to),
 		func(execution failsafe.Execution[string]) error {
 			time.Sleep(100 * time.Millisecond)
 			return nil
@@ -221,7 +256,7 @@ func TestFallbackTimeout(t *testing.T) {
 	})
 
 	// When / Then
-	testutil.TestGetSuccess(t, failsafe.NewExecutor[bool](fb, to),
+	testutil.TestGetSuccess(t, nil, failsafe.NewExecutor[bool](fb, to),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			time.Sleep(100 * time.Millisecond)
 			return false, nil
@@ -236,7 +271,7 @@ func TestRetryPolicyBulkhead(t *testing.T) {
 	bh.TryAcquirePermit()
 	bh.TryAcquirePermit() // bulkhead should be full
 
-	testutil.TestRunFailure(t, failsafe.NewExecutor[any](rp, bh),
+	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[any](rp, bh),
 		func(execution failsafe.Execution[any]) error {
 			return errors.New("test")
 		}, 7, 0, bulkhead.ErrBulkheadFull)

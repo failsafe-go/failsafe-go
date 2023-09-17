@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -21,7 +22,7 @@ func TestShouldNotTimeout(t *testing.T) {
 	timeout := timeout.With[any](time.Second)
 
 	// When / Then
-	testutil.TestGetSuccess(t, failsafe.NewExecutor[any](timeout),
+	testutil.TestGetSuccess(t, nil, failsafe.NewExecutor[any](timeout),
 		func(execution failsafe.Execution[any]) (any, error) {
 			return "success", nil
 		},
@@ -34,8 +35,13 @@ func TestRetryTimeoutWithBlockedFunc(t *testing.T) {
 	rpStats := &policytesting.Stats{}
 	timeout := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](50*time.Millisecond), timeoutStats).Build()
 	rp := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[any](), rpStats).Build()
+	setup := func() context.Context {
+		timeoutStats.Reset()
+		rpStats.Reset()
+		return nil
+	}
 
-	testutil.TestGetSuccess(t, failsafe.NewExecutor[any](rp, timeout),
+	testutil.TestGetSuccess(t, setup, failsafe.NewExecutor[any](rp, timeout),
 		func(exec failsafe.Execution[any]) (any, error) {
 			if exec.Attempts() <= 2 {
 				// Block, trigginer the timeout
@@ -55,8 +61,13 @@ func TestRetryTimeoutWithPendingRetry(t *testing.T) {
 	rpStats := &policytesting.Stats{}
 	timeout := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](50*time.Millisecond), timeoutStats).Build()
 	rp := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[any]().WithDelay(100*time.Millisecond), rpStats).Build()
+	setup := func() context.Context {
+		timeoutStats.Reset()
+		rpStats.Reset()
+		return nil
+	}
 
-	testutil.TestGetFailure(t, failsafe.NewExecutor[any](rp, timeout),
+	testutil.TestGetFailure(t, setup, failsafe.NewExecutor[any](rp, timeout),
 		func(exec failsafe.Execution[any]) (any, error) {
 			return nil, testutil.ErrInvalidArgument
 		}, 3, 3, testutil.ErrInvalidArgument)
@@ -72,8 +83,12 @@ func TestTimeoutRetryWithBlockedFunc(t *testing.T) {
 	timeoutStats := &policytesting.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](150*time.Millisecond), timeoutStats).Build()
 	rp := retrypolicy.WithDefaults[any]()
+	setup := func() context.Context {
+		timeoutStats.Reset()
+		return nil
+	}
 
-	testutil.TestRunFailure(t, failsafe.NewExecutor[any](to, rp),
+	testutil.TestRunFailure(t, setup, failsafe.NewExecutor[any](to, rp),
 		func(_ failsafe.Execution[any]) error {
 			time.Sleep(60 * time.Millisecond)
 			return testutil.ErrInvalidArgument
@@ -91,8 +106,13 @@ func TestTimeoutRetryWithPendingRetry(t *testing.T) {
 	rpStats := &policytesting.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](100*time.Millisecond), timeoutStats).Build()
 	rp := policytesting.WithRetryStatsAndLogs[any](retrypolicy.Builder[any]().WithDelay(time.Second), rpStats).Build()
+	setup := func() context.Context {
+		timeoutStats.Reset()
+		rpStats.Reset()
+		return nil
+	}
 
-	testutil.TestRunFailure(t, failsafe.NewExecutor[any](to, rp),
+	testutil.TestRunFailure(t, setup, failsafe.NewExecutor[any](to, rp),
 		func(_ failsafe.Execution[any]) error {
 			return testutil.ErrInvalidArgument
 		},
@@ -107,8 +127,13 @@ func TestFallbackTimeoutWithBlockedFunc(t *testing.T) {
 	fbStats := &policytesting.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](10*time.Millisecond), timeoutStats).Build()
 	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithError[any](testutil.ErrInvalidArgument), fbStats).Build()
+	setup := func() context.Context {
+		timeoutStats.Reset()
+		fbStats.Reset()
+		return nil
+	}
 
-	testutil.TestRunFailure(t, failsafe.NewExecutor[any](fb, to),
+	testutil.TestRunFailure(t, setup, failsafe.NewExecutor[any](fb, to),
 		func(_ failsafe.Execution[any]) error {
 			time.Sleep(100 * time.Millisecond)
 			return errors.New("test")
@@ -124,8 +149,13 @@ func TestFallbackWithInnerTimeout(t *testing.T) {
 	fbStats := &policytesting.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](10*time.Millisecond), timeoutStats).Build()
 	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithError[any](testutil.ErrInvalidArgument), fbStats).Build()
+	setup := func() context.Context {
+		timeoutStats.Reset()
+		fbStats.Reset()
+		return nil
+	}
 
-	testutil.TestRunFailure(t, failsafe.NewExecutor[any](fb, to),
+	testutil.TestRunFailure(t, setup, failsafe.NewExecutor[any](fb, to),
 		func(_ failsafe.Execution[any]) error {
 			return errors.New("test")
 		},
@@ -140,8 +170,13 @@ func TestTimeoutFallbackWithBlockedFunc(t *testing.T) {
 	fbStats := &policytesting.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](10*time.Millisecond), timeoutStats).Build()
 	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithError[any](testutil.ErrInvalidArgument), fbStats).Build()
+	setup := func() context.Context {
+		timeoutStats.Reset()
+		fbStats.Reset()
+		return nil
+	}
 
-	testutil.TestRunFailure(t, failsafe.NewExecutor[any](to, fb),
+	testutil.TestRunFailure(t, setup, failsafe.NewExecutor[any](to, fb),
 		func(_ failsafe.Execution[any]) error {
 			time.Sleep(100 * time.Millisecond)
 			return errors.New("test")
@@ -160,8 +195,13 @@ func TestTimeoutFallbackWithBlockedFallback(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 		return nil, testutil.ErrInvalidState
 	}), fbStats).Build()
+	setup := func() context.Context {
+		timeoutStats.Reset()
+		fbStats.Reset()
+		return nil
+	}
 
-	testutil.TestRunFailure(t, failsafe.NewExecutor[any](to, fb),
+	testutil.TestRunFailure(t, setup, failsafe.NewExecutor[any](to, fb),
 		func(_ failsafe.Execution[any]) error {
 			return errors.New("test")
 		},

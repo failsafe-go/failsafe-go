@@ -3,11 +3,13 @@ package policytesting
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
 	"github.com/failsafe-go/failsafe-go/fallback"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
+	"github.com/failsafe-go/failsafe-go/ratelimiter"
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
 	"github.com/failsafe-go/failsafe-go/timeout"
 )
@@ -34,6 +36,18 @@ func (s *Stats) Reset() {
 	s.AbortCount = 0
 }
 
+func ResetRateLimiter[R any](cb ratelimiter.RateLimiter[R]) {
+	cbElem := reflect.ValueOf(cb)
+	resetMethod := cbElem.MethodByName("Reset")
+	resetMethod.Call([]reflect.Value{})
+}
+
+func ResetCircuitBreaker[R any](cb circuitbreaker.CircuitBreaker[R]) {
+	cbElem := reflect.ValueOf(cb)
+	resetMethod := cbElem.MethodByName("Reset")
+	resetMethod.Call([]reflect.Value{})
+}
+
 func WithRetryStats[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *Stats) retrypolicy.RetryPolicyBuilder[R] {
 	return withRetryStatsAndLogs(rp, stats, false)
 }
@@ -50,7 +64,7 @@ func withRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *S
 	rp.OnRetry(func(e failsafe.ExecutionEvent[R]) {
 		stats.RetryCount++
 		if withLogging {
-			fmt.Println(fmt.Sprintf("%s %p retrying [Result: %v, failure: %s]", testutil.GetType(rp), rp, e.LastResult(), e.LastError()))
+			fmt.Println(fmt.Sprintf("%s %p retrying [result: %v, error: %s]", testutil.GetType(rp), rp, e.LastResult(), e.LastError()))
 		}
 	}).OnRetriesExceeded(func(e failsafe.ExecutionEvent[R]) {
 		stats.RetrieExceededCount++
@@ -109,7 +123,7 @@ func WithTimeoutStatsAndLogs[R any](to timeout.TimeoutBuilder[R], stats *Stats) 
 func WithFallbackStatsAndLogs[R any](fb fallback.FallbackBuilder[R], stats *Stats) fallback.FallbackBuilder[R] {
 	fb.OnFallbackExecuted(func(e failsafe.ExecutionCompletedEvent[R]) {
 		stats.ExecutionCount++
-		fmt.Println(fmt.Sprintf("%s %p complete [Result: %v, failure: %s, attempts: %d, executions: %d]",
+		fmt.Println(fmt.Sprintf("%s %p complete [result: %v, error: %s, attempts: %d, executions: %d]",
 			testutil.GetType(fb), fb, e.Result, e.Error, e.Attempts(), e.Executions()))
 	})
 	return fb
@@ -120,7 +134,7 @@ func withStatsAndLogs[P any, R any](policy failsafe.FailurePolicyBuilder[P, R], 
 		stats.ExecutionCount++
 		stats.SuccessCount++
 		if withLogging {
-			fmt.Println(fmt.Sprintf("%s %p success [Result: %v, attempts: %d, executions: %d]",
+			fmt.Println(fmt.Sprintf("%s %p success [result: %v, attempts: %d, executions: %d]",
 				testutil.GetType(policy), policy, e.LastResult(), e.Attempts(), e.Executions()))
 		}
 	})
@@ -128,7 +142,7 @@ func withStatsAndLogs[P any, R any](policy failsafe.FailurePolicyBuilder[P, R], 
 		stats.ExecutionCount++
 		stats.FailureCount++
 		if withLogging {
-			fmt.Println(fmt.Sprintf("%s %p failure [Result: %v, failure: %s, attempts: %d, executions: %d]",
+			fmt.Println(fmt.Sprintf("%s %p failure [result: %v, error: %s, attempts: %d, executions: %d]",
 				testutil.GetType(policy), policy, e.LastResult(), e.LastError(), e.Attempts(), e.Executions()))
 		}
 	})

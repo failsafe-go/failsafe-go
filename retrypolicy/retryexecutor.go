@@ -22,12 +22,12 @@ type retryPolicyExecutor[R any] struct {
 	lastDelay       time.Duration // The last fixed, backoff, random, or computed delay time
 }
 
-func (rpe *retryPolicyExecutor[R]) PreExecute(exec policy.ExecutionInternal[R]) *common.ExecutionResult[R] {
+func (rpe *retryPolicyExecutor[R]) PreExecute(exec policy.ExecutionInternal[R]) *common.PolicyResult[R] {
 	return rpe.BaseExecutor.PreExecute(exec)
 }
 
-func (rpe *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.ExecutionResult[R]) func(failsafe.Execution[R]) *common.ExecutionResult[R] {
-	return func(exec failsafe.Execution[R]) *common.ExecutionResult[R] {
+func (rpe *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
+	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
 		for {
 			result := innerFn(exec)
@@ -74,7 +74,7 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *co
 }
 
 // OnFailure updates failedAttempts and retriesExceeded, and calls event listeners
-func (rpe *retryPolicyExecutor[R]) OnFailure(exec policy.ExecutionInternal[R], result *common.ExecutionResult[R]) *common.ExecutionResult[R] {
+func (rpe *retryPolicyExecutor[R]) OnFailure(exec policy.ExecutionInternal[R], result *common.PolicyResult[R]) *common.PolicyResult[R] {
 	rpe.BaseExecutor.OnFailure(exec, result)
 
 	rpe.failedAttempts++

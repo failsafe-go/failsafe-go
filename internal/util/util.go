@@ -72,6 +72,8 @@ func NewClock() Clock {
 
 type Stopwatch interface {
 	ElapsedTime() time.Duration
+
+	Reset()
 }
 
 type wallClockStopwatch struct {

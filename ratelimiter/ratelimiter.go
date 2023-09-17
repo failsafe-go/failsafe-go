@@ -349,3 +349,7 @@ func (r *rateLimiter[R]) ToExecutor(policyIndex int, _ R) any {
 	rle.Executor = rle
 	return rle
 }
+
+func (r *rateLimiter[R]) Reset() {
+	r.stats.reset()
+}

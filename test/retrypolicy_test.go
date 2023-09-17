@@ -17,7 +17,7 @@ func TestShouldRetryOnFailure(t *testing.T) {
 	rp := retrypolicy.WithDefaults[bool]()
 
 	// When / Then
-	testutil.TestGetFailure(t, failsafe.NewExecutor[bool](rp),
+	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[bool](rp),
 		func(exec failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.ErrConnecting
 		},
@@ -29,7 +29,7 @@ func TestShouldReturnRetriesExceededError(t *testing.T) {
 	rp := retrypolicy.WithDefaults[bool]()
 
 	// When / Then
-	testutil.TestGetFailure(t, failsafe.NewExecutor[bool](rp),
+	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[bool](rp),
 		func(exec failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.ErrConnecting
 		},
@@ -42,7 +42,7 @@ func TestShouldNotRetryOnSuccess(t *testing.T) {
 	rp := retrypolicy.WithDefaults[bool]()
 
 	// When / Then
-	testutil.TestGetSuccess(t, failsafe.NewExecutor[bool](rp),
+	testutil.TestGetSuccess(t, nil, failsafe.NewExecutor[bool](rp),
 		func(exec failsafe.Execution[bool]) (bool, error) {
 			return false, nil
 		},
@@ -58,7 +58,7 @@ func TestShouldNotRetryOnNonRetriableFailure(t *testing.T) {
 		Build()
 
 	// When / Then
-	testutil.TestRunFailure(t, failsafe.NewExecutor[any](rp),
+	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[any](rp),
 		func(exec failsafe.Execution[any]) error {
 			if exec.Attempts() <= 2 {
 				return testutil.ErrConnecting
@@ -78,7 +78,7 @@ func TestShouldCompleteWhenMaxDurationExceeded(t *testing.T) {
 		Build()
 
 	// When / Then
-	testutil.TestGetFailure(t, failsafe.NewExecutor[bool](rp),
+	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[bool](rp),
 		func(exec failsafe.Execution[bool]) (bool, error) {
 			time.Sleep(120 * time.Millisecond)
 			return false, errors.New("Asdf")

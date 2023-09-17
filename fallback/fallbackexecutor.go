@@ -15,8 +15,8 @@ type fallbackExecutor[R any] struct {
 var _ policy.Executor[any] = &fallbackExecutor[any]{}
 
 // Apply performs an execution by calling the innerFn, applying a fallback if it fails, and calling post-execute.
-func (e *fallbackExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.ExecutionResult[R]) func(failsafe.Execution[R]) *common.ExecutionResult[R] {
-	return func(exec failsafe.Execution[R]) *common.ExecutionResult[R] {
+func (e *fallbackExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
+	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
 		result := innerFn(exec)
 		if execInternal.IsCanceledForPolicy(e.PolicyIndex) {
@@ -40,7 +40,7 @@ func (e *fallbackExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.
 			}
 
 			success := e.IsFailure(fallbackResult, fallbackError)
-			result = &common.ExecutionResult[R]{
+			result = &common.PolicyResult[R]{
 				Result:     fallbackResult,
 				Error:      fallbackError,
 				Complete:   true,

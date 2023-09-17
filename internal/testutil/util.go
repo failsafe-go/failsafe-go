@@ -22,6 +22,10 @@ func (t *TestStopwatch) ElapsedTime() time.Duration {
 	return time.Duration(t.CurrentTime)
 }
 
+func (t *TestStopwatch) Reset() {
+	t.CurrentTime = 0
+}
+
 func Timed(fn func()) time.Duration {
 	startTime := time.Now()
 	fn()

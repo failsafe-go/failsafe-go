@@ -15,8 +15,8 @@ type bulkheadExecutor[R any] struct {
 
 var _ policy.Executor[any] = &bulkheadExecutor[any]{}
 
-func (be *bulkheadExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.ExecutionResult[R]) func(failsafe.Execution[R]) *common.ExecutionResult[R] {
-	return func(exec failsafe.Execution[R]) *common.ExecutionResult[R] {
+func (be *bulkheadExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
+	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
 		if err := be.bulkhead.AcquirePermitWithMaxWait(execInternal.Context(), be.config.maxWaitTime); err != nil {
 			if be.config.onBulkheadFull != nil {

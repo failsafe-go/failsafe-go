@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,10 +24,16 @@ func TestNestedRetryPoliciesWhereInnerIsExceeded(t *testing.T) {
 	innerRetryStats := &policytesting.Stats{}
 	outerRetryPolicy := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[bool]().WithMaxRetries(10), outerRetryStats).Build()
 	innerRetryPolicy := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[bool]().WithMaxRetries(1), innerRetryStats).Build()
+	fn, reset := testutil.ErrorNTimesThenReturn[bool](testutil.ErrConnecting, 5, true)
+	setup := func() context.Context {
+		reset()
+		outerRetryStats.Reset()
+		innerRetryStats.Reset()
+		return nil
+	}
 
 	// When / Then
-	testutil.TestGetSuccess(t, failsafe.NewExecutor[bool](outerRetryPolicy, innerRetryPolicy),
-		testutil.ErrorNTimesThenReturn[bool](testutil.ErrConnecting, 5, true),
+	testutil.TestGetSuccess(t, setup, failsafe.NewExecutor[bool](outerRetryPolicy, innerRetryPolicy), fn,
 		6, 6, true)
 	assert.Equal(t, 5, outerRetryStats.ExecutionCount)
 	assert.Equal(t, 4, outerRetryStats.FailureCount)
@@ -52,9 +59,14 @@ func TestFallbackRetryPolicyRetryPolicy(t *testing.T) {
 		}
 		return false, testutil.ErrInvalidArgument
 	}
+	setup := func() context.Context {
+		retryPolicy1Stats.Reset()
+		retryPolicy2Stats.Reset()
+		return nil
+	}
 
 	// When / Then
-	testutil.TestGetSuccess(t, failsafe.NewExecutor[any](fb, retryPolicy2, retryPolicy1), fn,
+	testutil.TestGetSuccess(t, setup, failsafe.NewExecutor[any](fb, retryPolicy2, retryPolicy1), fn,
 		5, 5, true)
 	// Expected RetryPolicy failure sequence:
 	//    rp1 ErrInvalidState - failure, retry
@@ -73,9 +85,7 @@ func TestFallbackRetryPolicyRetryPolicy(t *testing.T) {
 	assert.Equal(t, 1, retryPolicy2Stats.SuccessCount)
 
 	// When / Then
-	retryPolicy1Stats.Reset()
-	retryPolicy2Stats.Reset()
-	testutil.TestGetSuccess(t, failsafe.NewExecutor[any](fb, retryPolicy1, retryPolicy2), fn,
+	testutil.TestGetSuccess(t, setup, failsafe.NewExecutor[any](fb, retryPolicy1, retryPolicy2), fn,
 		5, 5, true)
 	// Expected RetryPolicy failure sequence:
 	//    rp2 ErrInvalidState - success

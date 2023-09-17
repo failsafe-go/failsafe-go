@@ -11,6 +11,8 @@ type rateLimiterStats interface {
 	// acquirePermits eagerly acquires requestedPermits and returns the time that must be waited in order to use the permits,
 	// else returns -1 if the wait time would exceed the maxWaitTime. A maxWaitTime of -1 indicates no max wait.
 	acquirePermits(requestedPermits int, maxWaitTime time.Duration) time.Duration
+
+	reset()
 }
 
 // A rate limiter implementation that evenly distributes permits over time, based on the max permits per period. This
@@ -51,6 +53,11 @@ func (s *smoothRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWait
 
 	s.nextFreePermitTime = newNextFreePermitTime
 	return waitTime
+}
+
+func (s *smoothRateLimiterStats[R]) reset() {
+	s.stopwatch.Reset()
+	s.nextFreePermitTime = 0
 }
 
 // A rate limiter implementation that allows bursts of executions, up to the max permits per period. This implementation
@@ -109,6 +116,12 @@ func (s *burstyRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWait
 
 	s.availablePermits -= requestedPermits
 	return waitTime
+}
+
+func (s *burstyRateLimiterStats[R]) reset() {
+	s.stopwatch.Reset()
+	s.availablePermits = s.config.periodPermits
+	s.currentPeriod = 0
 }
 
 // exceedsMaxWaitTime returns whether the waitTime would exceed the maxWaitTime, else false if maxWaitTime is -1.

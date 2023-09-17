@@ -13,7 +13,7 @@ import (
 func TestFallbackOfResult(t *testing.T) {
 	fb := fallback.WithResult(true)
 
-	testutil.TestGetSuccess(t, failsafe.NewExecutor[bool](fb),
+	testutil.TestGetSuccess(t, nil, failsafe.NewExecutor[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.ErrInvalidArgument
 		},
@@ -24,7 +24,7 @@ func TestFallbackOfResult(t *testing.T) {
 func TestShouldFallbackOfError(t *testing.T) {
 	fb := fallback.WithError[bool](testutil.ErrInvalidArgument)
 
-	testutil.TestGetFailure(t, failsafe.NewExecutor[bool](fb),
+	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.ErrInvalidArgument
 		},
@@ -39,7 +39,7 @@ func TestShouldFallbackOfFn(t *testing.T) {
 		}
 	})
 
-	testutil.TestGetFailure(t, failsafe.NewExecutor[bool](fb),
+	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.ErrConnecting
 		},
@@ -50,7 +50,7 @@ func TestShouldFallbackOfFn(t *testing.T) {
 
 // Tests a successful execution that does not fallback
 func TestShouldNotFallback(t *testing.T) {
-	testutil.TestGetSuccess(t, failsafe.NewExecutor[bool](fallback.WithResult(true)),
+	testutil.TestGetSuccess(t, nil, failsafe.NewExecutor[bool](fallback.WithResult(true)),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, nil
 		},
@@ -64,14 +64,14 @@ func TestShouldFallbackWithFailureConditions(t *testing.T) {
 		Build()
 
 	// Fallback should not handle
-	testutil.TestGetFailure(t, failsafe.NewExecutor[bool](fb),
+	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.ErrInvalidArgument
 		},
 		1, 1, testutil.ErrInvalidArgument)
 
 	// Fallback should handle
-	testutil.TestGetSuccess(t, failsafe.NewExecutor[bool](fb),
+	testutil.TestGetSuccess(t, nil, failsafe.NewExecutor[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.ErrInvalidState
 		},
@@ -82,14 +82,14 @@ func TestShouldFallbackWithFailureConditions(t *testing.T) {
 func TestShouldVerifyFallbackResult(t *testing.T) {
 	// Assert a failure is still a failure
 	fb := fallback.WithError[any](testutil.ErrInvalidArgument)
-	testutil.TestGetFailure[any](t, failsafe.NewExecutor[any](fb),
+	testutil.TestGetFailure[any](t, nil, failsafe.NewExecutor[any](fb),
 		func(execution failsafe.Execution[any]) (any, error) {
 			return false, errors.New("test")
 		}, 1, 1, testutil.ErrInvalidArgument)
 
 	// Assert a success after a failure is a success
 	fb = fallback.WithResult[any](true)
-	testutil.TestGetSuccess[any](t, failsafe.NewExecutor[any](fb),
+	testutil.TestGetSuccess[any](t, nil, failsafe.NewExecutor[any](fb),
 		func(execution failsafe.Execution[any]) (any, error) {
 			return false, errors.New("test")
 		}, 1, 1, true)

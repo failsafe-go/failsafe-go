@@ -341,3 +341,8 @@ func (cb *circuitBreaker[R]) recordFailure(exec failsafe.Execution[R]) {
 	cb.state.getStats().recordFailure()
 	cb.state.checkThresholdAndReleasePermit(exec)
 }
+
+func (cb *circuitBreaker[R]) Reset() {
+	cb.close()
+	cb.state.getStats().reset()
+}

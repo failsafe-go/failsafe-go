@@ -18,7 +18,7 @@ import (
 // Asserts that listeners are called the expected number of times for a successful completion.
 func TestListenersOnSuccess(t *testing.T) {
 	// Given - Fail 4 times then succeed
-	stub := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 2, false, false, true)
+	stub, _ := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 2, false, false, true)
 	rpBuilder := retrypolicy.Builder[bool]().HandleResult(false).WithMaxAttempts(10)
 	cbBuilder := circuitbreaker.Builder[bool]().HandleResult(false).WithDelay(0)
 	fbBuilder := fallback.BuilderWithResult(false)
@@ -94,7 +94,7 @@ func TestListenersForUnhandledFailure(t *testing.T) {
 // Asserts that listeners are called the expected number of times when retries are exceeded.
 func TestListenersForRetriesExceeded(t *testing.T) {
 	// Given - Fail 4 times and exceed retries
-	stub := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 10)
+	stub, _ := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 10)
 	rpBuilder := retrypolicy.Builder[bool]().WithMaxRetries(3)
 	cbBuilder := circuitbreaker.Builder[bool]().WithDelay(0)
 	stats := &listenerStats{}
@@ -162,7 +162,7 @@ func TestListenersForAbort(t *testing.T) {
 
 func TestListenersForFailingRetryPolicy(t *testing.T) {
 	// Given - Fail 10 times
-	stub := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 10)
+	stub, _ := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 10)
 	// NewExecutor failing RetryPolicy
 	rpBuilder := retrypolicy.Builder[bool]()
 	// And successful CircuitBreaker and Fallback
@@ -196,7 +196,7 @@ func TestListenersForFailingRetryPolicy(t *testing.T) {
 
 func TestListenersForFailingCircuitBreaker(t *testing.T) {
 	// Given - Fail 10 times
-	stub := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 10)
+	stub, _ := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 10)
 	// NewExecutor successful RetryPolicy
 	rpBuilder := retrypolicy.Builder[bool]().HandleErrors(testutil.ErrInvalidArgument)
 	// And failing CircuitBreaker
@@ -231,7 +231,7 @@ func TestListenersForFailingCircuitBreaker(t *testing.T) {
 
 func TestListenersForFailingFallback(t *testing.T) {
 	// Given - Fail 10 times
-	stub := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 10)
+	stub, _ := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 10)
 	// Given successful RetryPolicy and CircuitBreaker
 	rpBuilder := retrypolicy.Builder[bool]().HandleErrors(testutil.ErrInvalidArgument)
 	cbBuilder := circuitbreaker.Builder[bool]().HandleErrors(testutil.ErrInvalidArgument).WithDelay(0)

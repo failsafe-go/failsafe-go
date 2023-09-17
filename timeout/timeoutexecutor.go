@@ -19,11 +19,11 @@ type timeoutExecutor[R any] struct {
 
 var _ policy.Executor[any] = &timeoutExecutor[any]{}
 
-func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.ExecutionResult[R]) func(failsafe.Execution[R]) *common.ExecutionResult[R] {
+func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	// This func sets up a race between a timeout and the innerFn returning
-	return func(exec failsafe.Execution[R]) *common.ExecutionResult[R] {
+	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
-		var result atomic.Pointer[common.ExecutionResult[R]]
+		var result atomic.Pointer[common.PolicyResult[R]]
 
 		timer := time.AfterFunc(e.config.timeoutDelay, func() {
 			timeoutResult := internal.FailureResult[R](ErrTimeoutExceeded)

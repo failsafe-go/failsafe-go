@@ -1,6 +1,8 @@
 package testutil
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,46 +10,79 @@ import (
 	"github.com/failsafe-go/failsafe-go"
 )
 
-type WhenGet[R any] func(execution failsafe.Execution[R]) (R, error)
+type Given func() context.Context
 type WhenRun[R any] func(execution failsafe.Execution[R]) error
+type WhenGet[R any] func(execution failsafe.Execution[R]) (R, error)
 
-func TestGetSuccess[R any](t *testing.T, executor failsafe.Executor[R], when WhenGet[R], expectedAttempts int, expectedExecutions int, expectedResult R) {
-	testGet(t, executor, when, expectedAttempts, expectedExecutions, expectedResult, nil)
+func TestRunSuccess[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenRun[R], expectedAttempts int, expectedExecutions int) {
+	testRun(t, given, executor, when, expectedAttempts, expectedExecutions, nil)
 }
 
-func TestGetFailure[R any](t *testing.T, executor failsafe.Executor[R], when WhenGet[R], expectedAttempts int, expectedExecutions int, expectedError error) {
-	testGet(t, executor, when, expectedAttempts, expectedExecutions, *(new(R)), expectedError)
+func TestRunFailure[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenRun[R], expectedAttempts int, expectedExecutions int, expectedError error) {
+	testRun(t, given, executor, when, expectedAttempts, expectedExecutions, expectedError)
 }
 
-func TestRunSuccess[R any](t *testing.T, executor failsafe.Executor[R], when WhenRun[R], expectedAttempts int, expectedExecutions int) {
-	testRun(t, executor, when, expectedAttempts, expectedExecutions, nil)
+func TestGetSuccess[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenGet[R], expectedAttempts int, expectedExecutions int, expectedResult R) {
+	testGet(t, given, executor, when, expectedAttempts, expectedExecutions, expectedResult, nil)
 }
 
-func TestRunFailure[R any](t *testing.T, executor failsafe.Executor[R], when WhenRun[R], expectedAttempts int, expectedExecutions int, expectedError error) {
-	testRun(t, executor, when, expectedAttempts, expectedExecutions, expectedError)
+func TestGetFailure[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenGet[R], expectedAttempts int, expectedExecutions int, expectedError error) {
+	testGet(t, given, executor, when, expectedAttempts, expectedExecutions, *(new(R)), expectedError)
 }
 
-func testGet[R any](t *testing.T, executor failsafe.Executor[R], when WhenGet[R], expectedAttempts int, expectedExecutions int, expectedResult R, expectedError error) {
+func testRun[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenRun[R], expectedAttempts int, expectedExecutions int, expectedError error) {
 	var completedEvent *failsafe.ExecutionCompletedEvent[R]
-	result, err := executor.OnComplete(func(e failsafe.ExecutionCompletedEvent[R]) {
+	executor = executor.OnComplete(func(e failsafe.ExecutionCompletedEvent[R]) {
 		completedEvent = &e
-	}).GetWithExecution(when)
-	assert.Equal(t, expectedAttempts, completedEvent.Attempts(), "expected attempts did not match")
-	assert.Equal(t, expectedExecutions, completedEvent.Executions(), "expected executions did not match")
-	assert.Equal(t, expectedResult, result, "expected result did not match")
-	assert.ErrorIs(t, err, expectedError, "expected error did not match")
+	})
+	givenFn := func() {
+		if given != nil {
+			executor = executor.WithContext(given())
+		}
+	}
+	assertResult := func(err error) {
+		if expectedAttempts != -1 {
+			assert.Equal(t, expectedAttempts, completedEvent.Attempts(), "expected attempts did not match")
+		}
+		if expectedExecutions != -1 {
+			assert.Equal(t, expectedExecutions, completedEvent.Executions(), "expected executions did not match")
+		}
+		assert.ErrorIs(t, err, expectedError, "expected error did not match")
+	}
+
+	// Run sync
+	givenFn()
+	assertResult(executor.RunWithExecution(when))
+
+	// Run async
+	givenFn()
+	assertResult(executor.RunWithExecutionAsync(when).Error())
 }
 
-func testRun[R any](t *testing.T, executor failsafe.Executor[R], when WhenRun[R], expectedAttempts int, expectedExecutions int, expectedError error) {
+func testGet[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenGet[R], expectedAttempts int, expectedExecutions int, expectedResult R, expectedError error) {
 	var completedEvent *failsafe.ExecutionCompletedEvent[R]
-	err := executor.OnComplete(func(e failsafe.ExecutionCompletedEvent[R]) {
+	executor = executor.OnComplete(func(e failsafe.ExecutionCompletedEvent[R]) {
 		completedEvent = &e
-	}).RunWithExecution(when)
-	if expectedAttempts != -1 {
+	})
+	givenFn := func() {
+		if given != nil {
+			executor = executor.WithContext(given())
+		}
+	}
+	assertResult := func(result R, err error) {
 		assert.Equal(t, expectedAttempts, completedEvent.Attempts(), "expected attempts did not match")
-	}
-	if expectedExecutions != -1 {
 		assert.Equal(t, expectedExecutions, completedEvent.Executions(), "expected executions did not match")
+		assert.Equal(t, expectedResult, result, "expected result did not match")
+		assert.ErrorIs(t, err, expectedError, "expected error did not match")
 	}
-	assert.ErrorIs(t, err, expectedError, "expected error did not match")
+
+	// Run sync
+	fmt.Println("Testing sync")
+	givenFn()
+	assertResult(executor.GetWithExecution(when))
+
+	// Run async
+	fmt.Println("\nTesting async")
+	givenFn()
+	assertResult(executor.GetWithExecutionAsync(when).Get())
 }

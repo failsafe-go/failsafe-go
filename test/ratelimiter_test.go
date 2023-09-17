@@ -20,7 +20,7 @@ func TestRateLimiterPermitAcquiredAfterWait(t *testing.T) {
 
 	// When / Then
 	limiter.TryAcquirePermit() // limiter should now be out of permits
-	testutil.TestGetSuccess(t, failsafe.NewExecutor[string](limiter),
+	testutil.TestGetSuccess(t, nil, failsafe.NewExecutor[string](limiter),
 		func(exec failsafe.Execution[string]) (string, error) {
 			return "test", nil
 		},
@@ -33,7 +33,7 @@ func TestShouldReturnRateLimitExceededError(t *testing.T) {
 
 	// When / Then
 	limiter.TryAcquirePermit() // limiter should now be out of permits
-	testutil.TestRunFailure(t, failsafe.NewExecutor[any](limiter),
+	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[any](limiter),
 		func(execution failsafe.Execution[any]) error {
 			return nil
 		},
@@ -47,7 +47,7 @@ func TestRateLimiterMaxWaitTimeExceeded(t *testing.T) {
 
 	// When / Then
 	limiter.AcquirePermitsWithMaxWait(nil, 50, time.Minute) // limiter should now be well over its max permits
-	testutil.TestRunFailure(t, failsafe.NewExecutor[any](limiter),
+	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[any](limiter),
 		func(execution failsafe.Execution[any]) error {
 			return nil
 		},

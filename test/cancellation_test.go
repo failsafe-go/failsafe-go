@@ -77,14 +77,17 @@ func TestCancelWithContextDeadlingDuringExecution(t *testing.T) {
 func TestCancelWithContextDuringPendingRetry(t *testing.T) {
 	// Given
 	rp := policytesting.WithRetryLogs[any](retrypolicy.Builder[any]().WithDelay(time.Second)).Build()
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		time.Sleep(50 * time.Millisecond)
-		cancel()
-	}()
+	setup := func() context.Context {
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			time.Sleep(50 * time.Millisecond)
+			cancel()
+		}()
+		return ctx
+	}
 
 	// When / Then
-	testutil.TestGetFailure(t, failsafe.NewExecutor[any](rp).WithContext(ctx),
+	testutil.TestGetFailure(t, setup, failsafe.NewExecutor[any](rp),
 		testutil.GetWithExecutionFn[any](nil, testutil.ErrInvalidState),
 		1, 1, context.Canceled)
 }
