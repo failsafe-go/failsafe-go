@@ -1,22 +1,22 @@
 package common
 
 // PolicyResult represents an execution result for a policy. If a policy is done handling a result or is no longer able
-// to handle a result, such as when retries are exceeded, the PolicyResult should be marked as complete.
+// to handle a result, such as when retries are exceeded, the PolicyResult should be marked as done.
 type PolicyResult[R any] struct {
 	Result R
 	Error  error
-	// Complete indicates whether an execution is complete or if retries may be needed.
-	Complete bool
+	// Done indicates whether an execution is done or if retries may be needed.
+	Done bool
 	// Success indicates that a failure did not occur, or the policy was successful in handling the failure/
 	Success bool
 	// SuccessAll indicates whether the policy and all inner policies were successful.
 	SuccessAll bool
 }
 
-// WithComplete returns a new Result for the complete and success values.
-func (er *PolicyResult[R]) WithComplete(complete bool, success bool) *PolicyResult[R] {
+// WithDone returns a new Result for the done and success values.
+func (er *PolicyResult[R]) WithDone(done bool, success bool) *PolicyResult[R] {
 	c := *er
-	c.Complete = complete
+	c.Done = done
 	c.Success = success
 	c.SuccessAll = success && c.SuccessAll
 	return &c

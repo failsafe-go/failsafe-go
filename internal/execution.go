@@ -6,7 +6,7 @@ import (
 
 func FailureResult[R any](err error) *common.PolicyResult[R] {
 	return &common.PolicyResult[R]{
-		Error:    err,
-		Complete: true,
+		Error: err,
+		Done:  true,
 	}
 }

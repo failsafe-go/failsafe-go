@@ -28,7 +28,7 @@ type FallbackBuilder[R any] interface {
 
 	// OnFallbackExecuted registers the listener to be called when a Fallback has executed. The provided event will contain
 	// the execution result and error returned by the Fallback.
-	OnFallbackExecuted(listener func(event failsafe.ExecutionCompletedEvent[R])) FallbackBuilder[R]
+	OnFallbackExecuted(listener func(event failsafe.ExecutionDoneEvent[R])) FallbackBuilder[R]
 
 	// Build returns a new Fallback using the builder's configuration.
 	Build() Fallback[R]
@@ -37,7 +37,7 @@ type FallbackBuilder[R any] interface {
 type fallbackConfig[R any] struct {
 	*policy.BaseFailurePolicy[R]
 	fn                 func(failsafe.Execution[R]) (R, error)
-	onFallbackExecuted func(failsafe.ExecutionCompletedEvent[R])
+	onFallbackExecuted func(failsafe.ExecutionDoneEvent[R])
 }
 
 var _ FallbackBuilder[any] = &fallbackConfig[any]{}
@@ -111,7 +111,7 @@ func (c *fallbackConfig[R]) OnFailure(listener func(event failsafe.ExecutionEven
 	return c
 }
 
-func (c *fallbackConfig[R]) OnFallbackExecuted(listener func(event failsafe.ExecutionCompletedEvent[R])) FallbackBuilder[R] {
+func (c *fallbackConfig[R]) OnFallbackExecuted(listener func(event failsafe.ExecutionDoneEvent[R])) FallbackBuilder[R] {
 	c.onFallbackExecuted = listener
 	return c
 }

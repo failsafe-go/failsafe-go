@@ -32,7 +32,7 @@ func (e *fallbackExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.
 			}
 
 			if e.config.onFallbackExecuted != nil {
-				e.config.onFallbackExecuted(failsafe.ExecutionCompletedEvent[R]{
+				e.config.onFallbackExecuted(failsafe.ExecutionDoneEvent[R]{
 					ExecutionStats: execInternal.Copy(),
 					Result:         fallbackResult,
 					Error:          fallbackError,
@@ -43,7 +43,7 @@ func (e *fallbackExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.
 			result = &common.PolicyResult[R]{
 				Result:     fallbackResult,
 				Error:      fallbackError,
-				Complete:   true,
+				Done:       true,
 				Success:    success,
 				SuccessAll: success && result.SuccessAll,
 			}

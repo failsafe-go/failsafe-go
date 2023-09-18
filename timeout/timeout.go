@@ -17,7 +17,7 @@ type Timeout[R any] interface {
 
 type TimeoutBuilder[R any] interface {
 	// OnTimeoutExceeded registers the listener to be called when the timeout is exceeded.
-	OnTimeoutExceeded(listener func(event failsafe.ExecutionCompletedEvent[R])) TimeoutBuilder[R]
+	OnTimeoutExceeded(listener func(event failsafe.ExecutionDoneEvent[R])) TimeoutBuilder[R]
 
 	// Build returns a new Timeout using the builder's configuration.
 	Build() Timeout[R]
@@ -25,7 +25,7 @@ type TimeoutBuilder[R any] interface {
 
 type timeoutConfig[R any] struct {
 	timeoutDelay      time.Duration
-	onTimeoutExceeded func(failsafe.ExecutionCompletedEvent[R])
+	onTimeoutExceeded func(failsafe.ExecutionDoneEvent[R])
 }
 
 var _ TimeoutBuilder[any] = &timeoutConfig[any]{}
@@ -46,7 +46,7 @@ func Builder[R any](timeoutDelay time.Duration) TimeoutBuilder[R] {
 	}
 }
 
-func (c *timeoutConfig[R]) OnTimeoutExceeded(listener func(event failsafe.ExecutionCompletedEvent[R])) TimeoutBuilder[R] {
+func (c *timeoutConfig[R]) OnTimeoutExceeded(listener func(event failsafe.ExecutionDoneEvent[R])) TimeoutBuilder[R] {
 	c.onTimeoutExceeded = listener
 	return c
 }

@@ -64,7 +64,7 @@ func (e *BaseExecutor[R]) PostExecute(exec ExecutionInternal[R], er *common.Poli
 	if e.Executor.IsFailure(er.Result, er.Error) {
 		er = e.Executor.OnFailure(exec, er.WithFailure())
 	} else {
-		er = er.WithComplete(true, true)
+		er = er.WithDone(true, true)
 		e.Executor.OnSuccess(exec, er)
 	}
 	return er

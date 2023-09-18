@@ -18,8 +18,8 @@ type ExecutionScheduledEvent[R any] struct {
 	Delay time.Duration
 }
 
-// ExecutionCompletedEvent indicates an execution was completed.
-type ExecutionCompletedEvent[R any] struct {
+// ExecutionDoneEvent indicates an execution is done.
+type ExecutionDoneEvent[R any] struct {
 	ExecutionStats
 	// The execution result, else the zero value for R
 	Result R
@@ -27,8 +27,8 @@ type ExecutionCompletedEvent[R any] struct {
 	Error error
 }
 
-func newExecutionCompletedEvent[R any](er *common.PolicyResult[R], stats ExecutionStats) ExecutionCompletedEvent[R] {
-	return ExecutionCompletedEvent[R]{
+func newExecutionDoneEvent[R any](er *common.PolicyResult[R], stats ExecutionStats) ExecutionDoneEvent[R] {
+	return ExecutionDoneEvent[R]{
 		Result:         er.Result,
 		Error:          er.Error,
 		ExecutionStats: stats,

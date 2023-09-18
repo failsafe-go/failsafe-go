@@ -30,7 +30,7 @@ type executionResult[R any] struct {
 	result   atomic.Pointer[*common.PolicyResult[R]]
 }
 
-func (e *executionResult[R]) complete(result *common.PolicyResult[R]) {
+func (e *executionResult[R]) record(result *common.PolicyResult[R]) {
 	e.result.Store(&result)
 	e.done.Store(true)
 	close(e.doneChan)

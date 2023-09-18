@@ -47,11 +47,11 @@ func TestListenersOnSuccess(t *testing.T) {
 	assert.Equal(t, 1, stats.cbSuccess)
 	assert.Equal(t, 4, stats.cbFailure)
 
-	assert.Equal(t, 0, stats.fbComplete)
+	assert.Equal(t, 0, stats.fbDone)
 	assert.Equal(t, 1, stats.fbSuccess)
 	assert.Equal(t, 0, stats.fbFailure)
 
-	assert.Equal(t, 1, stats.complete)
+	assert.Equal(t, 1, stats.done)
 	assert.Equal(t, 1, stats.success)
 	assert.Equal(t, 0, stats.failure)
 }
@@ -86,7 +86,7 @@ func TestListenersForUnhandledFailure(t *testing.T) {
 	assert.Equal(t, 0, stats.cbSuccess)
 	assert.Equal(t, 3, stats.cbFailure)
 
-	assert.Equal(t, 1, stats.complete)
+	assert.Equal(t, 1, stats.done)
 	assert.Equal(t, 0, stats.success)
 	assert.Equal(t, 1, stats.failure)
 }
@@ -121,7 +121,7 @@ func TestListenersForRetriesExceeded(t *testing.T) {
 	assert.Equal(t, 0, stats.cbSuccess)
 	assert.Equal(t, 4, stats.cbFailure)
 
-	assert.Equal(t, 1, stats.complete)
+	assert.Equal(t, 1, stats.done)
 	assert.Equal(t, 0, stats.success)
 	assert.Equal(t, 1, stats.failure)
 }
@@ -155,7 +155,7 @@ func TestListenersForAbort(t *testing.T) {
 	assert.Equal(t, 0, stats.cbSuccess)
 	assert.Equal(t, 4, stats.cbFailure)
 
-	assert.Equal(t, 1, stats.complete)
+	assert.Equal(t, 1, stats.done)
 	assert.Equal(t, 0, stats.success)
 	assert.Equal(t, 1, stats.failure)
 }
@@ -185,11 +185,11 @@ func TestListenersForFailingRetryPolicy(t *testing.T) {
 	assert.Equal(t, 3, stats.cbSuccess)
 	assert.Equal(t, 0, stats.cbFailure)
 
-	assert.Equal(t, 0, stats.fbComplete)
+	assert.Equal(t, 0, stats.fbDone)
 	assert.Equal(t, 1, stats.fbSuccess)
 	assert.Equal(t, 0, stats.fbFailure)
 
-	assert.Equal(t, 1, stats.complete)
+	assert.Equal(t, 1, stats.done)
 	assert.Equal(t, 0, stats.success)
 	assert.Equal(t, 1, stats.failure)
 }
@@ -220,11 +220,11 @@ func TestListenersForFailingCircuitBreaker(t *testing.T) {
 	assert.Equal(t, 0, stats.cbSuccess)
 	assert.Equal(t, 1, stats.cbFailure)
 
-	assert.Equal(t, 0, stats.fbComplete)
+	assert.Equal(t, 0, stats.fbDone)
 	assert.Equal(t, 1, stats.fbSuccess)
 	assert.Equal(t, 0, stats.fbFailure)
 
-	assert.Equal(t, 1, stats.complete)
+	assert.Equal(t, 1, stats.done)
 	assert.Equal(t, 0, stats.success)
 	assert.Equal(t, 1, stats.failure)
 }
@@ -254,11 +254,11 @@ func TestListenersForFailingFallback(t *testing.T) {
 	assert.Equal(t, 1, stats.cbSuccess)
 	assert.Equal(t, 0, stats.cbFailure)
 
-	assert.Equal(t, 1, stats.fbComplete)
+	assert.Equal(t, 1, stats.fbDone)
 	assert.Equal(t, 0, stats.fbSuccess)
 	assert.Equal(t, 1, stats.fbFailure)
 
-	assert.Equal(t, 1, stats.complete)
+	assert.Equal(t, 1, stats.done)
 	assert.Equal(t, 0, stats.success)
 	assert.Equal(t, 1, stats.failure)
 }
@@ -328,7 +328,7 @@ func TestListenersForRateLimiter(t *testing.T) {
 	// Then
 	assert.Equal(t, 3, stats.rlExceeded)
 
-	assert.Equal(t, 5, stats.complete)
+	assert.Equal(t, 5, stats.done)
 	assert.Equal(t, 2, stats.success)
 	assert.Equal(t, 3, stats.failure)
 }
@@ -368,13 +368,13 @@ func TestListenersOnPanic(t *testing.T) {
 	assert.Equal(t, 0, stats.cbSuccess)
 	assert.Equal(t, 2, stats.cbFailure)
 
-	assert.Equal(t, 0, stats.fbComplete) // Complete listener will not be called since the fallback is currently skipped on a panic
+	assert.Equal(t, 0, stats.fbDone) // Done listener will not be called since the fallback is currently skipped on a panic
 	assert.Equal(t, 0, stats.fbSuccess)
 	assert.Equal(t, 0, stats.fbFailure)
 
-	assert.Equal(t, 0, stats.complete) // Complete listener is not called on a panic
-	assert.Equal(t, 0, stats.success)  // Success listener is not called on a panic
-	assert.Equal(t, 0, stats.failure)  // Failure listener is not called on a panic
+	assert.Equal(t, 0, stats.done)    // Done listener is not called on a panic
+	assert.Equal(t, 0, stats.success) // Success listener is not called on a panic
+	assert.Equal(t, 0, stats.failure) // Failure listener is not called on a panic
 }
 
 type listenerStats struct {
@@ -395,17 +395,17 @@ type listenerStats struct {
 	cbFailure    int
 
 	// Fallback
-	fbComplete int
-	fbSuccess  int
-	fbFailure  int
+	fbDone    int
+	fbSuccess int
+	fbFailure int
 
 	// RateLimiter
 	rlExceeded int
 
 	// Executor
-	complete int
-	success  int
-	failure  int
+	done    int
+	success int
+	failure int
 }
 
 func registerRpListeners[R any](stats *listenerStats, rpBuilder retrypolicy.RetryPolicyBuilder[R]) {
@@ -447,8 +447,8 @@ func registerCbListeners[R any](stats *listenerStats, cbBuilder circuitbreaker.C
 }
 
 func registerFbListeners[R any](stats *listenerStats, fbBuilder fallback.FallbackBuilder[R]) {
-	fbBuilder.OnFallbackExecuted(func(f failsafe.ExecutionCompletedEvent[R]) {
-		stats.fbComplete++
+	fbBuilder.OnFallbackExecuted(func(f failsafe.ExecutionDoneEvent[R]) {
+		stats.fbDone++
 	}).OnFailure(func(e failsafe.ExecutionEvent[R]) {
 		stats.fbFailure++
 	}).OnSuccess(func(e failsafe.ExecutionEvent[R]) {
@@ -463,11 +463,11 @@ func registerRlListeners[R any](stats *listenerStats, rlBuilder ratelimiter.Rate
 }
 
 func registerExecutorListeners[R any](stats *listenerStats, executor failsafe.Executor[R]) {
-	executor.OnComplete(func(e failsafe.ExecutionCompletedEvent[R]) {
-		stats.complete++
-	}).OnFailure(func(e failsafe.ExecutionCompletedEvent[R]) {
+	executor.OnDone(func(e failsafe.ExecutionDoneEvent[R]) {
+		stats.done++
+	}).OnFailure(func(e failsafe.ExecutionDoneEvent[R]) {
 		stats.failure++
-	}).OnSuccess(func(e failsafe.ExecutionCompletedEvent[R]) {
+	}).OnSuccess(func(e failsafe.ExecutionDoneEvent[R]) {
 		stats.success++
 	})
 }

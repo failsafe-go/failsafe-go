@@ -36,7 +36,7 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *co
 			}
 
 			result = rpe.PostExecute(execInternal, result)
-			if result.Complete {
+			if result.Done {
 				return result
 			}
 
@@ -83,7 +83,7 @@ func (rpe *retryPolicyExecutor[R]) OnFailure(exec policy.ExecutionInternal[R], r
 	rpe.retriesExceeded = maxRetriesExceeded || maxDurationExceeded
 	isAbortable := rpe.config.isAbortable(result.Result, result.Error)
 	shouldRetry := !isAbortable && !rpe.retriesExceeded && rpe.config.allowsRetries()
-	completed := isAbortable || !shouldRetry
+	done := isAbortable || !shouldRetry
 
 	// Call listeners
 	if isAbortable && rpe.config.onAbort != nil {
@@ -94,7 +94,7 @@ func (rpe *retryPolicyExecutor[R]) OnFailure(exec policy.ExecutionInternal[R], r
 			rpe.config.onRetriesExceeded(failsafe.ExecutionEvent[R]{ExecutionAttempt: exec.Copy()})
 		}
 		if rpe.config.returnLastFailure {
-			return result.WithComplete(false, false)
+			return result.WithDone(false, false)
 		} else {
 			return internal.FailureResult[R](&RetriesExceededError{
 				lastResult: result.Result,
@@ -102,7 +102,7 @@ func (rpe *retryPolicyExecutor[R]) OnFailure(exec policy.ExecutionInternal[R], r
 			})
 		}
 	}
-	return result.WithComplete(completed, false)
+	return result.WithDone(done, false)
 }
 
 // getDelay updates lastDelay and returns the new delay

@@ -91,7 +91,7 @@ func withBreakerStatsAndLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R], 
 }
 
 func WithTimeoutStatsAndLogs[R any](to timeout.TimeoutBuilder[R], stats *Stats) timeout.TimeoutBuilder[R] {
-	to.OnTimeoutExceeded(func(e failsafe.ExecutionCompletedEvent[R]) {
+	to.OnTimeoutExceeded(func(e failsafe.ExecutionDoneEvent[R]) {
 		stats.executionCount.Add(1)
 		fmt.Println(fmt.Sprintf("%s %p exceeded [attempts: %d, executions: %d]",
 			testutil.GetType(to), to, e.Attempts(), e.Executions()))
@@ -100,9 +100,9 @@ func WithTimeoutStatsAndLogs[R any](to timeout.TimeoutBuilder[R], stats *Stats) 
 }
 
 func WithFallbackStatsAndLogs[R any](fb fallback.FallbackBuilder[R], stats *Stats) fallback.FallbackBuilder[R] {
-	fb.OnFallbackExecuted(func(e failsafe.ExecutionCompletedEvent[R]) {
+	fb.OnFallbackExecuted(func(e failsafe.ExecutionDoneEvent[R]) {
 		stats.executionCount.Add(1)
-		fmt.Println(fmt.Sprintf("%s %p complete [result: %v, error: %s, attempts: %d, executions: %d]",
+		fmt.Println(fmt.Sprintf("%s %p done [result: %v, error: %s, attempts: %d, executions: %d]",
 			testutil.GetType(fb), fb, e.Result, e.Error, e.Attempts(), e.Executions()))
 	})
 	return fb
