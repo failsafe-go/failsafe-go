@@ -93,7 +93,7 @@ type RateLimiter[R any] interface {
 	TryAcquirePermit() bool
 
 	// TryAcquirePermits tries to acquire the requested permits to perform executions against the rate limiter, returning
-	// immediately without waiting. Returns true if the permit was successfull acquired, else false.
+	// immediately without waiting. Returns true if the permit was successfully acquired, else false.
 	TryAcquirePermits(permits int) bool
 
 	// TryReservePermit tries to reserve a permit to perform an execution against the rate limiter, and returns the time that

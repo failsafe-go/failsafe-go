@@ -62,7 +62,7 @@ type RetryPolicy[R any] interface {
 RetryPolicyBuilder builds RetryPolicy instances.
 
   - By default, a RetryPolicy will retry a failed execution up to 2 times when any error is returned, with no delay between
-    retry attempts. If retries are exceeded, RetriesExceededError is returned by default. Alternative, ReturnLastFailure
+    retry attempts. If retries are exceeded, RetriesExceededError is returned by default. Alternatively, ReturnLastFailure
     can be used to configure the policy to return the last execution failure.
   - You can change the default number of retry attempts and delay between retries by using the with configuration methods.
   - By default, any error is considered a failure and will be handled by the policy. You can override this by specifying
