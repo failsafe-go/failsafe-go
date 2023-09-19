@@ -137,8 +137,8 @@ type Metrics interface {
 
 // StateChangedEvent indicates a CircuitBreaker's state has changed.
 type StateChangedEvent struct {
-	PreviousState State
-	CurrentState  State
+	OldState State
+	NewState State
 }
 
 type circuitBreaker[R any] struct {
@@ -286,8 +286,8 @@ func (cb *circuitBreaker[R]) transitionTo(newState State, exec failsafe.Executio
 
 	if transitioned {
 		event := StateChangedEvent{
-			PreviousState: currentState,
-			CurrentState:  newState,
+			OldState: currentState,
+			NewState: newState,
 		}
 		if cb.config.stateChangedListener != nil {
 			cb.config.stateChangedListener(event)

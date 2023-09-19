@@ -427,7 +427,7 @@ func registerRpListeners[R any](stats *listenerStats, rpBuilder retrypolicy.Retr
 
 func registerCbListeners[R any](stats *listenerStats, cbBuilder circuitbreaker.CircuitBreakerBuilder[R]) {
 	cbBuilder.OnStateChanged(func(event circuitbreaker.StateChangedEvent) {
-		fmt.Println("CircuitBreaker state change from", event.PreviousState, "to", event.CurrentState)
+		fmt.Println("CircuitBreaker state change from", event.OldState, "to", event.NewState)
 		stats.stateChanged++
 	})
 	cbBuilder.OnOpen(func(event circuitbreaker.StateChangedEvent) {
