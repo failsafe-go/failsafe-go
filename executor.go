@@ -167,56 +167,58 @@ func (e *executor[R]) OnFailure(listener func(ExecutionDoneEvent[R])) Executor[R
 func (e *executor[R]) Run(fn func() error) error {
 	_, err := e.executeSync(func(_ Execution[R]) (R, error) {
 		return *(new(R)), fn()
-	})
+	}, false)
 	return err
 }
 
 func (e *executor[R]) RunWithExecution(fn func(exec Execution[R]) error) error {
 	_, err := e.executeSync(func(exec Execution[R]) (R, error) {
 		return *(new(R)), fn(exec)
-	})
+	}, true)
 	return err
 }
 
 func (e *executor[R]) Get(fn func() (R, error)) (R, error) {
 	return e.executeSync(func(_ Execution[R]) (R, error) {
 		return fn()
-	})
+	}, false)
 }
 
 func (e *executor[R]) GetWithExecution(fn func(exec Execution[R]) (R, error)) (R, error) {
 	return e.executeSync(func(exec Execution[R]) (R, error) {
 		return fn(exec)
-	})
+	}, true)
 }
 
 func (e *executor[R]) RunAsync(fn func() error) ExecutionResult[R] {
 	return e.executeAsync(func(_ Execution[R]) (R, error) {
 		return *(new(R)), fn()
-	})
+	}, false)
 }
 
 func (e *executor[R]) RunWithExecutionAsync(fn func(exec Execution[R]) error) ExecutionResult[R] {
 	return e.executeAsync(func(exec Execution[R]) (R, error) {
 		return *(new(R)), fn(exec)
-	})
+	}, true)
 }
 
 func (e *executor[R]) GetAsync(fn func() (R, error)) ExecutionResult[R] {
-	return e.executeAsync(func(_ Execution[R]) (R, error) {
+	return e.executeAsync(func(e Execution[R]) (R, error) {
 		return fn()
-	})
+	}, false)
 }
 
 func (e *executor[R]) GetWithExecutionAsync(fn func(exec Execution[R]) (R, error)) ExecutionResult[R] {
 	return e.executeAsync(func(exec Execution[R]) (R, error) {
 		return fn(exec)
-	})
+	}, true)
 }
 
 // This type mirrors part of policy.ExecutionInternal, which we don't import here to avoid a cycle.
 type executionInternal[R any] interface {
 	Record(result *common.PolicyResult[R]) *common.PolicyResult[R]
+
+	Copy() Execution[R]
 }
 
 // This type mirrors part of policy.Executor, which we don't import here to avoid a cycle.
@@ -224,29 +226,30 @@ type policyExecutor[R any] interface {
 	Apply(innerFn func(Execution[R]) *common.PolicyResult[R]) func(Execution[R]) *common.PolicyResult[R]
 }
 
-func (e *executor[R]) executeSync(fn func(exec Execution[R]) (R, error)) (R, error) {
-	er := e.execute(fn)
+func (e *executor[R]) executeSync(fn func(exec Execution[R]) (R, error), withExec bool) (R, error) {
+	er := e.execute(fn, withExec)
 	return er.Result, er.Error
 }
 
-func (e *executor[R]) executeAsync(fn func(exec Execution[R]) (R, error)) ExecutionResult[R] {
+func (e *executor[R]) executeAsync(fn func(exec Execution[R]) (R, error), withExec bool) ExecutionResult[R] {
 	result := &executionResult[R]{
 		doneChan: make(chan any, 1),
 	}
 	go func() {
-		result.record(e.execute(fn))
+		result.record(e.execute(fn, withExec))
 	}()
 	return result
 }
 
-func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error)) *common.PolicyResult[R] {
+func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error), withExec bool) *common.PolicyResult[R] {
 	outerFn := func(exec Execution[R]) *common.PolicyResult[R] {
-		ex := exec.(*execution[R])
-		// Copy exec before passing to user provided func
-		ex.mtx.Lock()
-		execCopy := *ex
-		ex.mtx.Unlock()
-		result, err := fn(&execCopy)
+		execInternal := exec.(executionInternal[R])
+		var execForUser Execution[R]
+		if withExec {
+			// Only copy and provide an execution to the user fn if needed
+			execForUser = execInternal.Copy()
+		}
+		result, err := fn(execForUser)
 		er := &common.PolicyResult[R]{
 			Result:     result,
 			Error:      err,
@@ -254,7 +257,7 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error)) *common.Pol
 			Success:    true,
 			SuccessAll: true,
 		}
-		r := exec.(executionInternal[R]).Record(er)
+		r := execInternal.Record(er)
 		return r
 	}
 
