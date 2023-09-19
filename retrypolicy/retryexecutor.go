@@ -136,7 +136,7 @@ func getFixedOrRandomDelay[R any](config *retryPolicyConfig[R], delay time.Durat
 func adjustForBackoff[R any](config *retryPolicyConfig[R], exec failsafe.Execution[R], delay time.Duration) time.Duration {
 	if exec.Attempts() != 1 && config.maxDelay != 0 {
 		backoffDelay := time.Duration(float32(delay) * config.delayFactor)
-		delay = util.Min(backoffDelay, config.maxDelay)
+		delay = min(backoffDelay, config.maxDelay)
 	}
 	return delay
 }
@@ -152,7 +152,7 @@ func adjustForJitter[R any](config *retryPolicyConfig[R], delay time.Duration) t
 
 func adjustForMaxDuration[R any](config *retryPolicyConfig[R], delay time.Duration, elapsed time.Duration) time.Duration {
 	if config.maxDuration != 0 {
-		delay = util.Min(delay, config.maxDuration-elapsed)
+		delay = min(delay, config.maxDuration-elapsed)
 	}
-	return util.Max(0, delay)
+	return max(0, delay)
 }
