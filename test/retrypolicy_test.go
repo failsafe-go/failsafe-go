@@ -52,20 +52,20 @@ func TestShouldNotRetryOnSuccess(t *testing.T) {
 // Asserts that a non-handled error does not trigger retries.
 func TestShouldNotRetryOnNonRetriableFailure(t *testing.T) {
 	// Given
-	rp := retrypolicy.Builder[any]().
+	rp := retrypolicy.Builder[int]().
 		WithMaxRetries(-1).
-		HandleErrors(testutil.ErrConnecting).
+		HandleResult(500).
 		Build()
 
 	// When / Then
-	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[any](rp),
-		func(exec failsafe.Execution[any]) error {
+	testutil.TestGetSuccess(t, nil, failsafe.NewExecutor[int](rp),
+		func(exec failsafe.Execution[int]) (int, error) {
 			if exec.Attempts() <= 2 {
-				return testutil.ErrConnecting
+				return 500, nil
 			}
-			return testutil.ErrTimeout
+			return 0, nil
 		},
-		3, 3, testutil.ErrTimeout)
+		3, 3, 0)
 }
 
 // Asserts that an execution is failed when the max duration is exceeded.

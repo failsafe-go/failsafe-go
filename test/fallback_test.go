@@ -59,23 +59,23 @@ func TestShouldNotFallback(t *testing.T) {
 
 // Tests a fallback with failure conditions
 func TestShouldFallbackWithFailureConditions(t *testing.T) {
-	fb := fallback.BuilderWithResult[bool](true).
-		HandleErrors(testutil.ErrInvalidState).
+	fb := fallback.BuilderWithResult[int](0).
+		HandleResult(500).
 		Build()
 
 	// Fallback should not handle
-	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[bool](fb),
-		func(execution failsafe.Execution[bool]) (bool, error) {
-			return false, testutil.ErrInvalidArgument
+	testutil.TestGetSuccess(t, nil, failsafe.NewExecutor[int](fb),
+		func(execution failsafe.Execution[int]) (int, error) {
+			return 400, nil
 		},
-		1, 1, testutil.ErrInvalidArgument)
+		1, 1, 400)
 
 	// Fallback should handle
-	testutil.TestGetSuccess(t, nil, failsafe.NewExecutor[bool](fb),
-		func(execution failsafe.Execution[bool]) (bool, error) {
-			return false, testutil.ErrInvalidState
+	testutil.TestGetSuccess(t, nil, failsafe.NewExecutor[int](fb),
+		func(execution failsafe.Execution[int]) (int, error) {
+			return 500, nil
 		},
-		1, 1, true)
+		1, 1, 0)
 }
 
 // Asserts that the fallback result itself can cause an execution to be considered a failure.

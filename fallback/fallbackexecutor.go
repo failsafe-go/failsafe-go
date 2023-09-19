@@ -39,13 +39,13 @@ func (e *fallbackExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.
 				})
 			}
 
-			success := e.IsFailure(fallbackResult, fallbackError)
+			success := !e.IsFailure(fallbackResult, fallbackError)
 			result = &common.PolicyResult[R]{
 				Result:     fallbackResult,
 				Error:      fallbackError,
 				Done:       true,
 				Success:    success,
-				SuccessAll: success && result.SuccessAll,
+				SuccessAll: success,
 			}
 		}
 		return result
