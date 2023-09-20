@@ -162,3 +162,20 @@ func TestCancelWithTimeoutDuringBulkheadDelay(t *testing.T) {
 	// Then
 	assert.Error(t, timeout.ErrTimeoutExceeded, err)
 }
+
+// Tests a scenario where a canceled channel is closed before it's accessed, which should use the internally shared
+// closedChan.
+func TestCloseCanceledChannelBeforeAccessingIt(t *testing.T) {
+	to := timeout.With[any](10 * time.Millisecond)
+
+	failsafe.RunWithExecution(func(e failsafe.Execution[any]) error {
+		time.Sleep(200 * time.Millisecond)
+		canceled := false
+		select {
+		case <-e.Canceled():
+			canceled = true
+		}
+		assert.True(t, canceled)
+		return nil
+	}, to)
+}

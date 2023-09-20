@@ -60,6 +60,15 @@ type Execution[R any] interface {
 	Canceled() <-chan any
 }
 
+// A closed channel that can be used as a canceled channel where the canceled channel would have been closed before it
+// was accessed.
+var closedChan chan any
+
+func init() {
+	closedChan = make(chan any, 1)
+	close(closedChan)
+}
+
 type execution[R any] struct {
 	attempts         int
 	executions       int
@@ -72,7 +81,7 @@ type execution[R any] struct {
 	// Guarded by mtx
 	lastResult    R     // The last error that occurred, else the zero value for R.
 	lastError     error // The last error that occurred, else nil.
-	canceled      chan any
+	canceled      *chan any
 	canceledIndex *int
 }
 
@@ -132,7 +141,11 @@ func (e *execution[_]) IsCanceled() bool {
 func (e *execution[_]) Canceled() <-chan any {
 	e.mtx.Lock()
 	defer e.mtx.Unlock()
-	return e.canceled
+	// Create channel lazily
+	if *e.canceled == nil {
+		*e.canceled = make(chan any, 1)
+	}
+	return *e.canceled
 }
 
 func (e *execution[R]) InitializeAttempt(policyIndex int) bool {
@@ -146,7 +159,7 @@ func (e *execution[R]) InitializeAttempt(policyIndex int) bool {
 	e.attemptStartTime = time.Now()
 	if e.isCanceledForPolicy(-1) {
 		*e.canceledIndex = -1
-		e.canceled = make(chan any)
+		*e.canceled = nil
 	}
 	return true
 }
@@ -173,8 +186,10 @@ func (e *execution[R]) Cancel(policyIndex int, result *common.PolicyResult[R]) {
 	e.lastResult = result.Result
 	e.lastError = result.Error
 	*e.canceledIndex = policyIndex
-	if e.canceled != nil {
-		close(e.canceled)
+	if *e.canceled != nil {
+		close(*e.canceled)
+	} else {
+		*e.canceled = closedChan
 	}
 }
 

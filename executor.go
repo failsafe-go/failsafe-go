@@ -269,10 +269,11 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error), withExec bo
 
 	// Prepare execution
 	canceledIndex := -1
+	var canceled chan any
 	exec := &execution[R]{
 		mtx:           &sync.Mutex{},
-		canceled:      make(chan any),
 		canceledIndex: &canceledIndex,
+		canceled:      &canceled,
 		ctx:           e.ctx,
 	}
 
