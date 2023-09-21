@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -28,4 +29,16 @@ func WaitAndAssertCanceled[R any](t *testing.T, waitDuration time.Duration, exec
 		return
 	}
 	assert.Fail(t, "Expected context to be canceled by timeout")
+}
+
+// Returns a setup function that provides a context that is canceled after the sleepTime.
+func SetupWithContextSleep(sleepTime time.Duration) func() context.Context {
+	return func() context.Context {
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			time.Sleep(sleepTime)
+			cancel()
+		}()
+		return ctx
+	}
 }

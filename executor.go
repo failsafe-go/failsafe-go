@@ -257,8 +257,7 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error), withExec bo
 			Success:    true,
 			SuccessAll: true,
 		}
-		r := execInternal.Record(er)
-		return r
+		return execInternal.Record(er)
 	}
 
 	// Compose policy executors from the innermost policy to the outermost

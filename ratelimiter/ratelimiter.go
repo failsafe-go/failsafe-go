@@ -154,7 +154,7 @@ every 10 millis. The returned RateLimiter will have a max wait time of 0.
 
 Executions are performed with no delay until they exceed the max rate, after which they are rejected.
 */
-func Smooth[R any](maxExecutions int64, period time.Duration) RateLimiter[R] {
+func Smooth[R any](maxExecutions int, period time.Duration) RateLimiter[R] {
 	return SmoothBuilder[R](maxExecutions, period).Build()
 }
 
@@ -194,7 +194,7 @@ By default, the returned RateLimiterBuilder will have a max wait time of 0.
 Executions are performed with no delay until they exceed the max rate, after which they are either rejected or
 will block and wait until the max wait time is exceeded.
 */
-func SmoothBuilder[R any](maxExecutions int64, period time.Duration) RateLimiterBuilder[R] {
+func SmoothBuilder[R any](maxExecutions int, period time.Duration) RateLimiterBuilder[R] {
 	return &rateLimiterConfig[R]{
 		interval: period / time.Duration(maxExecutions),
 	}
@@ -295,7 +295,7 @@ func (r *rateLimiter[R]) AcquirePermitsWithMaxWait(ctx context.Context, requeste
 	return r.acquirePermitsWithMaxWait(ctx, nil, requestedPermits, maxWaitTime)
 }
 
-func (r *rateLimiter[R]) acquirePermitsWithMaxWait(ctx context.Context, canceled <-chan any, requestedPermits int, maxWaitTime time.Duration) error {
+func (r *rateLimiter[R]) acquirePermitsWithMaxWait(ctx context.Context, exec failsafe.Execution[R], requestedPermits int, maxWaitTime time.Duration) error {
 	waitTime := r.stats.acquirePermits(requestedPermits, maxWaitTime)
 	if waitTime == -1 {
 		return ErrRateLimitExceeded
@@ -304,13 +304,23 @@ func (r *rateLimiter[R]) acquirePermitsWithMaxWait(ctx context.Context, canceled
 		ctx = context.Background()
 	}
 	timer := time.NewTimer(waitTime)
-	select {
-	case <-timer.C:
-	case <-canceled:
-		timer.Stop()
-	case <-ctx.Done():
-		timer.Stop()
-		return ctx.Err()
+	if exec == nil {
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		}
+	} else {
+		select {
+		case <-timer.C:
+		case <-exec.Canceled():
+			timer.Stop()
+			return context.Canceled
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		}
 	}
 	return nil
 }
