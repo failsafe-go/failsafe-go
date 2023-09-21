@@ -43,17 +43,17 @@ func withRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *S
 	rp.OnRetry(func(e failsafe.ExecutionEvent[R]) {
 		stats.retryCount.Add(1)
 		if withLogging {
-			fmt.Println(fmt.Sprintf("%s %p retrying [result: %v, error: %s]", testutil.GetType(rp), rp, e.LastResult(), e.LastError()))
+			fmt.Printf("%s %p retrying [result: %v, error: %s]\n", testutil.GetType(rp), rp, e.LastResult(), e.LastError())
 		}
 	}).OnRetriesExceeded(func(e failsafe.ExecutionEvent[R]) {
 		stats.retriesExceededCount.Add(1)
 		if withLogging {
-			fmt.Println(fmt.Sprintf("%s %p retries exceeded", testutil.GetType(rp), rp))
+			fmt.Printf("%s %p retries exceeded\n", testutil.GetType(rp), rp)
 		}
 	}).OnAbort(func(e failsafe.ExecutionEvent[R]) {
 		stats.abortCount.Add(1)
 		if withLogging {
-			fmt.Println(fmt.Sprintf("%s %p abort", testutil.GetType(rp), rp))
+			fmt.Printf("%s %p abort\n", testutil.GetType(rp), rp)
 		}
 	})
 	withStatsAndLogs[retrypolicy.RetryPolicyBuilder[R], R](rp, stats, withLogging)
@@ -73,17 +73,17 @@ func WithBreakerLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R]) circuitb
 func withBreakerStatsAndLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R], stats *Stats, withLogging bool) circuitbreaker.CircuitBreakerBuilder[R] {
 	cb.OnOpen(func(event circuitbreaker.StateChangedEvent) {
 		if withLogging {
-			fmt.Println(fmt.Sprintf("%s %p opened", testutil.GetType(cb), cb))
+			fmt.Printf("%s %p opened\n", testutil.GetType(cb), cb)
 		}
 	})
 	cb.OnHalfOpen(func(event circuitbreaker.StateChangedEvent) {
 		if withLogging {
-			fmt.Println(fmt.Sprintf("%s %p half-opened", testutil.GetType(cb), cb))
+			fmt.Printf("%s %p half-opened\n", testutil.GetType(cb), cb)
 		}
 	})
 	cb.OnClose(func(event circuitbreaker.StateChangedEvent) {
 		if withLogging {
-			fmt.Println(fmt.Sprintf("%s %p closed", testutil.GetType(cb), cb))
+			fmt.Printf("%s %p closed\n", testutil.GetType(cb), cb)
 		}
 	})
 	withStatsAndLogs[circuitbreaker.CircuitBreakerBuilder[R], R](cb, stats, withLogging)
@@ -93,8 +93,8 @@ func withBreakerStatsAndLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R], 
 func WithTimeoutStatsAndLogs[R any](to timeout.TimeoutBuilder[R], stats *Stats) timeout.TimeoutBuilder[R] {
 	to.OnTimeoutExceeded(func(e failsafe.ExecutionDoneEvent[R]) {
 		stats.executionCount.Add(1)
-		fmt.Println(fmt.Sprintf("%s %p exceeded [attempts: %d, executions: %d]",
-			testutil.GetType(to), to, e.Attempts(), e.Executions()))
+		fmt.Printf("%s %p exceeded [attempts: %d, executions: %d]\n",
+			testutil.GetType(to), to, e.Attempts(), e.Executions())
 	})
 	return to
 }
@@ -102,8 +102,8 @@ func WithTimeoutStatsAndLogs[R any](to timeout.TimeoutBuilder[R], stats *Stats) 
 func WithFallbackStatsAndLogs[R any](fb fallback.FallbackBuilder[R], stats *Stats) fallback.FallbackBuilder[R] {
 	fb.OnFallbackExecuted(func(e failsafe.ExecutionDoneEvent[R]) {
 		stats.executionCount.Add(1)
-		fmt.Println(fmt.Sprintf("%s %p done [result: %v, error: %s, attempts: %d, executions: %d]",
-			testutil.GetType(fb), fb, e.Result, e.Error, e.Attempts(), e.Executions()))
+		fmt.Printf("%s %p done [result: %v, error: %s, attempts: %d, executions: %d]\n",
+			testutil.GetType(fb), fb, e.Result, e.Error, e.Attempts(), e.Executions())
 	})
 	return fb
 }
@@ -113,16 +113,16 @@ func withStatsAndLogs[P any, R any](policy failsafe.FailurePolicyBuilder[P, R], 
 		stats.executionCount.Add(1)
 		stats.successCount.Add(1)
 		if withLogging {
-			fmt.Println(fmt.Sprintf("%s %p success [result: %v, attempts: %d, executions: %d]",
-				testutil.GetType(policy), policy, e.LastResult(), e.Attempts(), e.Executions()))
+			fmt.Printf("%s %p success [result: %v, attempts: %d, executions: %d]\n",
+				testutil.GetType(policy), policy, e.LastResult(), e.Attempts(), e.Executions())
 		}
 	})
 	policy.OnFailure(func(e failsafe.ExecutionEvent[R]) {
 		stats.executionCount.Add(1)
 		stats.failureCount.Add(1)
 		if withLogging {
-			fmt.Println(fmt.Sprintf("%s %p failure [result: %v, error: %s, attempts: %d, executions: %d]",
-				testutil.GetType(policy), policy, e.LastResult(), e.LastError(), e.Attempts(), e.Executions()))
+			fmt.Printf("%s %p failure [result: %v, error: %s, attempts: %d, executions: %d]\n",
+				testutil.GetType(policy), policy, e.LastResult(), e.LastError(), e.Attempts(), e.Executions())
 		}
 	})
 }

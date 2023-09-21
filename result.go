@@ -45,9 +45,7 @@ func (e *executionResult[R]) IsDone() bool {
 }
 
 func (e *executionResult[R]) Get() (R, error) {
-	select {
-	case <-e.doneChan:
-	}
+	<-e.doneChan
 	result := e.result.Load()
 	if result != nil {
 		return (*result).Result, (*result).Error

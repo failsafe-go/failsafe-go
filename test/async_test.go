@@ -18,10 +18,8 @@ func TestGetAsync(t *testing.T) {
 	}, rp)
 
 	assert.False(t, result.IsDone())
-	select {
-	case <-result.Done():
-		assert.True(t, result.IsDone())
-		assert.True(t, result.Result())
-		assert.Nil(t, result.Error())
-	}
+	<-result.Done()
+	assert.True(t, result.IsDone())
+	assert.True(t, result.Result())
+	assert.Nil(t, result.Error())
 }

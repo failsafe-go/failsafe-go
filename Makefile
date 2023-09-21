@@ -15,3 +15,11 @@ test: ## Test Failsafe-go
 .PHONY: fmt
 fmt: ## Format Failsafe-go
 	go fmt ./...
+
+.PHONY: lint
+lint: ## Lint Failsafe-go
+	golangci-lint run -D errcheck,unused
+
+.PHONY: check
+check: ## Check Failsafe-go for a commit or release
+	fmt lint test

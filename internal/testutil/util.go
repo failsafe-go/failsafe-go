@@ -29,7 +29,7 @@ func (t *TestStopwatch) Reset() {
 func Timed(fn func()) time.Duration {
 	startTime := time.Now()
 	fn()
-	return time.Now().Sub(startTime)
+	return time.Since(startTime)
 }
 
 type Waiter struct {

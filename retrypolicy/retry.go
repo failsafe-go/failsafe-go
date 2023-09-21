@@ -41,7 +41,7 @@ func (e *RetriesExceededError) Unwrap() error {
 	if e.lastError != nil {
 		return e.lastError
 	}
-	return errors.New(fmt.Sprintf("failure: %v", e.lastResult))
+	return fmt.Errorf("failure: %v", e.lastResult)
 }
 
 // Is returns whether err is of the type RetriesExceededError.

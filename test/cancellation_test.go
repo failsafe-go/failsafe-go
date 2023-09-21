@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/bulkhead"
 	"github.com/failsafe-go/failsafe-go/fallback"
@@ -166,12 +164,7 @@ func TestCloseCanceledChannelBeforeAccessingIt(t *testing.T) {
 	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[any](to),
 		func(e failsafe.Execution[any]) error {
 			time.Sleep(100 * time.Millisecond)
-			canceled := false
-			select {
-			case <-e.Canceled():
-				canceled = true
-			}
-			assert.True(t, canceled)
+			<-e.Canceled()
 			return nil
 		},
 		1, 1, timeout.ErrTimeoutExceeded)

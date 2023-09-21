@@ -71,7 +71,7 @@ func NewStopwatch() Stopwatch {
 }
 
 func (s *wallClockStopwatch) ElapsedTime() time.Duration {
-	return time.Now().Sub(s.startTime)
+	return time.Since(s.startTime)
 }
 
 func (s *wallClockStopwatch) Reset() {
