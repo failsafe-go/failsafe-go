@@ -316,7 +316,7 @@ func (r *rateLimiter[R]) acquirePermitsWithMaxWait(ctx context.Context, exec fai
 		case <-timer.C:
 		case <-exec.Canceled():
 			timer.Stop()
-			return context.Canceled
+			return exec.LastError()
 		case <-ctx.Done():
 			timer.Stop()
 			return ctx.Err()

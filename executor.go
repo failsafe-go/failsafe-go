@@ -3,7 +3,6 @@ package failsafe
 import (
 	"context"
 	"math"
-	"sync"
 
 	"github.com/failsafe-go/failsafe-go/common"
 )
@@ -227,21 +226,23 @@ type policyExecutor[R any] interface {
 }
 
 func (e *executor[R]) executeSync(fn func(exec Execution[R]) (R, error), withExec bool) (R, error) {
-	er := e.execute(fn, withExec)
+	er := e.execute(fn, newExecution[R](e.ctx), withExec)
 	return er.Result, er.Error
 }
 
 func (e *executor[R]) executeAsync(fn func(exec Execution[R]) (R, error), withExec bool) ExecutionResult[R] {
+	exec := newExecution[R](e.ctx)
 	result := &executionResult[R]{
-		doneChan: make(chan any, 1),
+		execution: exec,
+		doneChan:  make(chan any, 1),
 	}
 	go func() {
-		result.record(e.execute(fn, withExec))
+		result.record(e.execute(fn, exec, withExec))
 	}()
 	return result
 }
 
-func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error), withExec bool) *common.PolicyResult[R] {
+func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error), exec *execution[R], withExec bool) *common.PolicyResult[R] {
 	outerFn := func(exec Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(executionInternal[R])
 		var execForUser Execution[R]
@@ -266,20 +267,10 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error), withExec bo
 		outerFn = pe.Apply(outerFn)
 	}
 
-	// Prepare execution
-	canceledIndex := -1
-	var canceled chan any
-	exec := &execution[R]{
-		mtx:           &sync.Mutex{},
-		canceledIndex: &canceledIndex,
-		canceled:      &canceled,
-		ctx:           e.ctx,
-	}
-
 	// Propagate context cancellations to the execution
-	ctx := e.ctx
 	var stopAfterFunc func() bool
-	if ctx != nil {
+	if e.ctx != nil {
+		ctx := e.ctx
 		stopAfterFunc = context.AfterFunc(ctx, func() {
 			exec.Cancel(math.MaxInt, &common.PolicyResult[R]{
 				Error: ctx.Err(),
@@ -289,7 +280,7 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error), withExec bo
 	}
 
 	// Initialize first attempt and execute
-	exec.InitializeAttempt(canceledIndex)
+	exec.InitializeAttempt(-1)
 	er := outerFn(exec)
 
 	// Stop the Context AfterFunc and call listeners

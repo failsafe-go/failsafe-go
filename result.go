@@ -1,10 +1,15 @@
 package failsafe
 
 import (
+	"errors"
+	"math"
 	"sync/atomic"
 
 	"github.com/failsafe-go/failsafe-go/common"
 )
+
+// ErrExecutionCanceled indicates that an execution was canceled by ExecutionResult.Cancel.
+var ErrExecutionCanceled = errors.New("execution canceled")
 
 // ExecutionResult provides the result of an asynchronous execution.
 type ExecutionResult[R any] interface {
@@ -22,9 +27,13 @@ type ExecutionResult[R any] interface {
 
 	// Error returns the execution error else nil, blocking until the execution is done.
 	Error() error
+
+	// Cancel cancels the execution if it is not already done, with ErrExecutionCanceled as the error.
+	Cancel()
 }
 
 type executionResult[R any] struct {
+	*execution[R]
 	doneChan chan any
 	done     atomic.Bool
 	result   atomic.Pointer[*common.PolicyResult[R]]
@@ -61,4 +70,11 @@ func (e *executionResult[R]) Result() R {
 func (e *executionResult[R]) Error() error {
 	_, err := e.Get()
 	return err
+}
+
+func (e *executionResult[R]) Cancel() {
+	e.execution.Cancel(math.MaxInt, &common.PolicyResult[R]{
+		Error: ErrExecutionCanceled,
+		Done:  true,
+	})
 }

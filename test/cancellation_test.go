@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/bulkhead"
 	"github.com/failsafe-go/failsafe-go/fallback"
@@ -60,6 +62,27 @@ func TestCancelWithContextDeadlineDuringExecution(t *testing.T) {
 			return nil
 		},
 		1, 1, context.DeadlineExceeded)
+}
+
+// Asserts that an execution is marked as canceled when it's canceled via an execution result.
+func TestCancelWithExecutionResult(t *testing.T) {
+	// Given
+	rp := retrypolicy.WithDefaults[any]()
+
+	// When
+	result := failsafe.RunWithExecutionAsync(func(e failsafe.Execution[any]) error {
+		testutil.WaitAndAssertCanceled(t, time.Second, e)
+		return nil
+	}, rp)
+	assert.False(t, result.IsDone())
+	time.Sleep(100 * time.Millisecond)
+	result.Cancel()
+
+	// Then
+	res, err := result.Get()
+	assert.True(t, result.IsDone())
+	assert.Nil(t, res)
+	assert.ErrorIs(t, err, failsafe.ErrExecutionCanceled)
 }
 
 // Asserts that when a RetryPolicy is blocked on a delay, canceling the context results in a Canceled error being returned.

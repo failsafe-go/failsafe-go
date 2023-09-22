@@ -225,3 +225,14 @@ func (e *execution[R]) Result() *common.PolicyResult[R] {
 	defer e.mtx.Unlock()
 	return e.result
 }
+
+func newExecution[R any](ctx context.Context) *execution[R] {
+	canceledIndex := -1
+	var canceled chan any
+	return &execution[R]{
+		mtx:           &sync.Mutex{},
+		canceledIndex: &canceledIndex,
+		canceled:      &canceled,
+		ctx:           ctx,
+	}
+}
