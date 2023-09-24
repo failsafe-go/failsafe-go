@@ -149,7 +149,7 @@ type RetryPolicyBuilder[R any] interface {
 
 	// OnRetriesExceeded registers the listener to be called when an execution fails and the max retry attempts or max
 	// duration are exceeded. The provided event will contain the last execution result and error.
-	OnRetriesExceeded(listener func(event failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R]
+	OnRetriesExceeded(listener func(failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R]
 
 	// Build returns a new RetryPolicy using the builder's configuration.
 	Build() RetryPolicy[R]

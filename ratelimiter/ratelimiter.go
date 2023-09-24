@@ -127,7 +127,7 @@ type RateLimiterBuilder[R any] interface {
 	WithMaxWaitTime(maxWaitTime time.Duration) RateLimiterBuilder[R]
 
 	// OnRateLimitExceeded registers the listener to be called when the rate limit is exceeded.
-	OnRateLimitExceeded(listener func(event failsafe.ExecutionEvent[R])) RateLimiterBuilder[R]
+	OnRateLimitExceeded(listener func(failsafe.ExecutionEvent[R])) RateLimiterBuilder[R]
 
 	// Build returns a new RateLimiter using the builder's configuration.
 	Build() RateLimiter[R]

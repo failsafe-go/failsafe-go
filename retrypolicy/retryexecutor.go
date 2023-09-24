@@ -106,7 +106,7 @@ func (rpe *retryPolicyExecutor[R]) OnFailure(exec policy.ExecutionInternal[R], r
 }
 
 // getDelay updates lastDelay and returns the new delay
-func (rpe *retryPolicyExecutor[R]) getDelay(exec failsafe.Execution[R]) time.Duration {
+func (rpe *retryPolicyExecutor[R]) getDelay(exec failsafe.ExecutionAttempt[R]) time.Duration {
 	delay := rpe.lastDelay
 	computedDelay := rpe.config.ComputeDelay(exec)
 	if computedDelay != -1 {
@@ -133,7 +133,7 @@ func getFixedOrRandomDelay[R any](config *retryPolicyConfig[R], delay time.Durat
 	return delay
 }
 
-func adjustForBackoff[R any](config *retryPolicyConfig[R], exec failsafe.Execution[R], delay time.Duration) time.Duration {
+func adjustForBackoff[R any](config *retryPolicyConfig[R], exec failsafe.ExecutionAttempt[R], delay time.Duration) time.Duration {
 	if exec.Attempts() != 1 && config.maxDelay != 0 {
 		backoffDelay := time.Duration(float32(delay) * config.delayFactor)
 		delay = min(backoffDelay, config.maxDelay)

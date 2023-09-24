@@ -21,5 +21,5 @@ lint: ## Lint Failsafe-go
 	golangci-lint run -D errcheck,unused
 
 .PHONY: check
-check: ## Check Failsafe-go for a commit or release
-	fmt lint test
+check: fmt test ## Check Failsafe-go for a commit or release
+	go mod tidy
