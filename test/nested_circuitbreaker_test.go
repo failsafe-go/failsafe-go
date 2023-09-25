@@ -43,8 +43,8 @@ func TestCircuitBreakerCircuitBreaker(t *testing.T) {
 			return testutil.ErrInvalidState
 		},
 		1, 1, testutil.ErrInvalidState)
-	assert.Equal(t, uint(1), cb1.Metrics().FailureCount())
-	assert.Equal(t, uint(0), cb2.Metrics().FailureCount())
+	assert.Equal(t, uint(1), cb1.Metrics().Failures())
+	assert.Equal(t, uint(0), cb2.Metrics().Failures())
 	assert.True(t, cb1.IsOpen())
 	assert.True(t, cb2.IsClosed())
 
@@ -53,8 +53,8 @@ func TestCircuitBreakerCircuitBreaker(t *testing.T) {
 			return testutil.ErrInvalidArgument
 		},
 		1, 1, testutil.ErrInvalidArgument)
-	assert.Equal(t, uint(0), cb1.Metrics().FailureCount())
-	assert.Equal(t, uint(1), cb2.Metrics().FailureCount())
+	assert.Equal(t, uint(0), cb1.Metrics().Failures())
+	assert.Equal(t, uint(1), cb2.Metrics().Failures())
 	assert.True(t, cb1.IsClosed())
 	assert.True(t, cb2.IsOpen())
 }

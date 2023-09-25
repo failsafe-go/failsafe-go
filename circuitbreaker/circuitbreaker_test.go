@@ -31,9 +31,9 @@ func TestGetSuccessAndFailureStats(t *testing.T) {
 	}
 
 	// Then
-	assert.Equal(t, uint(3), breaker.Metrics().FailureCount())
+	assert.Equal(t, uint(3), breaker.Metrics().Failures())
 	assert.Equal(t, uint(43), breaker.Metrics().FailureRate())
-	assert.Equal(t, uint(4), breaker.Metrics().SuccessCount())
+	assert.Equal(t, uint(4), breaker.Metrics().Successes())
 	assert.Equal(t, uint(57), breaker.Metrics().SuccessRate())
 
 	// When
@@ -46,9 +46,9 @@ func TestGetSuccessAndFailureStats(t *testing.T) {
 	}
 
 	// Then
-	assert.Equal(t, uint(2), breaker.Metrics().FailureCount())
+	assert.Equal(t, uint(2), breaker.Metrics().Failures())
 	assert.Equal(t, uint(20), breaker.Metrics().FailureRate())
-	assert.Equal(t, uint(8), breaker.Metrics().SuccessCount())
+	assert.Equal(t, uint(8), breaker.Metrics().Successes())
 	assert.Equal(t, uint(80), breaker.Metrics().SuccessRate())
 
 	// When
@@ -62,8 +62,8 @@ func TestGetSuccessAndFailureStats(t *testing.T) {
 	}
 
 	// Then
-	assert.Equal(t, uint(5), breaker.Metrics().FailureCount())
+	assert.Equal(t, uint(5), breaker.Metrics().Failures())
 	assert.Equal(t, uint(33), breaker.Metrics().FailureRate())
-	assert.Equal(t, uint(10), breaker.Metrics().SuccessCount())
+	assert.Equal(t, uint(10), breaker.Metrics().Successes())
 	assert.Equal(t, uint(67), breaker.Metrics().SuccessRate())
 }
