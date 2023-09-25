@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -151,6 +152,10 @@ func (s TestExecution[R]) AttemptStartTime() time.Time {
 
 func (s TestExecution[R]) ElapsedAttemptTime() time.Duration {
 	panic("unimplemented stub")
+}
+
+func (s TestExecution[R]) Context() context.Context {
+	return nil
 }
 
 func (s TestExecution[R]) IsCanceled() bool {

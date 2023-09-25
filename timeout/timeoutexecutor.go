@@ -1,6 +1,7 @@
 package timeout
 
 import (
+	"context"
 	"errors"
 	"sync/atomic"
 	"time"
@@ -23,11 +24,22 @@ func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.P
 	// This func sets up a race between a timeout and the innerFn returning
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
-		var result atomic.Pointer[common.PolicyResult[R]]
 
-		timer := time.AfterFunc(e.config.timeoutDelay, func() {
+		// Create child context if needed
+		ctx := exec.Context()
+		var ctxCancel func()
+		if ctx != nil {
+			ctx, ctxCancel = context.WithCancel(ctx)
+			execInternal = execInternal.CopyWithContext(ctx).(policy.ExecutionInternal[R])
+		}
+
+		var result atomic.Pointer[common.PolicyResult[R]]
+		timer := time.AfterFunc(e.config.timeLimit, func() {
 			timeoutResult := internal.FailureResult[R](ErrTimeoutExceeded)
 			if result.CompareAndSwap(nil, timeoutResult) {
+				if ctxCancel != nil {
+					ctxCancel()
+				}
 				execInternal.Cancel(e.PolicyIndex, timeoutResult)
 				if e.config.onTimeoutExceeded != nil {
 					e.config.onTimeoutExceeded(failsafe.ExecutionDoneEvent[R]{
@@ -38,8 +50,8 @@ func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.P
 			}
 		})
 
-		// Store result and cancel timeout context if needed
-		if result.CompareAndSwap(nil, innerFn(exec)) {
+		// Store result and ctxCancel timeout context if needed
+		if result.CompareAndSwap(nil, innerFn(execInternal)) {
 			timer.Stop()
 		}
 		return e.PostExecute(execInternal, result.Load())

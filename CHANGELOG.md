@@ -5,6 +5,7 @@
 ### Improvements
 
 - Lazily create canceled channels.
+- Propagate cancellations to contexts.
 
 ## 0.3.0
 

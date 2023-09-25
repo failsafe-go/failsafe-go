@@ -231,10 +231,16 @@ func (e *executor[R]) executeSync(fn func(exec Execution[R]) (R, error), withExe
 }
 
 func (e *executor[R]) executeAsync(fn func(exec Execution[R]) (R, error), withExec bool) ExecutionResult[R] {
-	exec := newExecution[R](e.ctx)
+	var cancelFunc func()
+	ctx := e.ctx
+	if ctx != nil {
+		ctx, cancelFunc = context.WithCancel(ctx)
+	}
+	exec := newExecution[R](ctx)
 	result := &executionResult[R]{
-		execution: exec,
-		doneChan:  make(chan any, 1),
+		execution:  exec,
+		cancelFunc: cancelFunc,
+		doneChan:   make(chan any, 1),
 	}
 	go func() {
 		result.record(e.execute(fn, exec, withExec))

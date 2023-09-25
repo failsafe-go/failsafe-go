@@ -26,6 +26,9 @@ func WaitAndAssertCanceled[R any](t *testing.T, waitDuration time.Duration, exec
 	case <-exec.Canceled():
 		timer.Stop()
 		assert.True(t, exec.IsCanceled())
+		if exec.Context() != nil {
+			assert.NotNil(t, exec.Context().Err(), "execution Context should be Done")
+		}
 		return
 	}
 	assert.Fail(t, "Expected context to be canceled by timeout")

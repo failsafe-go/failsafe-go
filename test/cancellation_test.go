@@ -18,12 +18,14 @@ import (
 )
 
 // Asserts that an execution is marked as canceled when a timeout is exceeded.
+// Also asserts that the context provided to an execution is canceled.
 func TestCancelWithTimeoutDuringExecution(t *testing.T) {
 	// Given
 	to := timeout.With[any](100 * time.Millisecond)
+	executor := failsafe.NewExecutor[any](to).WithContext(context.Background())
 
 	// When / Then
-	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[any](to),
+	testutil.TestRunFailure(t, nil, executor,
 		func(exec failsafe.Execution[any]) error {
 			testutil.WaitAndAssertCanceled(t, time.Second, exec)
 			return nil
@@ -65,15 +67,17 @@ func TestCancelWithContextDeadlineDuringExecution(t *testing.T) {
 }
 
 // Asserts that an execution is marked as canceled when it's canceled via an execution result.
+// Also asserts that the context provided to an execution is canceled.
 func TestCancelWithExecutionResult(t *testing.T) {
 	// Given
 	rp := retrypolicy.WithDefaults[any]()
 
 	// When
-	result := failsafe.RunWithExecutionAsync(func(e failsafe.Execution[any]) error {
+	executor := failsafe.NewExecutor[any](rp).WithContext(context.Background())
+	result := executor.RunWithExecutionAsync(func(e failsafe.Execution[any]) error {
 		testutil.WaitAndAssertCanceled(t, time.Second, e)
 		return nil
-	}, rp)
+	})
 	assert.False(t, result.IsDone())
 	time.Sleep(100 * time.Millisecond)
 	result.Cancel()

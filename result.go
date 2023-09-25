@@ -28,15 +28,17 @@ type ExecutionResult[R any] interface {
 	// Error returns the execution error else nil, blocking until the execution is done.
 	Error() error
 
-	// Cancel cancels the execution if it is not already done, with ErrExecutionCanceled as the error.
+	// Cancel cancels the execution if it is not already done, with ErrExecutionCanceled as the error. If a Context was
+	// configured with the execution, a child context will be created for the execution and canceled as well.
 	Cancel()
 }
 
 type executionResult[R any] struct {
 	*execution[R]
-	doneChan chan any
-	done     atomic.Bool
-	result   atomic.Pointer[*common.PolicyResult[R]]
+	cancelFunc func()
+	doneChan   chan any
+	done       atomic.Bool
+	result     atomic.Pointer[*common.PolicyResult[R]]
 }
 
 func (e *executionResult[R]) record(result *common.PolicyResult[R]) {
@@ -73,6 +75,10 @@ func (e *executionResult[R]) Error() error {
 }
 
 func (e *executionResult[R]) Cancel() {
+	// Propagate cancelation to contexts
+	if e.cancelFunc != nil {
+		e.cancelFunc()
+	}
 	e.execution.Cancel(math.MaxInt, &common.PolicyResult[R]{
 		Error: ErrExecutionCanceled,
 		Done:  true,

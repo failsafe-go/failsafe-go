@@ -51,7 +51,7 @@ func TestGetWithExecution(t *testing.T) {
 	assert.Equal(t, "fallback", result)
 	assert.Nil(t, err)
 	assert.Equal(t, 3, lasteExec.Attempts())
-	assert.Equal(t, 2, lasteExec.Executions())
+	assert.Equal(t, 3, lasteExec.Executions())
 	assert.Equal(t, "", lasteExec.LastResult())
 	assert.Equal(t, testutil.ErrInvalidArgument, lasteExec.LastError())
 }

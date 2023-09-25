@@ -3,6 +3,7 @@ package failsafe
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/failsafe-go/failsafe-go/common"
@@ -52,6 +53,10 @@ type ExecutionAttempt[R any] interface {
 type Execution[R any] interface {
 	ExecutionAttempt[R]
 
+	// Context returns the context configured for the execution, else nil if none is configured. For executions that may
+	// timeout, each attempt will get a separate child context.
+	Context() context.Context
+
 	// IsCanceled returns whether the execution has been canceled by an external Context or a timeout.Timeout.
 	IsCanceled() bool
 
@@ -70,30 +75,30 @@ func init() {
 }
 
 type execution[R any] struct {
-	attempts         int
-	executions       int
 	startTime        time.Time
 	attemptStartTime time.Time
-	result           *common.PolicyResult[R]
 	ctx              context.Context
 	mtx              *sync.Mutex
 
 	// Guarded by mtx
-	lastResult    R     // The last error that occurred, else the zero value for R.
-	lastError     error // The last error that occurred, else nil.
+	attempts      *atomic.Uint32
+	executions    *atomic.Uint32
+	result        **common.PolicyResult[R]
 	canceled      *chan any
 	canceledIndex *int
+	lastResult    R     // The last error that occurred, else the zero value for R.
+	lastError     error // The last error that occurred, else nil.
 }
 
 var _ Execution[any] = &execution[any]{}
 var _ ExecutionStats = &execution[any]{}
 
 func (e *execution[R]) Attempts() int {
-	return e.attempts
+	return int(e.attempts.Load())
 }
 
 func (e *execution[R]) Executions() int {
-	return e.executions
+	return int(e.executions.Load())
 }
 
 func (e *execution[R]) StartTime() time.Time {
@@ -101,11 +106,11 @@ func (e *execution[R]) StartTime() time.Time {
 }
 
 func (e *execution[R]) IsFirstAttempt() bool {
-	return e.attempts == 1
+	return e.attempts.Load() == 1
 }
 
 func (e *execution[R]) IsRetry() bool {
-	return e.attempts > 1
+	return e.attempts.Load() > 1
 }
 
 func (e *execution[R]) ElapsedTime() time.Duration {
@@ -155,7 +160,7 @@ func (e *execution[R]) InitializeAttempt(policyIndex int) bool {
 	if e.isCanceledForPolicy(policyIndex) {
 		return false
 	}
-	e.attempts++
+	e.attempts.Add(1)
 	e.attemptStartTime = time.Now()
 	if e.isCanceledForPolicy(-1) {
 		*e.canceledIndex = -1
@@ -167,13 +172,13 @@ func (e *execution[R]) InitializeAttempt(policyIndex int) bool {
 func (e *execution[R]) Record(result *common.PolicyResult[R]) *common.PolicyResult[R] {
 	e.mtx.Lock()
 	defer e.mtx.Unlock()
-	e.executions++
+	e.executions.Add(1)
 	if !e.isCanceledForPolicy(-1) {
-		e.result = result
+		*e.result = result
 		e.lastResult = result.Result
 		e.lastError = result.Error
 	}
-	return e.result
+	return *e.result
 }
 
 func (e *execution[R]) Cancel(policyIndex int, result *common.PolicyResult[R]) {
@@ -182,7 +187,7 @@ func (e *execution[R]) Cancel(policyIndex int, result *common.PolicyResult[R]) {
 	if e.isCanceledForPolicy(-1) {
 		return
 	}
-	e.result = result
+	*e.result = result
 	e.lastResult = result.Result
 	e.lastError = result.Error
 	*e.canceledIndex = policyIndex
@@ -204,6 +209,13 @@ func (e *execution[R]) isCanceledForPolicy(policyIndex int) bool {
 	return *e.canceledIndex > policyIndex
 }
 
+func (e *execution[R]) Copy() Execution[R] {
+	e.mtx.Lock()
+	c := *e
+	e.mtx.Unlock()
+	return &c
+}
+
 func (e *execution[R]) CopyWithResult(result *common.PolicyResult[R]) Execution[R] {
 	e.mtx.Lock()
 	c := *e
@@ -213,24 +225,31 @@ func (e *execution[R]) CopyWithResult(result *common.PolicyResult[R]) Execution[
 	return &c
 }
 
-func (e *execution[R]) Copy() Execution[R] {
+func (e *execution[R]) CopyWithContext(ctx context.Context) Execution[R] {
 	e.mtx.Lock()
 	c := *e
 	e.mtx.Unlock()
+	c.ctx = ctx
 	return &c
 }
 
 func (e *execution[R]) Result() *common.PolicyResult[R] {
 	e.mtx.Lock()
 	defer e.mtx.Unlock()
-	return e.result
+	return *e.result
 }
 
 func newExecution[R any](ctx context.Context) *execution[R] {
+	attempts := atomic.Uint32{}
+	executions := atomic.Uint32{}
+	var result *common.PolicyResult[R]
 	canceledIndex := -1
 	var canceled chan any
 	return &execution[R]{
 		mtx:           &sync.Mutex{},
+		attempts:      &attempts,
+		executions:    &executions,
+		result:        &result,
 		canceledIndex: &canceledIndex,
 		canceled:      &canceled,
 		ctx:           ctx,

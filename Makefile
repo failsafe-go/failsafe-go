@@ -12,6 +12,10 @@ build: ## Build Failsafe-go
 test: ## Test Failsafe-go
 	go run gotest.tools/gotestsum@latest
 
+.PHONY: test-with-race
+test-with-race: ## Test Failsafe-go
+	go test -race ./...
+
 .PHONY: fmt
 fmt: ## Format Failsafe-go
 	go fmt ./...
