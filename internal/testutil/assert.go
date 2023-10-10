@@ -27,7 +27,7 @@ func WaitAndAssertCanceled[R any](t *testing.T, waitDuration time.Duration, exec
 		timer.Stop()
 		assert.True(t, exec.IsCanceled())
 		if exec.Context() != nil {
-			assert.NotNil(t, exec.Context().Err(), "execution Context should be Done")
+			assert.NotNil(t, exec.Context().Err(), "execution Context Err should be not nil")
 		}
 		return
 	}

@@ -59,7 +59,7 @@ type BulkheadBuilder[R any] interface {
 }
 
 type bulkheadConfig[R any] struct {
-	maxConcurrency int
+	maxConcurrency uint
 	maxWaitTime    time.Duration
 	onBulkheadFull func(failsafe.ExecutionEvent[R])
 }
@@ -84,12 +84,12 @@ func (c *bulkheadConfig[R]) Build() Bulkhead[R] {
 var _ BulkheadBuilder[any] = &bulkheadConfig[any]{}
 
 // With returns a new Bulkhead for execution result type R and the maxConcurrency.
-func With[R any](maxConcurrency int) Bulkhead[R] {
+func With[R any](maxConcurrency uint) Bulkhead[R] {
 	return Builder[R](maxConcurrency).Build()
 }
 
 // Builder returns a BulkheadBuilder for execution result type R which builds Timeouts for the timeoutDelay.
-func Builder[R any](maxConcurrency int) BulkheadBuilder[R] {
+func Builder[R any](maxConcurrency uint) BulkheadBuilder[R] {
 	return &bulkheadConfig[R]{
 		maxConcurrency: maxConcurrency,
 	}
