@@ -13,7 +13,7 @@ import (
 var _ circuitState[any] = &openState[any]{}
 
 func TestTryAcquirePermit(t *testing.T) {
-	breaker := Builder[any]().WithDelayFn(func(exec failsafe.ExecutionAttempt[any]) time.Duration {
+	breaker := Builder[any]().WithDelayFunc(func(exec failsafe.ExecutionAttempt[any]) time.Duration {
 		return 100 * time.Millisecond
 	}).Build().(*circuitBreaker[any])
 	breaker.open(testutil.TestExecution[any]{})

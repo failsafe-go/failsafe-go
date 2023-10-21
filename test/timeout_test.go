@@ -192,7 +192,7 @@ func TestTimeoutFallbackWithBlockedFallback(t *testing.T) {
 	timeoutStats := &policytesting.Stats{}
 	fbStats := &policytesting.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](100*time.Millisecond), timeoutStats).Build()
-	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithFn[any](func(_ failsafe.Execution[any]) (any, error) {
+	fb := policytesting.WithFallbackStatsAndLogs[any](fallback.BuilderWithFunc[any](func(_ failsafe.Execution[any]) (any, error) {
 		time.Sleep(200 * time.Millisecond)
 		return nil, testutil.ErrInvalidState
 	}), fbStats).Build()

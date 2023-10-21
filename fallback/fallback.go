@@ -56,15 +56,15 @@ func WithError[R any](err error) Fallback[R] {
 	return BuilderWithError[R](err).Build()
 }
 
-// WithFn returns a Fallback for execution result type R that uses fallbackFn to handle a failed execution.
-func WithFn[R any](fallbackFn func(exec failsafe.Execution[R]) (R, error)) Fallback[R] {
-	return BuilderWithFn(fallbackFn).Build()
+// WithFunc returns a Fallback for execution result type R that uses fallbackFn to handle a failed execution.
+func WithFunc[R any](fallbackFn func(exec failsafe.Execution[R]) (R, error)) Fallback[R] {
+	return BuilderWithFunc(fallbackFn).Build()
 }
 
 // BuilderWithResult returns a FallbackBuilder for execution result type R which builds Fallbacks that return the result
 // when an execution fails.
 func BuilderWithResult[R any](result R) FallbackBuilder[R] {
-	return BuilderWithFn(func(exec failsafe.Execution[R]) (R, error) {
+	return BuilderWithFunc(func(exec failsafe.Execution[R]) (R, error) {
 		return result, nil
 	})
 }
@@ -72,14 +72,14 @@ func BuilderWithResult[R any](result R) FallbackBuilder[R] {
 // BuilderWithError returns a FallbackBuilder for execution result type R which builds Fallbacks that return the error
 // when an execution fails.
 func BuilderWithError[R any](err error) FallbackBuilder[R] {
-	return BuilderWithFn(func(exec failsafe.Execution[R]) (R, error) {
+	return BuilderWithFunc(func(exec failsafe.Execution[R]) (R, error) {
 		return *(new(R)), err
 	})
 }
 
-// BuilderWithFn returns a FallbackBuilder for execution result type R which builds Fallbacks that use the fallbackFn to
+// BuilderWithFunc returns a FallbackBuilder for execution result type R which builds Fallbacks that use the fallbackFn to
 // handle failed executions.
-func BuilderWithFn[R any](fallbackFn func(exec failsafe.Execution[R]) (R, error)) FallbackBuilder[R] {
+func BuilderWithFunc[R any](fallbackFn func(exec failsafe.Execution[R]) (R, error)) FallbackBuilder[R] {
 	return &fallbackConfig[R]{
 		BaseFailurePolicy: &policy.BaseFailurePolicy[R]{},
 		fn:                fallbackFn,

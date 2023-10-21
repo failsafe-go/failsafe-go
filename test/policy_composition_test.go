@@ -88,7 +88,7 @@ func TestFallbackRetryPolicy(t *testing.T) {
 		3, 3, true)
 
 	// Given
-	fb = fallback.WithFn(func(exec failsafe.Execution[bool]) (bool, error) {
+	fb = fallback.WithFunc(func(exec failsafe.Execution[bool]) (bool, error) {
 		assert.False(t, exec.LastResult())
 		assert.ErrorIs(t, exec.LastError(), testutil.ErrInvalidState)
 		return true, nil
@@ -121,7 +121,7 @@ func TestRetryPolicyFallback(t *testing.T) {
 // Tests fallback with a circuit breaker that is closed.
 func TestFallbackCircuitBreaker(t *testing.T) {
 	// Given
-	fb := fallback.WithFn(func(exec failsafe.Execution[bool]) (bool, error) {
+	fb := fallback.WithFunc(func(exec failsafe.Execution[bool]) (bool, error) {
 		assert.False(t, exec.LastResult())
 		assert.ErrorIs(t, testutil.ErrInvalidState, exec.LastError())
 		return true, nil
@@ -143,7 +143,7 @@ func TestFallbackCircuitBreaker(t *testing.T) {
 // Tests fallback with a circuit breaker that is open.
 func TestFallbackCircuitBreakerOpen(t *testing.T) {
 	// Given
-	fb := fallback.WithFn(func(exec failsafe.Execution[bool]) (bool, error) {
+	fb := fallback.WithFunc(func(exec failsafe.Execution[bool]) (bool, error) {
 		assert.False(t, exec.LastResult())
 		assert.ErrorIs(t, circuitbreaker.ErrCircuitBreakerOpen, exec.LastError())
 		return false, nil
@@ -250,7 +250,7 @@ func TestCircuitBreakerTimeout(t *testing.T) {
 func TestFallbackTimeout(t *testing.T) {
 	// Given
 	to := timeout.With[bool](10 * time.Millisecond)
-	fb := fallback.WithFn(func(e failsafe.Execution[bool]) (bool, error) {
+	fb := fallback.WithFunc(func(e failsafe.Execution[bool]) (bool, error) {
 		assert.ErrorIs(t, e.LastError(), timeout.ErrTimeoutExceeded)
 		return true, nil
 	})

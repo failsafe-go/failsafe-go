@@ -270,8 +270,8 @@ func (c *retryPolicyConfig[R]) WithDelay(delay time.Duration) RetryPolicyBuilder
 	return c
 }
 
-func (c *retryPolicyConfig[R]) WithDelayFn(delayFn failsafe.DelayFunction[R]) RetryPolicyBuilder[R] {
-	c.BaseDelayablePolicy.WithDelayFn(delayFn)
+func (c *retryPolicyConfig[R]) WithDelayFunc(delayFn failsafe.DelayFunc[R]) RetryPolicyBuilder[R] {
+	c.BaseDelayablePolicy.WithDelayFunc(delayFn)
 	return c
 }
 

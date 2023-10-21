@@ -119,7 +119,7 @@ func TestCancelWithContextWithFallback(t *testing.T) {
 // Asserts that waiting on a cancelation works from within a fallback function.
 func TestCancelWithContextDuringFallbackFn(t *testing.T) {
 	// Given
-	fb := fallback.WithFn(func(exec failsafe.Execution[any]) (any, error) {
+	fb := fallback.WithFunc(func(exec failsafe.Execution[any]) (any, error) {
 		testutil.WaitAndAssertCanceled(t, time.Second, exec)
 		return nil, nil
 	})
