@@ -21,9 +21,7 @@ func TestIsAbortableForError(t *testing.T) {
 	rp := Builder[any]().AbortOnErrors(testutil.ErrInvalidArgument).Build().(*retryPolicy[any])
 
 	assert.True(t, rp.config.isAbortable(nil, testutil.ErrInvalidArgument))
-	assert.True(t, rp.config.isAbortable(nil, &testutil.CompositeError{
-		Cause: testutil.ErrInvalidArgument,
-	}))
+	assert.True(t, rp.config.isAbortable(nil, testutil.NewCompositeError(testutil.ErrInvalidArgument)))
 	assert.False(t, rp.config.isAbortable(nil, testutil.ErrConnecting))
 }
 

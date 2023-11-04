@@ -21,11 +21,14 @@ func (ce *CompositeError) Unwrap() error {
 }
 
 func (ce *CompositeError) Is(err error) bool {
-	e, ok := err.(*CompositeError)
-	if !ok {
-		return false
+	_, ok := err.(*CompositeError)
+	return ok
+}
+
+func NewCompositeError(cause error) *CompositeError {
+	return &CompositeError{
+		Cause: cause,
 	}
-	return errors.Is(e, ce.Cause)
 }
 
 var ErrInvalidArgument = errors.New("invalid argument")

@@ -34,18 +34,14 @@ func TestShouldFallbackOfError(t *testing.T) {
 // Tests Fallback.WithFunc
 func TestShouldFallbackOfFn(t *testing.T) {
 	fb := fallback.WithFunc(func(exec failsafe.Execution[bool]) (bool, error) {
-		return false, &testutil.CompositeError{
-			Cause: exec.LastError(),
-		}
+		return false, testutil.NewCompositeError(exec.LastError())
 	})
 
 	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[bool](fb),
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.ErrConnecting
 		},
-		1, 1, &testutil.CompositeError{
-			Cause: testutil.ErrConnecting,
-		})
+		1, 1, testutil.NewCompositeError(testutil.ErrConnecting))
 }
 
 // Tests a successful execution that does not fallback
