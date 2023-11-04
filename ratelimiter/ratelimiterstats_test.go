@@ -185,7 +185,7 @@ func newSmoothLimiterStats(maxRate time.Duration) (*smoothRateLimiterStats[any],
 	return stats, stopwatch
 }
 
-func newBurstyLimiterStats(maxPermits int, period time.Duration) (*burstyRateLimiterStats[any], *testutil.TestStopwatch) {
+func newBurstyLimiterStats(maxPermits uint, period time.Duration) (*burstyRateLimiterStats[any], *testutil.TestStopwatch) {
 	stats := BurstyBuilder[any](maxPermits, period).Build().(*rateLimiter[any]).stats.(*burstyRateLimiterStats[any])
 	stopwatch := &testutil.TestStopwatch{}
 	stats.stopwatch = stopwatch
