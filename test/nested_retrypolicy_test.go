@@ -35,12 +35,12 @@ func TestNestedRetryPoliciesWhereInnerIsExceeded(t *testing.T) {
 	// When / Then
 	testutil.TestGetSuccess(t, setup, failsafe.NewExecutor[bool](outerRetryPolicy, innerRetryPolicy), fn,
 		6, 6, true)
-	assert.Equal(t, 5, outerRetryStats.ExecutionCount())
-	assert.Equal(t, 4, outerRetryStats.FailureCount())
-	assert.Equal(t, 1, outerRetryStats.SuccessCount())
-	assert.Equal(t, 2, innerRetryStats.ExecutionCount())
-	assert.Equal(t, 2, innerRetryStats.FailureCount())
-	assert.Equal(t, 0, innerRetryStats.SuccessCount())
+	assert.Equal(t, 5, outerRetryStats.Executions())
+	assert.Equal(t, 4, outerRetryStats.Failures())
+	assert.Equal(t, 1, outerRetryStats.Successes())
+	assert.Equal(t, 2, innerRetryStats.Executions())
+	assert.Equal(t, 2, innerRetryStats.Failures())
+	assert.Equal(t, 0, innerRetryStats.Successes())
 }
 
 /*
@@ -77,12 +77,12 @@ func TestFallbackRetryPolicyRetryPolicy(t *testing.T) {
 	//    rp2 ErrInvalidArgument - failure, retry
 	//    rp1 ErrInvalidState - failure, retries exceeded
 	//    rp2 ErrInvalidState - success
-	assert.Equal(t, 5, retryPolicy1Stats.ExecutionCount())
-	assert.Equal(t, 3, retryPolicy1Stats.FailureCount())
-	assert.Equal(t, 2, retryPolicy1Stats.SuccessCount())
-	assert.Equal(t, 3, retryPolicy2Stats.ExecutionCount())
-	assert.Equal(t, 2, retryPolicy2Stats.FailureCount())
-	assert.Equal(t, 1, retryPolicy2Stats.SuccessCount())
+	assert.Equal(t, 5, retryPolicy1Stats.Executions())
+	assert.Equal(t, 3, retryPolicy1Stats.Failures())
+	assert.Equal(t, 2, retryPolicy1Stats.Successes())
+	assert.Equal(t, 3, retryPolicy2Stats.Executions())
+	assert.Equal(t, 2, retryPolicy2Stats.Failures())
+	assert.Equal(t, 1, retryPolicy2Stats.Successes())
 
 	// When / Then
 	testutil.TestGetSuccess(t, setup, failsafe.NewExecutor[any](fb, retryPolicy1, retryPolicy2), fn,
@@ -96,10 +96,10 @@ func TestFallbackRetryPolicyRetryPolicy(t *testing.T) {
 	//    rp2 ErrInvalidArgument - failure, retry
 	//    rp2 ErrInvalidState - success
 	//    rp1 ErrInvalidState - retries exceeded
-	assert.Equal(t, 3, retryPolicy1Stats.ExecutionCount())
-	assert.Equal(t, 3, retryPolicy1Stats.FailureCount())
-	assert.Equal(t, 0, retryPolicy1Stats.SuccessCount())
-	assert.Equal(t, 5, retryPolicy2Stats.ExecutionCount())
-	assert.Equal(t, 2, retryPolicy2Stats.FailureCount())
-	assert.Equal(t, 3, retryPolicy2Stats.SuccessCount())
+	assert.Equal(t, 3, retryPolicy1Stats.Executions())
+	assert.Equal(t, 3, retryPolicy1Stats.Failures())
+	assert.Equal(t, 0, retryPolicy1Stats.Successes())
+	assert.Equal(t, 5, retryPolicy2Stats.Executions())
+	assert.Equal(t, 2, retryPolicy2Stats.Failures())
+	assert.Equal(t, 3, retryPolicy2Stats.Successes())
 }

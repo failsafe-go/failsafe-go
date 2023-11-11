@@ -93,8 +93,7 @@ func withBreakerStatsAndLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R], 
 func WithTimeoutStatsAndLogs[R any](to timeout.TimeoutBuilder[R], stats *Stats) timeout.TimeoutBuilder[R] {
 	to.OnTimeoutExceeded(func(e failsafe.ExecutionDoneEvent[R]) {
 		stats.executionCount.Add(1)
-		fmt.Printf("%s %p exceeded [attempts: %d, executions: %d]\n",
-			testutil.GetType(to), to, e.Attempts(), e.Executions())
+		fmt.Printf("%s %p exceeded [attempts: %d, executions: %d]\n", testutil.GetType(to), to, e.Attempts(), e.Executions())
 	})
 	return to
 }
@@ -138,27 +137,27 @@ type Stats struct {
 	abortCount           atomic.Int32
 }
 
-func (s *Stats) ExecutionCount() int {
+func (s *Stats) Executions() int {
 	return int(s.executionCount.Load())
 }
 
-func (s *Stats) SuccessCount() int {
+func (s *Stats) Successes() int {
 	return int(s.successCount.Load())
 }
 
-func (s *Stats) FailureCount() int {
+func (s *Stats) Failures() int {
 	return int(s.failureCount.Load())
 }
 
-func (s *Stats) RetryCount() int {
+func (s *Stats) Retries() int {
 	return int(s.retryCount.Load())
 }
 
-func (s *Stats) RetriesExceededCount() int {
+func (s *Stats) RetriesExceeded() int {
 	return int(s.retriesExceededCount.Load())
 }
 
-func (s *Stats) AbortCount() int {
+func (s *Stats) Aborts() int {
 	return int(s.abortCount.Load())
 }
 
