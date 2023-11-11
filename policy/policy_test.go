@@ -50,7 +50,7 @@ func TestIsFailureForPredicate(t *testing.T) {
 func TestShouldComputeDelay(t *testing.T) {
 	expected := 5 * time.Millisecond
 	policy := BaseDelayablePolicy[any]{
-		DelayFn: func(exec failsafe.ExecutionAttempt[any]) time.Duration {
+		DelayFunc: func(exec failsafe.ExecutionAttempt[any]) time.Duration {
 			return expected
 		},
 	}

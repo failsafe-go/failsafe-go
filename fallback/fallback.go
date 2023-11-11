@@ -56,9 +56,9 @@ func WithError[R any](err error) Fallback[R] {
 	return BuilderWithError[R](err).Build()
 }
 
-// WithFunc returns a Fallback for execution result type R that uses fallbackFn to handle a failed execution.
-func WithFunc[R any](fallbackFn func(exec failsafe.Execution[R]) (R, error)) Fallback[R] {
-	return BuilderWithFunc(fallbackFn).Build()
+// WithFunc returns a Fallback for execution result type R that uses fallbackFunc to handle a failed execution.
+func WithFunc[R any](fallbackFunc func(exec failsafe.Execution[R]) (R, error)) Fallback[R] {
+	return BuilderWithFunc(fallbackFunc).Build()
 }
 
 // BuilderWithResult returns a FallbackBuilder for execution result type R which builds Fallbacks that return the result
@@ -79,10 +79,10 @@ func BuilderWithError[R any](err error) FallbackBuilder[R] {
 
 // BuilderWithFunc returns a FallbackBuilder for execution result type R which builds Fallbacks that use the fallbackFn to
 // handle failed executions.
-func BuilderWithFunc[R any](fallbackFn func(exec failsafe.Execution[R]) (R, error)) FallbackBuilder[R] {
+func BuilderWithFunc[R any](fallbackFunc func(exec failsafe.Execution[R]) (R, error)) FallbackBuilder[R] {
 	return &fallbackConfig[R]{
 		BaseFailurePolicy: &policy.BaseFailurePolicy[R]{},
-		fn:                fallbackFn,
+		fn:                fallbackFunc,
 	}
 }
 
