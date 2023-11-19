@@ -40,6 +40,10 @@ func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.P
 				if ctxCancel != nil {
 					ctxCancel()
 				}
+
+				// Sets the timeoutResult, overwriting any previously set result for the execution. This is correct because while a
+				// result may have been recorded, inner policies such as fallbacks may still be processing that result, in which case
+				// it's still important to interrupt them with a timeout.
 				execInternal.Cancel(e.PolicyIndex, timeoutResult)
 				if e.config.onTimeoutExceeded != nil {
 					e.config.onTimeoutExceeded(failsafe.ExecutionDoneEvent[R]{
