@@ -53,9 +53,6 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *co
 			case <-timer.C:
 			case <-exec.Canceled():
 				timer.Stop()
-				if execInternal.IsCanceledForPolicy(rpe.PolicyIndex) {
-					return execInternal.Result()
-				}
 			}
 
 			// Prepare for next iteration
