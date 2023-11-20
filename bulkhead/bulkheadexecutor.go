@@ -21,7 +21,7 @@ func (be *bulkheadExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common
 		if err := be.bulkhead.AcquirePermitWithMaxWait(execInternal.Context(), be.config.maxWaitTime); err != nil {
 			if be.config.onBulkheadFull != nil {
 				be.config.onBulkheadFull(failsafe.ExecutionEvent[R]{
-					ExecutionAttempt: execInternal.Copy(),
+					ExecutionAttempt: execInternal,
 				})
 			}
 			return internal.FailureResult[R](err)

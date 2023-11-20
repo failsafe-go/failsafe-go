@@ -47,7 +47,7 @@ func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.P
 				execInternal.Cancel(e.PolicyIndex, timeoutResult)
 				if e.config.onTimeoutExceeded != nil {
 					e.config.onTimeoutExceeded(failsafe.ExecutionDoneEvent[R]{
-						ExecutionStats: execInternal.Copy(),
+						ExecutionStats: execInternal,
 						Error:          ErrTimeoutExceeded,
 					})
 				}

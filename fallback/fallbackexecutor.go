@@ -29,7 +29,7 @@ func (e *fallbackExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.
 
 			if e.config.onFallbackExecuted != nil {
 				e.config.onFallbackExecuted(failsafe.ExecutionDoneEvent[R]{
-					ExecutionStats: execInternal.Copy(),
+					ExecutionStats: execInternal,
 					Result:         fallbackResult,
 					Error:          fallbackError,
 				})
