@@ -44,6 +44,21 @@ func TestNestedRetryPoliciesWhereInnerIsExceeded(t *testing.T) {
 }
 
 /*
+RetryPolicy -> RetryPolicy
+
+Asserts that attempt counts are as expected when using nested retry policies.
+*/
+func TestRetryPolicyRetryPolicyAttempts(t *testing.T) {
+	rp1 := policytesting.WithRetryLogs(retrypolicy.Builder[any]()).Build()
+	rp2 := policytesting.WithRetryLogs(retrypolicy.Builder[any]()).Build()
+	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[any](rp2, rp1),
+		func(execution failsafe.Execution[any]) (any, error) {
+			return nil, testutil.ErrInvalidArgument
+		},
+		5, 5, testutil.ErrInvalidArgument)
+}
+
+/*
 Fallback -> RetryPolicy -> RetryPolicy
 */
 func TestFallbackRetryPolicyRetryPolicy(t *testing.T) {
