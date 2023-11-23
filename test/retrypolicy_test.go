@@ -85,3 +85,20 @@ func TestShouldFailWhenMaxDurationExceeded(t *testing.T) {
 		},
 		1, 1, &retrypolicy.RetriesExceededError{})
 }
+
+// Asserts that the last failure is returned
+func TestShouldReturnLastFailure(t *testing.T) {
+	// Given
+	rp := retrypolicy.Builder[any]().
+		WithMaxRetries(3).
+		ReturnLastFailure().
+		Build()
+	err := errors.New("test")
+
+	// When / Then
+	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[any](rp),
+		func(exec failsafe.Execution[any]) error {
+			return err
+		},
+		4, 4, err)
+}
