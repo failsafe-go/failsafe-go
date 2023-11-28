@@ -276,22 +276,25 @@ func (c *retryPolicyConfig[R]) WithDelayFunc(delayFunc failsafe.DelayFunc[R]) Re
 }
 
 func (c *retryPolicyConfig[R]) WithBackoff(delay time.Duration, maxDelay time.Duration) RetryPolicyBuilder[R] {
-	c.BaseDelayablePolicy.WithDelay(delay)
-	c.delayMax = maxDelay
-	c.delayFactor = 2
-	return c
+	return c.WithBackoffFactor(delay, maxDelay, 2)
 }
 
 func (c *retryPolicyConfig[R]) WithBackoffFactor(delay time.Duration, maxDelay time.Duration, delayFactor float32) RetryPolicyBuilder[R] {
 	c.BaseDelayablePolicy.WithDelay(delay)
-	c.delayMax = maxDelay
+	c.maxDelay = maxDelay
 	c.delayFactor = delayFactor
+
+	// Clear random delay
+	c.delayMin = 0
+	c.delayMax = 0
 	return c
 }
 
 func (c *retryPolicyConfig[R]) WithRandomDelay(delayMin time.Duration, delayMax time.Duration) RetryPolicyBuilder[R] {
 	c.delayMin = delayMin
 	c.delayMax = delayMax
+
+	// Clear non-random delay
 	c.Delay = 0
 	c.maxDelay = 0
 	return c

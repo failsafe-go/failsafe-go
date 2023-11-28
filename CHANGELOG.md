@@ -1,5 +1,11 @@
 ## Upcoming Release
 
+## 0.4.2
+
+### Bug Fixes
+
+- Fixed #23 - RetryPolicy backoff not computing
+
 ## 0.4.1
 
 ### Bug Fixes

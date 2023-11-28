@@ -115,56 +115,57 @@ func ErrorNTimesThenError[R any](err error, errorTimes int, finalError error) fu
 
 type TestExecution[R any] struct {
 	TheLastResult R
+	TheAttempts   int
 }
 
-func (s TestExecution[R]) Attempts() int {
+func (e TestExecution[R]) Attempts() int {
+	return e.TheAttempts
+}
+
+func (e TestExecution[R]) Executions() int {
 	panic("unimplemented stub")
 }
 
-func (s TestExecution[R]) Executions() int {
+func (e TestExecution[R]) StartTime() time.Time {
 	panic("unimplemented stub")
 }
 
-func (s TestExecution[R]) StartTime() time.Time {
+func (e TestExecution[R]) IsFirstAttempt() bool {
 	panic("unimplemented stub")
 }
 
-func (s TestExecution[R]) IsFirstAttempt() bool {
+func (e TestExecution[R]) IsRetry() bool {
 	panic("unimplemented stub")
 }
 
-func (s TestExecution[R]) IsRetry() bool {
+func (e TestExecution[R]) ElapsedTime() time.Duration {
 	panic("unimplemented stub")
 }
 
-func (s TestExecution[R]) ElapsedTime() time.Duration {
+func (e TestExecution[R]) LastResult() R {
+	return e.TheLastResult
+}
+
+func (e TestExecution[R]) LastError() error {
 	panic("unimplemented stub")
 }
 
-func (s TestExecution[R]) LastResult() R {
-	return s.TheLastResult
-}
-
-func (s TestExecution[R]) LastError() error {
+func (e TestExecution[R]) AttemptStartTime() time.Time {
 	panic("unimplemented stub")
 }
 
-func (s TestExecution[R]) AttemptStartTime() time.Time {
+func (e TestExecution[R]) ElapsedAttemptTime() time.Duration {
 	panic("unimplemented stub")
 }
 
-func (s TestExecution[R]) ElapsedAttemptTime() time.Duration {
-	panic("unimplemented stub")
-}
-
-func (s TestExecution[R]) Context() context.Context {
+func (e TestExecution[R]) Context() context.Context {
 	return nil
 }
 
-func (s TestExecution[R]) IsCanceled() bool {
+func (e TestExecution[R]) IsCanceled() bool {
 	panic("unimplemented stub")
 }
 
-func (s TestExecution[R]) Canceled() <-chan any {
+func (e TestExecution[R]) Canceled() <-chan any {
 	panic("unimplemented stub")
 }
