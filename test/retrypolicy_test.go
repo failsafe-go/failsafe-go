@@ -2,6 +2,7 @@ package test
 
 import (
 	"errors"
+	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 
@@ -101,4 +102,24 @@ func TestShouldReturnLastFailure(t *testing.T) {
 			return err
 		},
 		4, 4, err)
+}
+
+func TestShouldBackoff(t *testing.T) {
+	// Given
+	rp := retrypolicy.Builder[any]().
+		WithMaxRetries(4).
+		WithBackoff(10*time.Millisecond, time.Second).
+		ReturnLastFailure().
+		Build()
+	err := errors.New("test")
+
+	start := time.Now()
+	// When / Then
+	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[any](rp),
+		func(exec failsafe.Execution[any]) error {
+			return err
+		},
+		5, 5, err)
+	// 10 + 20 + 40 + 80 + 150 = 300
+	assert.LessOrEqual(t, int64(300), time.Since(start).Milliseconds())
 }
