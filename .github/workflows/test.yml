@@ -3,16 +3,18 @@ name: Run tests
 on:
   push:
     branches:
-      - main
-    paths:
-      - "**"
-      - "!docs/**"
-      - "!**.md"
+      - "main"
+    paths-ignore:
+      - "**.md"
+      - LICENSE
+      - ".github/dependabot.yml"
   pull_request:
-    paths:
-      - "**"
-      - "!docs/**"
-      - "!**.md"
+    branches:
+      - "*"
+    paths-ignore:
+      - "**.md"
+      - LICENSE
+      - ".github/dependabot.yml"
   workflow_dispatch:
 
 concurrency:
