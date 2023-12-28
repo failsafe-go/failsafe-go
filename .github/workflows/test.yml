@@ -35,7 +35,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version: "${{ matrix.go-version }}"
 
       - name: Run tests
         run: go test ./... -v -race -coverprofile=coverage.txt -covermode=atomic
