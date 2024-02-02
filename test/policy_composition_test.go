@@ -77,7 +77,7 @@ func TestCircuitBreakerRetryPolicy(t *testing.T) {
 // Fallback -> RetryPolicy
 func TestFallbackRetryPolicy(t *testing.T) {
 	// Given
-	fb := fallback.WithResult(true)
+	fb := fallback.BuilderWithResult(true).HandleErrors(retrypolicy.ErrExceeded).Build()
 	rp := retrypolicy.WithDefaults[bool]()
 
 	// When / Then
