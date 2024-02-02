@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -200,4 +201,20 @@ func TestShouldSupportTimeBasedFailureRateThresholding(t *testing.T) {
 	// Half-open -> close
 	executor.Get(testutil.GetTrueFn)
 	assert.True(t, cb.IsClosed())
+}
+
+func TestShouldReturnOpenErrorWithRemainingDelay(t *testing.T) {
+	breaker := circuitbreaker.Builder[any]().WithDelayFunc(func(exec failsafe.ExecutionAttempt[any]) time.Duration {
+		return 1 * time.Second
+	}).Build()
+	breaker.Open()
+
+	// When / Then
+	err := failsafe.Run(func() error {
+		return errors.New("test")
+	}, breaker)
+	var cbErr *circuitbreaker.OpenError
+	assert.True(t, errors.As(err, &cbErr))
+	assert.True(t, cbErr.RemainingDelay() > 0)
+	assert.True(t, cbErr.RemainingDelay().Milliseconds() < 1001)
 }

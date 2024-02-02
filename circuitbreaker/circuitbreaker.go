@@ -1,7 +1,7 @@
 package circuitbreaker
 
 import (
-	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -9,8 +9,28 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// ErrOpen is returned when an execution is attempted against a circuit breaker that is open.
-var ErrOpen = errors.New("circuit breaker open")
+// ErrOpen is an empty OpenError instance, useful for building policies that want to handle this error.
+var ErrOpen = &OpenError{}
+
+// OpenError is returned when an execution is attempted against a circuit breaker that is open.
+type OpenError struct {
+	remainingDelay time.Duration
+}
+
+// RemainingDelay returns the amount of time that the breaker will remain in the open state.
+func (e *OpenError) RemainingDelay() time.Duration {
+	return e.remainingDelay
+}
+
+func (e *OpenError) Error() string {
+	return fmt.Sprintf("circuit breaker open. remaining delay: %v", e.remainingDelay)
+}
+
+// Is returns whether err is of the type OpenError.
+func (e *OpenError) Is(err error) bool {
+	_, ok := err.(*OpenError)
+	return ok
+}
 
 // State of a CircuitBreaker.
 type State int
