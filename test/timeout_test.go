@@ -93,7 +93,7 @@ func TestTimeoutRetryWithBlockedFunc(t *testing.T) {
 			time.Sleep(60 * time.Millisecond)
 			return testutil.ErrInvalidArgument
 		},
-		3, 3, timeout.ErrTimeoutExceeded)
+		3, 3, timeout.ErrExceeded)
 	assert.Equal(t, 1, timeoutStats.Executions())
 }
 
@@ -116,7 +116,7 @@ func TestTimeoutRetryWithPendingRetry(t *testing.T) {
 		func(_ failsafe.Execution[any]) error {
 			return testutil.ErrInvalidArgument
 		},
-		1, 1, timeout.ErrTimeoutExceeded)
+		1, 1, timeout.ErrExceeded)
 	assert.Equal(t, 1, timeoutStats.Executions())
 	assert.Equal(t, 1, rpStats.Executions())
 }
@@ -182,7 +182,7 @@ func TestTimeoutFallbackWithBlockedFunc(t *testing.T) {
 			time.Sleep(100 * time.Millisecond)
 			return errors.New("test")
 		},
-		1, 1, timeout.ErrTimeoutExceeded)
+		1, 1, timeout.ErrExceeded)
 	assert.Equal(t, 1, timeoutStats.Executions())
 	assert.Equal(t, 0, fbStats.Executions())
 }
@@ -206,7 +206,7 @@ func TestTimeoutFallbackWithBlockedFallback(t *testing.T) {
 		func(_ failsafe.Execution[any]) error {
 			return errors.New("test")
 		},
-		1, 1, timeout.ErrTimeoutExceeded)
+		1, 1, timeout.ErrExceeded)
 	assert.Equal(t, 1, timeoutStats.Executions())
 	assert.Equal(t, 0, fbStats.Executions())
 }

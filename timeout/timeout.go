@@ -8,8 +8,8 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// ErrTimeoutExceeded is returned when an execution exceeds a configured timeout.
-var ErrTimeoutExceeded = errors.New("timeout exceeded")
+// ErrExceeded is returned when an execution exceeds a configured timeout.
+var ErrExceeded = errors.New("timeout exceeded")
 
 // Timeout is a Policy that cancels executions if they exceed a time limit. Any policies composed inside the timeout,
 // such as retries, will also be canceled. If the execution is configured with a Context, a child context will be created
