@@ -46,11 +46,11 @@ func TestIsAbortableForPredicate(t *testing.T) {
 
 func TestRetriesExceededErrorComparison(t *testing.T) {
 	e := errors.New("test")
-	e1 := &RetriesExceededError{
+	e1 := &ExceededError{
 		lastResult: false,
 		lastError:  e,
 	}
-	e2 := &RetriesExceededError{
+	e2 := &ExceededError{
 		lastResult: false,
 		lastError:  e,
 	}

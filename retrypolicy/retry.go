@@ -13,40 +13,39 @@ import (
 
 const defaultMaxRetries = 2
 
-// ErrRetriesExceeded is an empty RetriesExceededError instance, useful for building policies that want to handle this
-// error.
-var ErrRetriesExceeded = &RetriesExceededError{}
+// ErrExceeded is an empty ExceededError instance, useful for building policies that want to handle this error.
+var ErrExceeded = &ExceededError{}
 
-// RetriesExceededError is returned when a RetryPolicy's max attempts or max duration are exceeded.
-type RetriesExceededError struct {
+// ExceededError is returned when a RetryPolicy's max attempts or max duration are exceeded.
+type ExceededError struct {
 	lastResult any
 	lastError  error
 }
 
-// LastResult returns the last result that caused the RetriesExceededError.
-func (e *RetriesExceededError) LastResult() any {
+// LastResult returns the last result that caused the ExceededError.
+func (e *ExceededError) LastResult() any {
 	return e.lastResult
 }
 
-// LastError returns the last error that caused the RetriesExceededError.
-func (e *RetriesExceededError) LastError() error {
+// LastError returns the last error that caused the ExceededError.
+func (e *ExceededError) LastError() error {
 	return e.lastError
 }
 
-func (e *RetriesExceededError) Error() string {
+func (e *ExceededError) Error() string {
 	return fmt.Sprintf("retries exceeded. last result: %v, last error: %v", e.lastResult, e.lastError)
 }
 
-func (e *RetriesExceededError) Unwrap() error {
+func (e *ExceededError) Unwrap() error {
 	if e.lastError != nil {
 		return e.lastError
 	}
 	return fmt.Errorf("failure: %v", e.lastResult)
 }
 
-// Is returns whether err is of the type RetriesExceededError.
-func (e *RetriesExceededError) Is(err error) bool {
-	_, ok := err.(*RetriesExceededError)
+// Is returns whether err is of the type ExceededError.
+func (e *ExceededError) Is(err error) bool {
+	_, ok := err.(*ExceededError)
 	return ok
 }
 
@@ -62,7 +61,7 @@ type RetryPolicy[R any] interface {
 RetryPolicyBuilder builds RetryPolicy instances.
 
   - By default, a RetryPolicy will retry a failed execution up to 2 times when any error is returned, with no delay between
-    retry attempts. If retries are exceeded, RetriesExceededError is returned by default. Alternatively, ReturnLastFailure
+    retry attempts. If retries are exceeded, ExceededError is returned by default. Alternatively, ReturnLastFailure
     can be used to configure the policy to return the last execution failure.
   - You can change the default number of retry attempts and delay between retries by using the with configuration methods.
   - By default, any error is considered a failure and will be handled by the policy. You can override this by specifying
@@ -93,7 +92,7 @@ type RetryPolicyBuilder[R any] interface {
 	AbortIf(predicate func(R, error) bool) RetryPolicyBuilder[R]
 
 	// ReturnLastFailure configures the policy to return the last failure result or error after attempts are exceeded,
-	// rather than returning RetriesExceededError.
+	// rather than returning ExceededError.
 	ReturnLastFailure() RetryPolicyBuilder[R]
 
 	// WithMaxAttempts sets the max number of execution attempts to perform. -1 indicates no limit. This method has the same

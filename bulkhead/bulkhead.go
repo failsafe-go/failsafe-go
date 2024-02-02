@@ -11,8 +11,8 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// ErrBulkheadFull is returned when an execution is attempted against a Bulkhead that is full.
-var ErrBulkheadFull = errors.New("bulkhead full")
+// ErrFull is returned when an execution is attempted against a Bulkhead that is full.
+var ErrFull = errors.New("bulkhead full")
 
 // Bulkhead is a policy restricts concurrent executions as a way of preventing system overload.
 //
@@ -28,7 +28,7 @@ type Bulkhead[R any] interface {
 	AcquirePermit(ctx context.Context) error
 
 	// AcquirePermitWithMaxWait attempts to acquire a permit to perform an execution within the Bulkhead, waiting up to the
-	// maxWaitTime until one is available or the ctx is canceled. Returns ErrBulkheadFull if a permit could not be acquired
+	// maxWaitTime until one is available or the ctx is canceled. Returns ErrFull if a permit could not be acquired
 	// in time. Returns context.Canceled if the ctx is canceled. Callers should call ReleasePermit to release a successfully
 	// acquired permit back to the Bulkhead.
 	//
@@ -105,7 +105,7 @@ func (b *bulkhead[R]) AcquirePermit(ctx context.Context) error {
 		ctx = context.Background()
 	}
 	if err := b.semaphore.Acquire(ctx, 1); err != nil {
-		return ErrBulkheadFull
+		return ErrFull
 	}
 	return nil
 }
@@ -117,7 +117,7 @@ func (b *bulkhead[R]) AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime 
 	ctx, cancel := context.WithTimeout(ctx, maxWaitTime)
 	err := b.semaphore.Acquire(ctx, 1)
 	if err != nil && errors.Is(err, context.DeadlineExceeded) {
-		err = ErrBulkheadFull
+		err = ErrFull
 	}
 	cancel()
 	return err

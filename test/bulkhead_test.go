@@ -40,10 +40,10 @@ func TestBulkheadFull(t *testing.T) {
 	// When / Then
 	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[any](bh), func(execution failsafe.Execution[any]) error {
 		return nil
-	}, 1, 0, bulkhead.ErrBulkheadFull)
+	}, 1, 0, bulkhead.ErrFull)
 }
 
-// Asserts that an exceeded maxWaitTime causes ErrBulkheadFull.
+// Asserts that an exceeded maxWaitTime causes ErrFull.
 func TestBulkheadMaxWaitTimeExceeded(t *testing.T) {
 	// Given
 	bh := bulkhead.Builder[any](2).WithMaxWaitTime(20 * time.Millisecond).Build()
@@ -53,5 +53,5 @@ func TestBulkheadMaxWaitTimeExceeded(t *testing.T) {
 	// When / Then
 	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[any](bh), func(execution failsafe.Execution[any]) error {
 		return nil
-	}, 1, 0, bulkhead.ErrBulkheadFull)
+	}, 1, 0, bulkhead.ErrFull)
 }

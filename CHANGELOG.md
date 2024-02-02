@@ -1,5 +1,19 @@
 ## Upcoming Release
 
+## 0.4.3
+
+### Improvements
+
+- Added `CircuitBreaker.RemainingDelay()`
+
+### API Changes
+
+- Renamed `retrypolicy.ErrRetriesExceeded` to `retrypolicy.ErrExceeded`
+- Renamed `retrypolicy.RetriesExceededError` to `retrypolicy.ExceededError`
+- Renamed `circuitbreaker.ErrCircuitBreakerOpen` to `circuitbreaker.ErrOpen`
+- Renamed `bulkhead.ErrBulkheadFull` to `bulkhead.ErrFull`
+- Renamed `ratelimiter.ErrRateLimitExceeded` to `ratelimiter.ErrExceeded`
+
 ## 0.4.2
 
 ### Bug Fixes

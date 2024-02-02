@@ -91,7 +91,7 @@ func (rpe *retryPolicyExecutor[R]) OnFailure(exec policy.ExecutionInternal[R], r
 			rpe.config.onRetriesExceeded(failsafe.ExecutionEvent[R]{ExecutionAttempt: exec.Copy()})
 		}
 		if !rpe.config.returnLastFailure {
-			return internal.FailureResult[R](&RetriesExceededError{
+			return internal.FailureResult[R](&ExceededError{
 				lastResult: result.Result,
 				lastError:  result.Error,
 			})

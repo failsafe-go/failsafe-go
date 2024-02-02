@@ -25,11 +25,11 @@ func TestShouldRejectInitialExecutionWhenCircuitOpen(t *testing.T) {
 		func(execution failsafe.Execution[any]) error {
 			return testutil.ErrInvalidArgument
 		},
-		1, 0, circuitbreaker.ErrCircuitBreakerOpen)
+		1, 0, circuitbreaker.ErrOpen)
 	assert.True(t, cb.IsOpen())
 }
 
-// Should return ErrCircuitBreakerOpen when max half-open executions are occurring.
+// Should return ErrOpen when max half-open executions are occurring.
 func TestShouldRejectExcessiveAttemptsWhenBreakerHalfOpen(t *testing.T) {
 	// Given
 	cb := circuitbreaker.Builder[any]().WithSuccessThreshold(3).Build()
@@ -49,7 +49,7 @@ func TestShouldRejectExcessiveAttemptsWhenBreakerHalfOpen(t *testing.T) {
 	// Assert that the breaker does not allow any more executions at the moment
 	waiter.AwaitWithTimeout(3, 10*time.Second)
 	for i := 0; i < 5; i++ {
-		assert.ErrorIs(t, circuitbreaker.ErrCircuitBreakerOpen, failsafe.NewExecutor[any](cb).Run(testutil.NoopFn))
+		assert.ErrorIs(t, circuitbreaker.ErrOpen, failsafe.NewExecutor[any](cb).Run(testutil.NoopFn))
 	}
 }
 
@@ -104,7 +104,7 @@ func TestShouldReturnErrCircuitBreakerOpenAfterFailuresExceeded(t *testing.T) {
 		func(execution failsafe.Execution[bool]) (bool, error) {
 			return true, nil
 		},
-		1, 0, circuitbreaker.ErrCircuitBreakerOpen)
+		1, 0, circuitbreaker.ErrOpen)
 	assert.True(t, cb.IsOpen())
 }
 
@@ -124,7 +124,7 @@ func TestRejectedWithRetries(t *testing.T) {
 			fmt.Println("Executing")
 			return testutil.ErrInvalidArgument
 		},
-		7, 3, circuitbreaker.ErrCircuitBreakerOpen)
+		7, 3, circuitbreaker.ErrOpen)
 	assert.Equal(t, 7, rpStats.Executions())
 	assert.Equal(t, 6, rpStats.Retries())
 	assert.Equal(t, uint(3), cb.Metrics().Executions())
