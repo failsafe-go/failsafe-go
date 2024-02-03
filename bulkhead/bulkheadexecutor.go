@@ -19,8 +19,8 @@ func (be *bulkheadExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
 		if err := be.bulkhead.AcquirePermitWithMaxWait(execInternal.Context(), be.config.maxWaitTime); err != nil {
-			if be.config.onBulkheadFull != nil {
-				be.config.onBulkheadFull(failsafe.ExecutionEvent[R]{
+			if be.config.onFull != nil {
+				be.config.onFull(failsafe.ExecutionEvent[R]{
 					ExecutionAttempt: execInternal,
 				})
 			}

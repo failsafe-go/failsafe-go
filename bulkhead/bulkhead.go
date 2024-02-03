@@ -51,8 +51,8 @@ type BulkheadBuilder[R any] interface {
 	// WithMaxWaitTime configures the maxWaitTime to wait for permits to be available.
 	WithMaxWaitTime(maxWaitTime time.Duration) BulkheadBuilder[R]
 
-	// OnBulkheadFull registers the listener to be called when the bulkhead is full.
-	OnBulkheadFull(listener func(event failsafe.ExecutionEvent[R])) BulkheadBuilder[R]
+	// OnFull registers the listener to be called when the bulkhead is full.
+	OnFull(listener func(event failsafe.ExecutionEvent[R])) BulkheadBuilder[R]
 
 	// Build returns a new Bulkhead using the builder's configuration.
 	Build() Bulkhead[R]
@@ -61,7 +61,7 @@ type BulkheadBuilder[R any] interface {
 type bulkheadConfig[R any] struct {
 	maxConcurrency uint
 	maxWaitTime    time.Duration
-	onBulkheadFull func(failsafe.ExecutionEvent[R])
+	onFull         func(failsafe.ExecutionEvent[R])
 }
 
 func (c *bulkheadConfig[R]) WithMaxWaitTime(maxWaitTime time.Duration) BulkheadBuilder[R] {
@@ -69,8 +69,8 @@ func (c *bulkheadConfig[R]) WithMaxWaitTime(maxWaitTime time.Duration) BulkheadB
 	return c
 }
 
-func (c *bulkheadConfig[R]) OnBulkheadFull(listener func(event failsafe.ExecutionEvent[R])) BulkheadBuilder[R] {
-	c.onBulkheadFull = listener
+func (c *bulkheadConfig[R]) OnFull(listener func(event failsafe.ExecutionEvent[R])) BulkheadBuilder[R] {
+	c.onFull = listener
 	return c
 }
 
