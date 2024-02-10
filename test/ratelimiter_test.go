@@ -37,10 +37,10 @@ func TestShouldReturnRateLimitExceededError(t *testing.T) {
 		func(execution failsafe.Execution[any]) error {
 			return nil
 		},
-		1, 0, ratelimiter.ErrRateLimitExceeded)
+		1, 0, ratelimiter.ErrExceeded)
 }
 
-// Asserts that an exceeded maxWaitTime causes ErrRateLimitExceeded.
+// Asserts that an exceeded maxWaitTime causes ErrExceeded.
 func TestRateLimiterMaxWaitTimeExceeded(t *testing.T) {
 	// Given
 	limiter := ratelimiter.SmoothBuilderWithMaxRate[any](10 * time.Millisecond).Build()
@@ -51,7 +51,7 @@ func TestRateLimiterMaxWaitTimeExceeded(t *testing.T) {
 		func(execution failsafe.Execution[any]) error {
 			return nil
 		},
-		1, 0, ratelimiter.ErrRateLimitExceeded)
+		1, 0, ratelimiter.ErrExceeded)
 }
 
 func TestCancelRateLimiting(t *testing.T) {

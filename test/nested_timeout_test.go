@@ -31,7 +31,7 @@ func TestTimeoutRetryPolicyTimeout(t *testing.T) {
 			testutil.WaitAndAssertCanceled(t, 150*time.Millisecond, exec)
 			return nil
 		},
-		-1, -1, timeout.ErrTimeoutExceeded)
+		-1, -1, timeout.ErrExceeded)
 	assert.True(t, innerTimeoutStats.Executions() >= 3)
 	assert.True(t, retryStats.Executions() >= 3)
 }
@@ -84,7 +84,7 @@ func TestCancelNestedTimeouts(t *testing.T) {
 			testutil.WaitAndAssertCanceled(t, time.Second, exec)
 			return nil
 		},
-		3, 3, timeout.ErrTimeoutExceeded)
+		3, 3, timeout.ErrExceeded)
 	assert.Equal(t, 3, retryStats.Executions())
 	assert.Equal(t, 0, innerTimeoutStats.Executions())
 	assert.Equal(t, 3, outerTimeoutStats.Executions())

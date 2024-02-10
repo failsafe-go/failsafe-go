@@ -10,8 +10,8 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// ErrRateLimitExceeded is returned when an execution exceeds a configured rate limit.
-var ErrRateLimitExceeded = errors.New("rate limit exceeded")
+// ErrExceeded is returned when an execution exceeds a configured rate limit.
+var ErrExceeded = errors.New("rate limit exceeded")
 
 /*
 RateLimiter is a Policy that can control the rate of executions as a way of preventing system overload.
@@ -40,8 +40,8 @@ The methods that return immediately include:
   - TryReservePermit
   - TryReservePermits
 
-This type provides methods that return ErrRateLimitExceeded when permits cannot be acquired, and also methods that
-return a bool. The Acquire methods all return ErrRateLimitExceeded when permits cannot be acquired, and the TryAcquire
+This type provides methods that return ErrExceeded when permits cannot be acquired, and also methods that
+return a bool. The Acquire methods all return ErrExceeded when permits cannot be acquired, and the TryAcquire
 methods return a boolean.
 
 The ReservePermit methods attempt to reserve permits and return an expected wait time before the permit can be used.
@@ -65,14 +65,14 @@ type RateLimiter[R any] interface {
 	AcquirePermits(ctx context.Context, permits uint) error
 
 	// AcquirePermitWithMaxWait attempts to acquire a permit to perform an execution against the rate limiter, waiting up to
-	// the maxWaitTime until one is available or the ctx is canceled. Returns ErrRateLimitExceeded if a permit would not be
+	// the maxWaitTime until one is available or the ctx is canceled. Returns ErrExceeded if a permit would not be
 	// available in time. Returns an error if the context is canceled.
 	//
 	// ctx may be nil.
 	AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) error
 
 	// AcquirePermitsWithMaxWait attempts to acquire the requested permits to perform executions against the rate limiter,
-	// waiting up to the maxWaitTime until they are available or the ctx is canceled. Returns ErrRateLimitExceeded if the
+	// waiting up to the maxWaitTime until they are available or the ctx is canceled. Returns ErrExceeded if the
 	// permits would not be available in time. Returns an error if the context is canceled.
 	//
 	// ctx may be nil.
@@ -120,7 +120,7 @@ This type is not concurrency safe.
 */
 type RateLimiterBuilder[R any] interface {
 	// WithMaxWaitTime configures the maxWaitTime to wait for permits to be available. If permits cannot be acquired before
-	// the maxWaitTime is exceeded, then the rate limiter will return ErrRateLimitExceeded.
+	// the maxWaitTime is exceeded, then the rate limiter will return ErrExceeded.
 	//
 	// This setting only applies when the resulting RateLimiter is used with the failsafe.Run or related APIs. It does not
 	// apply when the RateLimiter is used in a standalone way.
@@ -298,7 +298,7 @@ func (r *rateLimiter[R]) AcquirePermitsWithMaxWait(ctx context.Context, requeste
 func (r *rateLimiter[R]) acquirePermitsWithMaxWait(ctx context.Context, exec failsafe.Execution[R], requestedPermits uint, maxWaitTime time.Duration) error {
 	waitTime := r.stats.acquirePermits(int(requestedPermits), maxWaitTime)
 	if waitTime == -1 {
-		return ErrRateLimitExceeded
+		return ErrExceeded
 	}
 	if ctx == nil {
 		ctx = context.Background()

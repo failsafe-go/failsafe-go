@@ -35,7 +35,7 @@ func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.P
 
 		var result atomic.Pointer[common.PolicyResult[R]]
 		timer := time.AfterFunc(e.config.timeLimit, func() {
-			timeoutResult := internal.FailureResult[R](ErrTimeoutExceeded)
+			timeoutResult := internal.FailureResult[R](ErrExceeded)
 			if result.CompareAndSwap(nil, timeoutResult) {
 				if ctxCancel != nil {
 					ctxCancel()
@@ -48,7 +48,7 @@ func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.P
 				if e.config.onTimeoutExceeded != nil {
 					e.config.onTimeoutExceeded(failsafe.ExecutionDoneEvent[R]{
 						ExecutionStats: execInternal,
-						Error:          ErrTimeoutExceeded,
+						Error:          ErrExceeded,
 					})
 				}
 			}
@@ -66,5 +66,5 @@ func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.P
 }
 
 func (e *timeoutExecutor[R]) IsFailure(_ R, err error) bool {
-	return err != nil && errors.Is(err, ErrTimeoutExceeded)
+	return err != nil && errors.Is(err, ErrExceeded)
 }

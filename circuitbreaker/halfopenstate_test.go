@@ -2,8 +2,11 @@ package circuitbreaker
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/failsafe-go/failsafe-go"
 )
 
 var _ circuitState[any] = &halfOpenState[any]{}
@@ -40,8 +43,8 @@ func TestHalfOpenFailureWithFailureThreshold(t *testing.T) {
 	assert.True(t, breaker.IsOpen())
 }
 
-// Asserts that  the circuit is opened after the failure ratio is met.
-func testHalfOpenFailureWithFailureRatio(t *testing.T) {
+// Asserts that the circuit is opened after the failure ratio is met.
+func TestHalfOpenFailureWithFailureRatio(t *testing.T) {
 	// Given
 	breaker := Builder[any]().WithFailureThresholdRatio(2, 3).Build()
 	breaker.HalfOpen()
@@ -348,4 +351,14 @@ func TestHalfOpenSuccessWithSuccessThresholdAndFailureRatio(t *testing.T) {
 
 	// Then
 	assert.True(t, breaker.IsClosed())
+}
+
+func TestRemainingDelayInHalfOpenState(t *testing.T) {
+	breaker := Builder[any]().WithDelayFunc(func(exec failsafe.ExecutionAttempt[any]) time.Duration {
+		return 1 * time.Second
+	}).Build().(*circuitBreaker[any])
+
+	// When / Then
+	breaker.halfOpen()
+	assert.Equal(t, time.Duration(0), breaker.RemainingDelay())
 }

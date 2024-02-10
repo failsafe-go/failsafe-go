@@ -2,8 +2,12 @@ package test
 
 import (
 	"errors"
+	"fmt"
+	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/internal/policytesting"
@@ -33,7 +37,34 @@ func TestShouldReturnRetriesExceededError(t *testing.T) {
 		func(exec failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.ErrConnecting
 		},
-		3, 3, &retrypolicy.RetriesExceededError{})
+		3, 3, &retrypolicy.ExceededError{})
+}
+
+func TestShouldReturnExceededErrorWrappingResults(t *testing.T) {
+	// Given
+	rp1 := retrypolicy.WithDefaults[any]()
+	underlyingErr := errors.New("test")
+
+	// When / Then for last error
+	err := failsafe.Run(func() error {
+		return underlyingErr
+	}, rp1)
+	fmt.Println(reflect.TypeOf(err))
+	var reErr *retrypolicy.ExceededError
+	assert.True(t, errors.As(err, &reErr))
+	assert.Equal(t, underlyingErr, reErr.LastError())
+	assert.Nil(t, reErr.LastResult())
+
+	// Given
+	rp2 := retrypolicy.Builder[bool]().HandleResult(false).Build()
+
+	// When / Then for last result
+	_, err = failsafe.Get[bool](func() (bool, error) {
+		return false, nil
+	}, rp2)
+	assert.True(t, errors.As(err, &reErr))
+	assert.Nil(t, reErr.LastError())
+	assert.Equal(t, false, reErr.LastResult())
 }
 
 // Tests a simple execution that does not retry.
@@ -83,7 +114,7 @@ func TestShouldFailWhenMaxDurationExceeded(t *testing.T) {
 			time.Sleep(120 * time.Millisecond)
 			return false, errors.New("test")
 		},
-		1, 1, &retrypolicy.RetriesExceededError{})
+		1, 1, &retrypolicy.ExceededError{})
 }
 
 // Asserts that the last failure is returned

@@ -31,7 +31,7 @@ func TestAcquirePermitWithMaxWaitTime(t *testing.T) {
 
 	assert.Nil(t, bulkhead.AcquirePermitWithMaxWait(nil, 100*time.Millisecond)) // waits 0
 	err := bulkhead.AcquirePermitWithMaxWait(nil, 100*time.Millisecond)         // waits 100
-	assert.ErrorIs(t, ErrBulkheadFull, err)
+	assert.ErrorIs(t, ErrFull, err)
 }
 
 func TestTryAcquirePermitAndReleasePermit(t *testing.T) {

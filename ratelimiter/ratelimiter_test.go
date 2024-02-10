@@ -30,7 +30,7 @@ func TestAcquirePermitWithMaxWaitTime(t *testing.T) {
 	assert.Nil(t, limiter.AcquirePermitWithMaxWait(nil, 100*time.Millisecond))  // waits 0
 	assert.Nil(t, limiter.AcquirePermitWithMaxWait(nil, 1000*time.Millisecond)) // waits 100
 	err := limiter.AcquirePermitWithMaxWait(nil, 100*time.Millisecond)          // waits 200
-	assert.ErrorIs(t, ErrRateLimitExceeded, err)
+	assert.ErrorIs(t, ErrExceeded, err)
 }
 
 func TestTryAcquirePermit(t *testing.T) {

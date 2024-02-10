@@ -11,8 +11,8 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// ErrBulkheadFull is returned when an execution is attempted against a Bulkhead that is full.
-var ErrBulkheadFull = errors.New("bulkhead full")
+// ErrFull is returned when an execution is attempted against a Bulkhead that is full.
+var ErrFull = errors.New("bulkhead full")
 
 // Bulkhead is a policy restricts concurrent executions as a way of preventing system overload.
 //
@@ -28,7 +28,7 @@ type Bulkhead[R any] interface {
 	AcquirePermit(ctx context.Context) error
 
 	// AcquirePermitWithMaxWait attempts to acquire a permit to perform an execution within the Bulkhead, waiting up to the
-	// maxWaitTime until one is available or the ctx is canceled. Returns ErrBulkheadFull if a permit could not be acquired
+	// maxWaitTime until one is available or the ctx is canceled. Returns ErrFull if a permit could not be acquired
 	// in time. Returns context.Canceled if the ctx is canceled. Callers should call ReleasePermit to release a successfully
 	// acquired permit back to the Bulkhead.
 	//
@@ -51,8 +51,8 @@ type BulkheadBuilder[R any] interface {
 	// WithMaxWaitTime configures the maxWaitTime to wait for permits to be available.
 	WithMaxWaitTime(maxWaitTime time.Duration) BulkheadBuilder[R]
 
-	// OnBulkheadFull registers the listener to be called when the bulkhead is full.
-	OnBulkheadFull(listener func(event failsafe.ExecutionEvent[R])) BulkheadBuilder[R]
+	// OnFull registers the listener to be called when the bulkhead is full.
+	OnFull(listener func(event failsafe.ExecutionEvent[R])) BulkheadBuilder[R]
 
 	// Build returns a new Bulkhead using the builder's configuration.
 	Build() Bulkhead[R]
@@ -61,7 +61,7 @@ type BulkheadBuilder[R any] interface {
 type bulkheadConfig[R any] struct {
 	maxConcurrency uint
 	maxWaitTime    time.Duration
-	onBulkheadFull func(failsafe.ExecutionEvent[R])
+	onFull         func(failsafe.ExecutionEvent[R])
 }
 
 func (c *bulkheadConfig[R]) WithMaxWaitTime(maxWaitTime time.Duration) BulkheadBuilder[R] {
@@ -69,8 +69,8 @@ func (c *bulkheadConfig[R]) WithMaxWaitTime(maxWaitTime time.Duration) BulkheadB
 	return c
 }
 
-func (c *bulkheadConfig[R]) OnBulkheadFull(listener func(event failsafe.ExecutionEvent[R])) BulkheadBuilder[R] {
-	c.onBulkheadFull = listener
+func (c *bulkheadConfig[R]) OnFull(listener func(event failsafe.ExecutionEvent[R])) BulkheadBuilder[R] {
+	c.onFull = listener
 	return c
 }
 
@@ -105,7 +105,7 @@ func (b *bulkhead[R]) AcquirePermit(ctx context.Context) error {
 		ctx = context.Background()
 	}
 	if err := b.semaphore.Acquire(ctx, 1); err != nil {
-		return ErrBulkheadFull
+		return ErrFull
 	}
 	return nil
 }
@@ -117,7 +117,7 @@ func (b *bulkhead[R]) AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime 
 	ctx, cancel := context.WithTimeout(ctx, maxWaitTime)
 	err := b.semaphore.Acquire(ctx, 1)
 	if err != nil && errors.Is(err, context.DeadlineExceeded) {
-		err = ErrBulkheadFull
+		err = ErrFull
 	}
 	cancel()
 	return err

@@ -30,7 +30,7 @@ func TestCancelWithTimeoutDuringExecution(t *testing.T) {
 			testutil.WaitAndAssertCanceled(t, time.Second, exec)
 			return nil
 		},
-		1, 1, timeout.ErrTimeoutExceeded)
+		1, 1, timeout.ErrExceeded)
 }
 
 // Asserts that an execution is marked as canceled when a provided Context is canceled.
@@ -154,7 +154,7 @@ func TestCancelWithTimeoutDuringRateLimiterDelay(t *testing.T) {
 	// When / Then
 	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[any](to, rl),
 		testutil.GetWithExecutionFn[any](nil, nil),
-		1, 0, timeout.ErrTimeoutExceeded)
+		1, 0, timeout.ErrExceeded)
 }
 
 func TestCancelWithContextDuringBulkheadDelay(t *testing.T) {
@@ -180,7 +180,7 @@ func TestCancelWithTimeoutDuringBulkheadDelay(t *testing.T) {
 	// When / Then
 	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[any](to, bh),
 		testutil.GetWithExecutionFn[any](nil, nil),
-		1, 0, timeout.ErrTimeoutExceeded)
+		1, 0, timeout.ErrExceeded)
 }
 
 // Tests a scenario where a canceled channel is closed before it's accessed, which should use the internally shared
@@ -194,5 +194,5 @@ func TestCloseCanceledChannelBeforeAccessingIt(t *testing.T) {
 			<-e.Canceled()
 			return nil
 		},
-		1, 1, timeout.ErrTimeoutExceeded)
+		1, 1, timeout.ErrExceeded)
 }
