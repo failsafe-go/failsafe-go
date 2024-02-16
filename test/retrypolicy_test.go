@@ -2,8 +2,6 @@ package test
 
 import (
 	"errors"
-	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
@@ -30,14 +28,18 @@ func TestShouldRetryOnFailure(t *testing.T) {
 
 func TestShouldReturnRetriesExceededError(t *testing.T) {
 	// Given
-	rp := retrypolicy.WithDefaults[bool]()
+	stats := &policytesting.Stats{}
+	rp := policytesting.WithRetryStats(retrypolicy.Builder[bool](), stats).Build()
 
 	// When / Then
-	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[bool](rp),
+	testutil.TestGetFailure(t, policytesting.SetupFn(stats), failsafe.NewExecutor[bool](rp),
 		func(exec failsafe.Execution[bool]) (bool, error) {
 			return false, testutil.ErrConnecting
 		},
-		3, 3, &retrypolicy.ExceededError{})
+		3, 3, &retrypolicy.ExceededError{}, func() {
+			assert.Equal(t, 2, stats.Retries())
+			assert.Equal(t, 1, stats.RetriesExceeded())
+		})
 }
 
 func TestShouldReturnExceededErrorWrappingResults(t *testing.T) {
@@ -49,7 +51,6 @@ func TestShouldReturnExceededErrorWrappingResults(t *testing.T) {
 	err := failsafe.Run(func() error {
 		return underlyingErr
 	}, rp1)
-	fmt.Println(reflect.TypeOf(err))
 	var reErr *retrypolicy.ExceededError
 	assert.True(t, errors.As(err, &reErr))
 	assert.Equal(t, underlyingErr, reErr.LastError())

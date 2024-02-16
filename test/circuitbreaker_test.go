@@ -124,11 +124,12 @@ func TestRejectedWithRetries(t *testing.T) {
 			fmt.Println("Executing")
 			return testutil.ErrInvalidArgument
 		},
-		7, 3, circuitbreaker.ErrOpen)
-	assert.Equal(t, 7, rpStats.Executions())
-	assert.Equal(t, 6, rpStats.Retries())
-	assert.Equal(t, uint(3), cb.Metrics().Executions())
-	assert.Equal(t, uint(3), cb.Metrics().Failures())
+		7, 3, circuitbreaker.ErrOpen, func() {
+			assert.Equal(t, 7, rpStats.Executions())
+			assert.Equal(t, 6, rpStats.Retries())
+			assert.Equal(t, uint(3), cb.Metrics().Executions())
+			assert.Equal(t, uint(3), cb.Metrics().Failures())
+		})
 }
 
 // Tests circuit breaker time based failure thresholding state transitions.

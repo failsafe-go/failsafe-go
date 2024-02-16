@@ -12,12 +12,19 @@ import (
 // ExecutionStats contains execution stats.
 type ExecutionStats interface {
 	// Attempts returns the number of execution attempts so far, including attempts that are currently in progress and
-	// attempts that were blocked before being executed, such as by a CircuitBreaker or RateLimiter.
+	// attempts that were blocked before being executed, such as by a CircuitBreaker or RateLimiter. These can include an initial
+	// execution along with retries and hedges.
 	Attempts() int
 
 	// Executions returns the number of completed executions. Executions that are blocked, such as when a CircuitBreaker is
 	// open, are not counted.
 	Executions() int
+
+	// Retries returns the number of retries so far, including retries that are currently in progress.
+	Retries() int
+
+	// Hedges returns the number of hedges that have been executed so far, including hedges that are currently in progress.
+	Hedges() int
 
 	// StartTime returns the time that the initial execution attempt started at.
 	StartTime() time.Time
@@ -41,6 +48,9 @@ type ExecutionAttempt[R any] interface {
 
 	// IsRetry returns true when Attempts is > 1, meaning the execution is being retried.
 	IsRetry() bool
+
+	// IsHedge returns true when the execution is part of a hedged attempt.
+	IsHedge() bool
 
 	// AttemptStartTime returns the time that the most recent execution attempt started at.
 	AttemptStartTime() time.Time
@@ -75,19 +85,25 @@ func init() {
 }
 
 type execution[R any] struct {
-	startTime        time.Time
-	attemptStartTime time.Time
-	ctx              context.Context
-	mtx              *sync.Mutex
+	// Shared state across instances
+	mtx        *sync.Mutex
+	startTime  time.Time
+	ctx        context.Context
+	attempts   *atomic.Uint32
+	retries    *atomic.Uint32
+	hedges     *atomic.Uint32
+	executions *atomic.Uint32
 
-	// Guarded by mtx
-	attempts      *atomic.Uint32
-	executions    *atomic.Uint32
-	result        **common.PolicyResult[R]
-	canceled      *chan any
-	canceledIndex *int
-	lastResult    R     // The last error that occurred, else the zero value for R.
-	lastError     error // The last error that occurred, else nil.
+	// Shared state, except for hedges
+	canceledIndex  *int
+	canceledResult **common.PolicyResult[R]
+	canceled       *chan any
+
+	// Per execution state
+	attemptStartTime time.Time
+	isHedge          bool
+	lastResult       R     // The last error that occurred, else the zero value for R.
+	lastError        error // The last error that occurred, else nil.
 }
 
 var _ Execution[any] = &execution[any]{}
@@ -101,6 +117,14 @@ func (e *execution[R]) Executions() int {
 	return int(e.executions.Load())
 }
 
+func (e *execution[R]) Retries() int {
+	return int(e.retries.Load())
+}
+
+func (e *execution[R]) Hedges() int {
+	return int(e.hedges.Load())
+}
+
 func (e *execution[R]) StartTime() time.Time {
 	return e.startTime
 }
@@ -111,6 +135,10 @@ func (e *execution[R]) IsFirstAttempt() bool {
 
 func (e *execution[R]) IsRetry() bool {
 	return e.attempts.Load() > 1
+}
+
+func (e *execution[R]) IsHedge() bool {
+	return e.isHedge
 }
 
 func (e *execution[R]) ElapsedTime() time.Duration {
@@ -153,34 +181,40 @@ func (e *execution[_]) Canceled() <-chan any {
 	return *e.canceled
 }
 
-func (e *execution[R]) InitializeAttempt(policyIndex int) bool {
+func (e *execution[R]) InitializeRetry(policyIndex int, lastResult *common.PolicyResult[R]) *common.PolicyResult[R] {
 	// Lock to guard against a race with a Timeout canceling the execution
 	e.mtx.Lock()
 	defer e.mtx.Unlock()
-	if e.isCanceledForPolicy(policyIndex) {
-		return false
+	if canceled, cancelResult := e.isCanceledForPolicy(policyIndex); canceled {
+		return cancelResult
 	}
-	e.attempts.Add(1)
-	now := time.Now()
-	e.attemptStartTime = now
-	e.startTime = now
-	if e.isCanceled() {
-		*e.canceledIndex = -1
-		*e.canceled = nil
+
+	if e.attempts.Add(1) > 1 {
+		e.retries.Add(1)
 	}
-	return true
+	e.attemptStartTime = time.Now()
+	*e.canceledIndex = -1
+	*e.canceledResult = nil
+	*e.canceled = nil
+	if lastResult != nil {
+		e.lastResult = lastResult.Result
+		e.lastError = lastResult.Error
+	}
+	return nil
 }
 
-func (e *execution[R]) Record(result *common.PolicyResult[R]) *common.PolicyResult[R] {
+func (e *execution[R]) InitializeHedge(policyIndex int) *common.PolicyResult[R] {
+	// Lock to guard against a race with a Timeout canceling the execution
 	e.mtx.Lock()
 	defer e.mtx.Unlock()
-	e.executions.Add(1)
-	if !e.isCanceled() {
-		*e.result = result
-		e.lastResult = result.Result
-		e.lastError = result.Error
+	if canceled, cancelResult := e.isCanceledForPolicy(policyIndex); canceled {
+		return cancelResult
 	}
-	return *e.result
+
+	e.isHedge = true
+	e.attempts.Add(1)
+	e.hedges.Add(1)
+	return nil
 }
 
 func (e *execution[R]) Cancel(policyIndex int, result *common.PolicyResult[R]) {
@@ -189,10 +223,12 @@ func (e *execution[R]) Cancel(policyIndex int, result *common.PolicyResult[R]) {
 	if e.isCanceled() {
 		return
 	}
-	*e.result = result
-	e.lastResult = result.Result
-	e.lastError = result.Error
 	*e.canceledIndex = policyIndex
+	*e.canceledResult = result
+	if result != nil {
+		e.lastResult = result.Result
+		e.lastError = result.Error
+	}
 	if *e.canceled != nil {
 		close(*e.canceled)
 	} else {
@@ -205,30 +241,28 @@ func (e *execution[R]) isCanceled() bool {
 	return *e.canceledIndex != -1
 }
 
-func (e *execution[R]) IsCanceledForPolicy(policyIndex int) bool {
+func (e *execution[R]) IsCanceledForPolicy(policyIndex int) (bool, *common.PolicyResult[R]) {
 	e.mtx.Lock()
 	defer e.mtx.Unlock()
 	return e.isCanceledForPolicy(policyIndex)
 }
 
 // Requires locking externally.
-func (e *execution[R]) isCanceledForPolicy(policyIndex int) bool {
-	return *e.canceledIndex >= policyIndex && *e.canceledIndex != -1
-}
-
-func (e *execution[R]) Copy() Execution[R] {
-	e.mtx.Lock()
-	c := *e
-	e.mtx.Unlock()
-	return &c
+func (e *execution[R]) isCanceledForPolicy(policyIndex int) (bool, *common.PolicyResult[R]) {
+	if *e.canceledIndex >= policyIndex && *e.canceledIndex != -1 {
+		return true, *e.canceledResult
+	}
+	return false, nil
 }
 
 func (e *execution[R]) CopyWithResult(result *common.PolicyResult[R]) Execution[R] {
 	e.mtx.Lock()
 	c := *e
 	e.mtx.Unlock()
-	c.lastResult = result.Result
-	c.lastError = result.Error
+	if result != nil {
+		c.lastResult = result.Result
+		c.lastError = result.Error
+	}
 	return &c
 }
 
@@ -240,25 +274,38 @@ func (e *execution[R]) CopyWithContext(ctx context.Context) Execution[R] {
 	return &c
 }
 
-func (e *execution[R]) Result() *common.PolicyResult[R] {
+func (e *execution[R]) copy() *execution[R] {
 	e.mtx.Lock()
-	defer e.mtx.Unlock()
-	return *e.result
+	c := *e
+	e.mtx.Unlock()
+	return &c
+}
+
+func (e *execution[R]) record() {
+	e.executions.Add(1)
 }
 
 func newExecution[R any](ctx context.Context) *execution[R] {
 	attempts := atomic.Uint32{}
+	retries := atomic.Uint32{}
+	hedges := atomic.Uint32{}
 	executions := atomic.Uint32{}
-	var result *common.PolicyResult[R]
+	attempts.Add(1)
 	canceledIndex := -1
+	var canceledResult *common.PolicyResult[R]
 	var canceled chan any
+	now := time.Now()
 	return &execution[R]{
-		mtx:           &sync.Mutex{},
-		attempts:      &attempts,
-		executions:    &executions,
-		result:        &result,
-		canceledIndex: &canceledIndex,
-		canceled:      &canceled,
-		ctx:           ctx,
+		ctx:              ctx,
+		mtx:              &sync.Mutex{},
+		attempts:         &attempts,
+		retries:          &retries,
+		hedges:           &hedges,
+		executions:       &executions,
+		canceledIndex:    &canceledIndex,
+		canceledResult:   &canceledResult,
+		canceled:         &canceled,
+		attemptStartTime: now,
+		startTime:        now,
 	}
 }

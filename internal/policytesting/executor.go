@@ -2,6 +2,7 @@
 package policytesting
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"sync/atomic"
@@ -9,6 +10,7 @@ import (
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
 	"github.com/failsafe-go/failsafe-go/fallback"
+	"github.com/failsafe-go/failsafe-go/hedgepolicy"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
 	"github.com/failsafe-go/failsafe-go/ratelimiter"
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
@@ -107,6 +109,14 @@ func WithFallbackStatsAndLogs[R any](fb fallback.FallbackBuilder[R], stats *Stat
 	return fb
 }
 
+func WithHedgeStatsAndLogs[R any](hp hedgepolicy.HedgePolicyBuilder[R], stats *Stats) hedgepolicy.HedgePolicyBuilder[R] {
+	hp.OnHedge(func(e failsafe.ExecutionEvent[R]) {
+		stats.hedgeCount.Add(1)
+		fmt.Printf("%s %p hedging [attempts: %v]\n", testutil.GetType(hp), hp, e.Attempts())
+	})
+	return hp
+}
+
 func withStatsAndLogs[P any, R any](policy failsafe.FailurePolicyBuilder[P, R], stats *Stats, withLogging bool) {
 	policy.OnSuccess(func(e failsafe.ExecutionEvent[R]) {
 		stats.executionCount.Add(1)
@@ -135,6 +145,9 @@ type Stats struct {
 	retryCount           atomic.Int32
 	retriesExceededCount atomic.Int32
 	abortCount           atomic.Int32
+
+	// Hedge specific stats
+	hedgeCount atomic.Int32
 }
 
 func (s *Stats) Executions() int {
@@ -157,6 +170,10 @@ func (s *Stats) RetriesExceeded() int {
 	return int(s.retriesExceededCount.Load())
 }
 
+func (s *Stats) Hedges() int {
+	return int(s.hedgeCount.Load())
+}
+
 func (s *Stats) Aborts() int {
 	return int(s.abortCount.Load())
 }
@@ -170,4 +187,14 @@ func (s *Stats) Reset() {
 	s.retryCount.Store(0)
 	s.retriesExceededCount.Store(0)
 	s.abortCount.Store(0)
+
+	// Hedge specific stats
+	s.hedgeCount.Store(0)
+}
+
+func SetupFn(stats *Stats) func() context.Context {
+	return func() context.Context {
+		stats.Reset()
+		return nil
+	}
 }

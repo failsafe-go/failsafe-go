@@ -31,7 +31,7 @@ func WaitAndAssertCanceled[R any](t *testing.T, waitDuration time.Duration, exec
 		}
 		return
 	}
-	assert.Fail(t, "Expected context to be canceled by timeout")
+	assert.Fail(t, "Expected context to be canceled")
 }
 
 // SetupWithContextSleep returns a setup function that provides a context that is canceled after the sleepTime.
