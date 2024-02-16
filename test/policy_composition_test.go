@@ -12,6 +12,7 @@ import (
 	"github.com/failsafe-go/failsafe-go/bulkhead"
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
 	"github.com/failsafe-go/failsafe-go/fallback"
+	"github.com/failsafe-go/failsafe-go/hedgepolicy"
 	"github.com/failsafe-go/failsafe-go/internal/policytesting"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
 	"github.com/failsafe-go/failsafe-go/ratelimiter"
@@ -102,6 +103,21 @@ func TestFallbackRetryPolicy(t *testing.T) {
 		3, 3, true)
 }
 
+// Fallback -> HedgePolicy
+func TestFallbackHedgePolicy(t *testing.T) {
+	// Given
+	fb := fallback.WithResult(true)
+	hp := hedgepolicy.WithDelay[bool](10 * time.Millisecond)
+
+	// When / Then
+	testutil.TestGetSuccess[bool](t, nil, failsafe.NewExecutor[bool](fb, hp),
+		func(execution failsafe.Execution[bool]) (bool, error) {
+			time.Sleep(50 * time.Millisecond)
+			return false, testutil.ErrInvalidArgument
+		},
+		2, -1, true)
+}
+
 // RetryPolicy -> Fallback
 func TestRetryPolicyFallback(t *testing.T) {
 	// Given
@@ -172,9 +188,10 @@ func TestRetryPolicyRateLimiter(t *testing.T) {
 	// When / Then
 	testutil.TestGetFailure(t, setup, failsafe.NewExecutor[any](rp, rl),
 		testutil.GetWithExecutionFn[any](nil, testutil.ErrInvalidState),
-		7, 3, ratelimiter.ErrExceeded)
-	assert.Equal(t, 7, rpStats.Executions())
-	assert.Equal(t, 6, rpStats.Retries())
+		7, 3, ratelimiter.ErrExceeded, func() {
+			assert.Equal(t, 7, rpStats.Executions())
+			assert.Equal(t, 6, rpStats.Retries())
+		})
 }
 
 // Fallback -> RetryPolicy -> CircuitBreaker
@@ -207,13 +224,9 @@ func TestRetryPolicyTimeout(t *testing.T) {
 	}).Build()
 	toStats := &policytesting.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](50*time.Millisecond), toStats).Build()
-	setup := func() context.Context {
-		toStats.Reset()
-		return nil
-	}
 
 	// When / Then
-	testutil.TestGetSuccess(t, setup, failsafe.NewExecutor[any](rp, to),
+	testutil.TestGetSuccess(t, policytesting.SetupFn(toStats), failsafe.NewExecutor[any](rp, to),
 		func(e failsafe.Execution[any]) (any, error) {
 			if e.Attempts() <= 2 {
 				time.Sleep(100 * time.Millisecond)
@@ -222,8 +235,27 @@ func TestRetryPolicyTimeout(t *testing.T) {
 				assert.False(t, e.IsCanceled())
 			}
 			return "success", nil
-		}, 3, 3, "success")
-	assert.Equal(t, 2, toStats.Executions())
+		}, 3, 3, "success", func() {
+			assert.Equal(t, 2, toStats.Executions())
+		})
+}
+
+// RetryPolicy -> HedgePolicy
+func TestRetryPolicyHedgePolicy(t *testing.T) {
+	// Given
+	stats := &policytesting.Stats{}
+	rp := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[any](), stats).Build()
+	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[any](10*time.Millisecond), stats).Build()
+
+	// When / Then
+	testutil.TestGetFailure(t, policytesting.SetupFn(stats), failsafe.NewExecutor[any](rp, hp),
+		func(e failsafe.Execution[any]) (any, error) {
+			time.Sleep(20 * time.Millisecond)
+			return nil, testutil.ErrInvalidState
+		}, 6, -1, testutil.ErrInvalidState, func() {
+			assert.Equal(t, 2, stats.Retries())
+			assert.Equal(t, 3, stats.Hedges())
+		})
 }
 
 // CircuitBreaker -> Timeout

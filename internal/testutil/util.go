@@ -39,7 +39,7 @@ type Waiter struct {
 
 func NewWaiter() *Waiter {
 	return &Waiter{
-		done: make(chan struct{}),
+		done: make(chan struct{}, 10),
 	}
 }
 
@@ -48,24 +48,23 @@ func (w *Waiter) Await(expectedResumes int) {
 }
 
 func (w *Waiter) AwaitWithTimeout(expectedResumes int, timeout time.Duration) {
-	w.count.Add(int32(expectedResumes))
-	timer := time.NewTimer(timeout)
-	select {
-	case <-timer.C:
-		panic("Timed out while waiting for a resume")
-	case <-w.done:
-		timer.Stop()
-		return
+	remainingResumes := w.count.Add(int32(expectedResumes))
+	if remainingResumes != 0 {
+		timer := time.NewTimer(timeout)
+		select {
+		case <-timer.C:
+			panic("Timed out while waiting for a resume")
+		case <-w.done:
+			timer.Stop()
+			return
+		}
 	}
 }
 
 func (w *Waiter) Resume() {
 	remainingResumes := w.count.Add(int32(-1))
 	if remainingResumes == 0 {
-		close(w.done)
-	}
-	if remainingResumes < 0 {
-		panic("too many Resume() calls")
+		w.done <- struct{}{}
 	}
 }
 

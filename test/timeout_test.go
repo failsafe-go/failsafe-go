@@ -10,6 +10,7 @@ import (
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/fallback"
+	"github.com/failsafe-go/failsafe-go/hedgepolicy"
 	"github.com/failsafe-go/failsafe-go/internal/policytesting"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
@@ -44,14 +45,15 @@ func TestRetryTimeoutWithBlockedFunc(t *testing.T) {
 	testutil.TestGetSuccess(t, setup, failsafe.NewExecutor[any](rp, timeout),
 		func(exec failsafe.Execution[any]) (any, error) {
 			if exec.Attempts() <= 2 {
-				// Block, trigginer the timeout
+				// Block, triggering the timeout
 				time.Sleep(100 * time.Millisecond)
 			}
 			return false, nil
-		}, 3, 3, false)
-	assert.Equal(t, 2, timeoutStats.Executions())
-	assert.Equal(t, 2, rpStats.Retries())
-	assert.Equal(t, 1, rpStats.Successes())
+		}, 3, 3, false, func() {
+			assert.Equal(t, 2, timeoutStats.Executions())
+			assert.Equal(t, 2, rpStats.Retries())
+			assert.Equal(t, 1, rpStats.Successes())
+		})
 }
 
 // Tests that when an outer retry is scheduled any inner timeouts are cancelled. This prevents the timeout from accidentally cancelling a
@@ -70,10 +72,11 @@ func TestRetryTimeoutWithPendingRetry(t *testing.T) {
 	testutil.TestGetFailure(t, setup, failsafe.NewExecutor[any](rp, timeout),
 		func(exec failsafe.Execution[any]) (any, error) {
 			return nil, testutil.ErrInvalidArgument
-		}, 3, 3, testutil.ErrInvalidArgument)
-	assert.Equal(t, 0, timeoutStats.Executions())
-	assert.Equal(t, 2, rpStats.Retries())
-	assert.Equal(t, 3, rpStats.Failures())
+		}, 3, 3, testutil.ErrInvalidArgument, func() {
+			assert.Equal(t, 0, timeoutStats.Executions())
+			assert.Equal(t, 2, rpStats.Retries())
+			assert.Equal(t, 3, rpStats.Failures())
+		})
 }
 
 // Tests that an outer timeout will cancel inner retries when the inner func is blocked. The flow should be:
@@ -83,18 +86,16 @@ func TestTimeoutRetryWithBlockedFunc(t *testing.T) {
 	timeoutStats := &policytesting.Stats{}
 	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](150*time.Millisecond), timeoutStats).Build()
 	rp := retrypolicy.WithDefaults[any]()
-	setup := func() context.Context {
-		timeoutStats.Reset()
-		return nil
-	}
 
-	testutil.TestRunFailure(t, setup, failsafe.NewExecutor[any](to, rp),
+	testutil.TestRunFailure(t, policytesting.SetupFn(timeoutStats), failsafe.NewExecutor[any](to, rp),
 		func(_ failsafe.Execution[any]) error {
 			time.Sleep(60 * time.Millisecond)
 			return testutil.ErrInvalidArgument
 		},
-		3, 3, timeout.ErrExceeded)
-	assert.Equal(t, 1, timeoutStats.Executions())
+		3, 3, timeout.ErrExceeded, func() {
+			assert.Equal(t, 1, timeoutStats.Executions())
+		})
+
 }
 
 // Tests that an outer timeout will cancel inner retries when an inner retry is pending. The flow should be:
@@ -116,9 +117,30 @@ func TestTimeoutRetryWithPendingRetry(t *testing.T) {
 		func(_ failsafe.Execution[any]) error {
 			return testutil.ErrInvalidArgument
 		},
-		1, 1, timeout.ErrExceeded)
-	assert.Equal(t, 1, timeoutStats.Executions())
-	assert.Equal(t, 1, rpStats.Executions())
+		1, 1, timeout.ErrExceeded, func() {
+			assert.Equal(t, 1, timeoutStats.Executions())
+			assert.Equal(t, 1, rpStats.Executions())
+		})
+}
+
+// Tests that an outer timeout will cancel inner hedge when the inner func is blocked. The flow should be:
+//   - Execution a hedge
+//   - Timeout
+func TestTimeoutHedgeWithBlockedFunc(t *testing.T) {
+	stats := &policytesting.Stats{}
+	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](100*time.Millisecond), stats).Build()
+	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[any](10*time.Millisecond), stats).WithMaxHedges(2).Build()
+
+	testutil.TestRunFailure(t, policytesting.SetupFn(stats), failsafe.NewExecutor[any](to, hp),
+		func(_ failsafe.Execution[any]) error {
+			time.Sleep(time.Second)
+			return testutil.ErrInvalidArgument
+		},
+		3, -1, timeout.ErrExceeded, func() {
+			assert.Equal(t, 1, stats.Executions())
+			assert.Equal(t, 2, stats.Hedges())
+		})
+
 }
 
 // Tests an inner timeout that fires while the func is blocked.
@@ -138,9 +160,10 @@ func TestFallbackTimeoutWithBlockedFunc(t *testing.T) {
 			time.Sleep(100 * time.Millisecond)
 			return errors.New("test")
 		},
-		1, 1, testutil.ErrInvalidArgument)
-	assert.Equal(t, 1, timeoutStats.Executions())
-	assert.Equal(t, 1, fbStats.Executions())
+		1, 1, testutil.ErrInvalidArgument, func() {
+			assert.Equal(t, 1, timeoutStats.Executions())
+			assert.Equal(t, 1, fbStats.Executions())
+		})
 }
 
 // Tests that an inner timeout will not interrupt an outer fallback. The inner timeout is never triggered since the func
@@ -160,9 +183,10 @@ func TestFallbackWithInnerTimeout(t *testing.T) {
 		func(_ failsafe.Execution[any]) error {
 			return errors.New("test")
 		},
-		1, 1, testutil.ErrInvalidArgument)
-	assert.Equal(t, 0, timeoutStats.Executions())
-	assert.Equal(t, 1, fbStats.Executions())
+		1, 1, testutil.ErrInvalidArgument, func() {
+			assert.Equal(t, 0, timeoutStats.Executions())
+			assert.Equal(t, 1, fbStats.Executions())
+		})
 }
 
 // Tests that an outer timeout will interrupt an inner func that is blocked, skipping the inner fallback.
@@ -182,9 +206,10 @@ func TestTimeoutFallbackWithBlockedFunc(t *testing.T) {
 			time.Sleep(100 * time.Millisecond)
 			return errors.New("test")
 		},
-		1, 1, timeout.ErrExceeded)
-	assert.Equal(t, 1, timeoutStats.Executions())
-	assert.Equal(t, 0, fbStats.Executions())
+		1, 1, timeout.ErrExceeded, func() {
+			assert.Equal(t, 1, timeoutStats.Executions())
+			assert.Equal(t, 0, fbStats.Executions())
+		})
 }
 
 // Tests that an outer timeout will interrupt an inner fallback that is blocked.
@@ -206,7 +231,8 @@ func TestTimeoutFallbackWithBlockedFallback(t *testing.T) {
 		func(_ failsafe.Execution[any]) error {
 			return errors.New("test")
 		},
-		1, 1, timeout.ErrExceeded)
-	assert.Equal(t, 1, timeoutStats.Executions())
-	assert.Equal(t, 0, fbStats.Executions())
+		1, 1, timeout.ErrExceeded, func() {
+			assert.Equal(t, 1, timeoutStats.Executions())
+			assert.Equal(t, 0, fbStats.Executions())
+		})
 }

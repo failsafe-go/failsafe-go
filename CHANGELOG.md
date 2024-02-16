@@ -1,5 +1,11 @@
 ## Upcoming Release
 
+## 0.5.0
+
+### Improvements
+
+- Added a new `HedgePolicy`
+
 ## 0.4.4
 
 ### Improvements

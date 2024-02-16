@@ -34,7 +34,6 @@ func NewCompositeError(cause error) *CompositeError {
 var ErrInvalidArgument = errors.New("invalid argument")
 var ErrInvalidState = errors.New("invalid state")
 var ErrConnecting = errors.New("connection error")
-var ErrTimeout = errors.New("timeout error")
 
 var NoopFn = func() error {
 	return nil
@@ -116,6 +115,8 @@ func ErrorNTimesThenError[R any](err error, errorTimes int, finalError error) fu
 type TestExecution[R any] struct {
 	TheLastResult R
 	TheAttempts   int
+	TheRetries    int
+	TheHedges     int
 }
 
 func (e TestExecution[R]) Attempts() int {
@@ -130,6 +131,14 @@ func (e TestExecution[R]) StartTime() time.Time {
 	panic("unimplemented stub")
 }
 
+func (e TestExecution[R]) Retries() int {
+	return e.TheRetries
+}
+
+func (e TestExecution[R]) Hedges() int {
+	return e.TheHedges
+}
+
 func (e TestExecution[R]) IsFirstAttempt() bool {
 	panic("unimplemented stub")
 }
@@ -139,6 +148,10 @@ func (e TestExecution[R]) IsRetry() bool {
 }
 
 func (e TestExecution[R]) ElapsedTime() time.Duration {
+	panic("unimplemented stub")
+}
+
+func (e TestExecution[R]) IsHedge() bool {
 	panic("unimplemented stub")
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/bulkhead"
 	"github.com/failsafe-go/failsafe-go/fallback"
+	"github.com/failsafe-go/failsafe-go/hedgepolicy"
 	"github.com/failsafe-go/failsafe-go/internal/policytesting"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
 	"github.com/failsafe-go/failsafe-go/ratelimiter"
@@ -181,6 +182,65 @@ func TestCancelWithTimeoutDuringBulkheadDelay(t *testing.T) {
 	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[any](to, bh),
 		testutil.GetWithExecutionFn[any](nil, nil),
 		1, 0, timeout.ErrExceeded)
+}
+
+// Tests canceling an execution that is blocked, before hedges have started.
+func TestCancelWithContextBeforeHedge(t *testing.T) {
+	// Given
+	stats := &policytesting.Stats{}
+	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[any](time.Second).WithMaxHedges(2), stats).Build()
+	setupInner := testutil.SetupWithContextSleep(100 * time.Millisecond)
+	setup := func() context.Context {
+		stats.Reset()
+		return setupInner()
+	}
+
+	// When / Then
+	testutil.TestRunFailure(t, setup, failsafe.NewExecutor[any](hp),
+		func(exec failsafe.Execution[any]) error {
+			testutil.WaitAndAssertCanceled(t, time.Second, exec)
+			return nil
+		},
+		1, 1, context.Canceled, func() {
+			assert.Equal(t, 0, stats.Hedges())
+		})
+}
+
+// Tests canceling an execution after hedges have been started.
+func TestCancelWithContextDuringHedge(t *testing.T) {
+	// Given
+	hp := hedgepolicy.BuilderWithDelay[any](10 * time.Millisecond).WithMaxHedges(2).Build()
+	setup := testutil.SetupWithContextSleep(100 * time.Millisecond)
+	waiter := testutil.NewWaiter()
+
+	// When / Then
+	testutil.TestRunFailure(t, setup, failsafe.NewExecutor[any](hp),
+		func(exec failsafe.Execution[any]) error {
+			testutil.WaitAndAssertCanceled(t, time.Second, exec)
+			waiter.Resume()
+			return nil
+		},
+		3, -1, context.Canceled, func() {
+			waiter.AwaitWithTimeout(3, time.Second)
+		})
+}
+
+func TestCancelWithTimeoutDuringHedge(t *testing.T) {
+	// Given
+	to := timeout.With[any](100 * time.Millisecond)
+	hp := hedgepolicy.BuilderWithDelay[any](10 * time.Millisecond).WithMaxHedges(2).Build()
+	waiter := testutil.NewWaiter()
+
+	// When / Then
+	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[any](to, hp),
+		func(exec failsafe.Execution[any]) error {
+			testutil.WaitAndAssertCanceled(t, time.Second, exec)
+			waiter.Resume()
+			return nil
+		},
+		3, -1, timeout.ErrExceeded, func() {
+			waiter.AwaitWithTimeout(3, 3*time.Second)
+		})
 }
 
 // Tests a scenario where a canceled channel is closed before it's accessed, which should use the internally shared
