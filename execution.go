@@ -294,6 +294,7 @@ func newExecution[R any](ctx context.Context) *execution[R] {
 	canceledIndex := -1
 	var canceledResult *common.PolicyResult[R]
 	var canceled chan any
+	now := time.Now()
 	return &execution[R]{
 		ctx:              ctx,
 		mtx:              &sync.Mutex{},
@@ -304,6 +305,7 @@ func newExecution[R any](ctx context.Context) *execution[R] {
 		canceledIndex:    &canceledIndex,
 		canceledResult:   &canceledResult,
 		canceled:         &canceled,
-		attemptStartTime: time.Now(),
+		attemptStartTime: now,
+		startTime:        now,
 	}
 }
