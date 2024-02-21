@@ -161,7 +161,9 @@ func (e *execution[R]) InitializeAttempt(policyIndex int) bool {
 		return false
 	}
 	e.attempts.Add(1)
-	e.attemptStartTime = time.Now()
+	now := time.Now()
+	e.attemptStartTime = now
+	e.startTime = now
 	if e.isCanceled() {
 		*e.canceledIndex = -1
 		*e.canceled = nil
