@@ -1,5 +1,11 @@
 ## Upcoming Release
 
+## 0.4.5
+
+### Bug Fixes
+
+- Fixed #29 - RetryPolicy `WithMaxDuration` not working
+
 ## 0.4.4
 
 ### Improvements

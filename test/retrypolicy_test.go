@@ -111,10 +111,12 @@ func TestShouldFailWhenMaxDurationExceeded(t *testing.T) {
 	// When / Then
 	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[bool](rp),
 		func(exec failsafe.Execution[bool]) (bool, error) {
-			time.Sleep(120 * time.Millisecond)
+			if exec.Attempts() == 2 {
+				time.Sleep(120 * time.Millisecond)
+			}
 			return false, errors.New("test")
 		},
-		1, 1, &retrypolicy.ExceededError{})
+		2, 2, &retrypolicy.ExceededError{})
 }
 
 // Asserts that the last failure is returned
