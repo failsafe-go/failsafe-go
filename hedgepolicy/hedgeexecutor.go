@@ -32,13 +32,16 @@ func (e *hedgeExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.Pol
 
 		// Guard against a race between execution results
 		done := atomic.Bool{}
+		resultCount := atomic.Int32{}
 		hedgeExec := execInternal
 		resultChan := make(chan *common.PolicyResult[R], 1) // Only the first result is sent
 
 		for attempts := 1; ; attempts++ {
 			go func(hedgeExec policy.ExecutionInternal[R]) {
 				result := innerFn(hedgeExec)
-				if done.CompareAndSwap(false, true) {
+				isFinalResult := int(resultCount.Add(1)) == e.config.maxHedges+1
+				isCancellable := e.config.IsAbortable(result.Result, result.Error)
+				if (isFinalResult || isCancellable) && done.CompareAndSwap(false, true) {
 					// Fetch cancelation result, if any
 					if canceled, cancelResult := execInternal.IsCanceledForPolicy(e.PolicyIndex); canceled {
 						result = cancelResult

@@ -1,13 +1,10 @@
 package retrypolicy
 
 import (
-	"errors"
 	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
-	"github.com/failsafe-go/failsafe-go/internal/util"
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
@@ -81,12 +78,12 @@ type RetryPolicyBuilder[R any] interface {
 	failsafe.FailurePolicyBuilder[RetryPolicyBuilder[R], R]
 	failsafe.DelayablePolicyBuilder[RetryPolicyBuilder[R], R]
 
-	// AbortOnErrors specifies that retries should be aborted if the execution error matches any of the errs using errors.Is.
-	AbortOnErrors(errs ...error) RetryPolicyBuilder[R]
-
-	// AbortOnResult wpecifies that retries should be aborted if the execution result matches the result using
+	// AbortOnResult specifies that retries should be aborted if the execution result matches the result using
 	// reflect.DeepEqual.
 	AbortOnResult(result R) RetryPolicyBuilder[R]
+
+	// AbortOnErrors specifies that retries should be aborted if the execution error matches any of the errs using errors.Is.
+	AbortOnErrors(errs ...error) RetryPolicyBuilder[R]
 
 	// AbortIf specifies that retries should be aborted if the predicate matches the result or error.
 	AbortIf(predicate func(R, error) bool) RetryPolicyBuilder[R]
@@ -157,6 +154,7 @@ type RetryPolicyBuilder[R any] interface {
 type retryPolicyConfig[R any] struct {
 	*policy.BaseFailurePolicy[R]
 	*policy.BaseDelayablePolicy[R]
+	*policy.BaseAbortablePolicy[R]
 
 	returnLastFailure bool
 	delayMin          time.Duration
@@ -167,8 +165,6 @@ type retryPolicyConfig[R any] struct {
 	jitterFactor      float32
 	maxDuration       time.Duration
 	maxRetries        int
-	// Conditions that determine whether retries should be aborted
-	abortConditions []func(result R, err error) bool
 
 	onAbort           func(failsafe.ExecutionEvent[R])
 	onRetry           func(failsafe.ExecutionEvent[R])
@@ -194,6 +190,7 @@ func Builder[R any]() RetryPolicyBuilder[R] {
 	return &retryPolicyConfig[R]{
 		BaseFailurePolicy:   &policy.BaseFailurePolicy[R]{},
 		BaseDelayablePolicy: &policy.BaseDelayablePolicy[R]{},
+		BaseAbortablePolicy: &policy.BaseAbortablePolicy[R]{},
 		maxRetries:          defaultMaxRetries,
 	}
 }
@@ -205,27 +202,18 @@ func (c *retryPolicyConfig[R]) Build() RetryPolicy[R] {
 	}
 }
 
-func (c *retryPolicyConfig[R]) AbortOnErrors(errs ...error) RetryPolicyBuilder[R] {
-	for _, target := range errs {
-		t := target
-		c.abortConditions = append(c.abortConditions, func(result R, actualErr error) bool {
-			return errors.Is(actualErr, t)
-		})
-	}
+func (c *retryPolicyConfig[R]) AbortOnResult(result R) RetryPolicyBuilder[R] {
+	c.BaseAbortablePolicy.AbortOnResult(result)
 	return c
 }
 
-func (c *retryPolicyConfig[R]) AbortOnResult(result R) RetryPolicyBuilder[R] {
-	c.abortConditions = append(c.abortConditions, func(r R, err error) bool {
-		return reflect.DeepEqual(r, result)
-	})
+func (c *retryPolicyConfig[R]) AbortOnErrors(errs ...error) RetryPolicyBuilder[R] {
+	c.BaseAbortablePolicy.AbortOnErrors(errs...)
 	return c
 }
 
 func (c *retryPolicyConfig[R]) AbortIf(predicate func(R, error) bool) RetryPolicyBuilder[R] {
-	c.abortConditions = append(c.abortConditions, func(result R, err error) bool {
-		return predicate(result, err)
-	})
+	c.BaseAbortablePolicy.AbortIf(predicate)
 	return c
 }
 
@@ -341,10 +329,6 @@ func (c *retryPolicyConfig[R]) OnRetriesExceeded(listener func(failsafe.Executio
 
 func (c *retryPolicyConfig[R]) allowsRetries() bool {
 	return c.maxRetries == -1 || c.maxRetries > 0
-}
-
-func (c *retryPolicyConfig[R]) isAbortable(result R, err error) bool {
-	return util.AppliesToAny(c.abortConditions, result, err)
 }
 
 func (rp *retryPolicy[R]) ToExecutor(policyIndex int, _ R) any {

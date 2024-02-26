@@ -82,7 +82,7 @@ func (rpe *retryPolicyExecutor[R]) OnFailure(exec policy.ExecutionInternal[R], r
 	maxRetriesExceeded := rpe.config.maxRetries != -1 && rpe.failedAttempts > rpe.config.maxRetries
 	maxDurationExceeded := rpe.config.maxDuration != 0 && exec.ElapsedTime() > rpe.config.maxDuration
 	rpe.retriesExceeded = maxRetriesExceeded || maxDurationExceeded
-	isAbortable := rpe.config.isAbortable(result.Result, result.Error)
+	isAbortable := rpe.config.IsAbortable(result.Result, result.Error)
 	shouldRetry := !isAbortable && !rpe.retriesExceeded && rpe.config.allowsRetries()
 	done := isAbortable || !shouldRetry
 

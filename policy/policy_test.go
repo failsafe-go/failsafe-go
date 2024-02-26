@@ -60,3 +60,39 @@ func TestShouldComputeDelay(t *testing.T) {
 	}))
 	assert.Equal(t, time.Duration(-1), policy.ComputeDelay(nil))
 }
+
+func TestIsAbortableNil(t *testing.T) {
+	policy := BaseAbortablePolicy[any]{}
+
+	assert.False(t, policy.IsAbortable(nil, nil))
+}
+
+func TestIsAbortableForError(t *testing.T) {
+	policy := BaseAbortablePolicy[any]{}
+	policy.AbortOnErrors(testutil.ErrInvalidArgument)
+
+	assert.True(t, policy.IsAbortable(nil, testutil.ErrInvalidArgument))
+	assert.True(t, policy.IsAbortable(nil, testutil.NewCompositeError(testutil.ErrInvalidArgument)))
+	assert.False(t, policy.IsAbortable(nil, testutil.ErrConnecting))
+}
+
+func TestIsAbortableForResult(t *testing.T) {
+	policy := BaseAbortablePolicy[any]{}
+	policy.AbortOnResult(10)
+
+	assert.True(t, policy.IsAbortable(10, nil))
+	assert.False(t, policy.IsAbortable(5, nil))
+	assert.False(t, policy.IsAbortable(5, testutil.ErrInvalidState))
+}
+
+func TestIsAbortableForPredicate(t *testing.T) {
+	policy := BaseAbortablePolicy[any]{}
+	policy.AbortIf(func(s any, err error) bool {
+		return s == "test" || errors.Is(err, testutil.ErrInvalidArgument)
+	})
+
+	assert.True(t, policy.IsAbortable("test", nil))
+	assert.False(t, policy.IsAbortable(0, nil))
+	assert.True(t, policy.IsAbortable("", testutil.ErrInvalidArgument))
+	assert.False(t, policy.IsAbortable("", testutil.ErrInvalidState))
+}

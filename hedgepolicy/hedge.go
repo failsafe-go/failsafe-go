@@ -8,9 +8,11 @@ import (
 )
 
 // HedgePolicy is a policy that performes additional executions if the initial execution is slow to complete. This policy
-// differs from RetryPolicy since multiple hedged execution may be in progress at the same time. The first execution to
-// be done is returned and the remaining executions are canceled. Once the max hedges have been started, they are left to
-// run until one completes, then the remaining executions are canceled.
+// differs from RetryPolicy since multiple hedged execution may be in progress at the same time. By default, any
+// outstanding hedges are canceled after the first execution result or error returns. The CancelOn and CancelIf methods
+// can be used to configure a hedge policy to cancel after different results, errors, or conditions. Once the max hedges
+// have been started, they are left to run until a cancellable result is returned, then the remaining hedges are
+// canceled.
 //
 // This type is concurrency safe.
 type HedgePolicy[R any] interface {
@@ -21,6 +23,17 @@ type HedgePolicy[R any] interface {
 //
 // This type is not concurrency safe.
 type HedgePolicyBuilder[R any] interface {
+	// CancelOnResult specifies that any outstanding hedges should be canceled if the execution result matches the result using
+	// reflect.DeepEqual.
+	CancelOnResult(result R) HedgePolicyBuilder[R]
+
+	// CancelOnErrors specifies that any outstanding hedges should be canceled if the execution error matches any of the errs
+	// using errors.Is.
+	CancelOnErrors(errs ...error) HedgePolicyBuilder[R]
+
+	// CancelIf specifies that any outstanding hedges should be canceled if the predicate matches the result or error.
+	CancelIf(predicate func(R, error) bool) HedgePolicyBuilder[R]
+
 	// OnHedge registers the listener to be called when a hedge is about to be attempted.
 	OnHedge(listener func(failsafe.ExecutionEvent[R])) HedgePolicyBuilder[R]
 
@@ -33,6 +46,8 @@ type HedgePolicyBuilder[R any] interface {
 }
 
 type hedgePolicyConfig[R any] struct {
+	*policy.BaseAbortablePolicy[R]
+
 	delayFunc failsafe.DelayFunc[R]
 	maxHedges int
 	onHedge   func(failsafe.ExecutionEvent[R])
@@ -68,8 +83,9 @@ func BuilderWithDelay[R any](delay time.Duration) HedgePolicyBuilder[R] {
 // is not done yet. Additional hedged executions will be performed, with delay, up to the max configured hedges.
 func BuilderWithDelayFunc[R any](delayFunc failsafe.DelayFunc[R]) HedgePolicyBuilder[R] {
 	return &hedgePolicyConfig[R]{
-		delayFunc: delayFunc,
-		maxHedges: 1,
+		BaseAbortablePolicy: &policy.BaseAbortablePolicy[R]{},
+		delayFunc:           delayFunc,
+		maxHedges:           1,
 	}
 }
 
@@ -78,6 +94,21 @@ type hedgePolicy[R any] struct {
 }
 
 var _ HedgePolicy[any] = &hedgePolicy[any]{}
+
+func (c *hedgePolicyConfig[R]) CancelOnResult(result R) HedgePolicyBuilder[R] {
+	c.BaseAbortablePolicy.AbortOnResult(result)
+	return c
+}
+
+func (c *hedgePolicyConfig[R]) CancelOnErrors(errs ...error) HedgePolicyBuilder[R] {
+	c.BaseAbortablePolicy.AbortOnErrors(errs...)
+	return c
+}
+
+func (c *hedgePolicyConfig[R]) CancelIf(predicate func(R, error) bool) HedgePolicyBuilder[R] {
+	c.BaseAbortablePolicy.AbortIf(predicate)
+	return c
+}
 
 func (c *hedgePolicyConfig[R]) OnHedge(listener func(failsafe.ExecutionEvent[R])) HedgePolicyBuilder[R] {
 	c.onHedge = listener
@@ -91,6 +122,12 @@ func (c *hedgePolicyConfig[R]) WithMaxHedges(maxHedges int) HedgePolicyBuilder[R
 
 func (c *hedgePolicyConfig[R]) Build() HedgePolicy[R] {
 	hCopy := *c
+	if !c.BaseAbortablePolicy.IsConfigured() {
+		// Cancel hedges by default after any result is received
+		c.AbortIf(func(r R, err error) bool {
+			return true
+		})
+	}
 	return &hedgePolicy[R]{
 		config: &hCopy, // TODO copy base fields
 	}
