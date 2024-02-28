@@ -238,7 +238,11 @@ func (c *retryPolicyConfig[R]) ReturnLastFailure() RetryPolicyBuilder[R] {
 }
 
 func (c *retryPolicyConfig[R]) WithMaxAttempts(maxAttempts int) RetryPolicyBuilder[R] {
-	c.maxRetries = maxAttempts - 1
+	if maxAttempts == -1 {
+		c.maxRetries = -1
+	} else {
+		c.maxRetries = maxAttempts - 1
+	}
 	return c
 }
 
