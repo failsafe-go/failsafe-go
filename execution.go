@@ -63,8 +63,8 @@ type ExecutionAttempt[R any] interface {
 type Execution[R any] interface {
 	ExecutionAttempt[R]
 
-	// Context returns the context configured for the execution, else nil if none is configured. For executions that may
-	// timeout, each attempt will get a separate child context.
+	// Context returns the context configured for the execution, else nil if none is configured. For executions involving a
+	// timeout or hedge, each attempt will get a separate child context.
 	Context() context.Context
 
 	// IsCanceled returns whether the execution has been canceled by an external Context or a timeout.Timeout.
@@ -89,6 +89,7 @@ type execution[R any] struct {
 	mtx        *sync.Mutex
 	startTime  time.Time
 	ctx        context.Context
+	cancelFunc func()
 	attempts   *atomic.Uint32
 	retries    *atomic.Uint32
 	hedges     *atomic.Uint32
@@ -234,6 +235,9 @@ func (e *execution[R]) Cancel(policyIndex int, result *common.PolicyResult[R]) {
 	} else {
 		*e.canceled = closedChan
 	}
+	if e.cancelFunc != nil {
+		e.cancelFunc()
+	}
 }
 
 // Requires locking externally.
@@ -266,11 +270,12 @@ func (e *execution[R]) CopyWithResult(result *common.PolicyResult[R]) Execution[
 	return &c
 }
 
-func (e *execution[R]) CopyWithContext(ctx context.Context) Execution[R] {
+func (e *execution[R]) CopyWithContext(ctx context.Context, cancelFunc func()) Execution[R] {
 	e.mtx.Lock()
 	c := *e
 	e.mtx.Unlock()
 	c.ctx = ctx
+	c.cancelFunc = cancelFunc
 	return &c
 }
 

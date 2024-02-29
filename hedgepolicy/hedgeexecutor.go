@@ -23,11 +23,8 @@ func (e *hedgeExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.Pol
 		execInternal := exec.(policy.ExecutionInternal[R])
 
 		// Create child context if needed
-		ctx := exec.Context()
-		var ctxCancel func()
-		if ctx != nil {
-			ctx, ctxCancel = context.WithCancel(ctx)
-			execInternal = execInternal.CopyWithContext(ctx).(policy.ExecutionInternal[R])
+		if exec.Context() != nil {
+			execInternal = execInternal.CopyWithContext(context.WithCancel(exec.Context())).(policy.ExecutionInternal[R])
 		}
 
 		// Guard against a race between execution results
@@ -45,10 +42,6 @@ func (e *hedgeExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.Pol
 					// Fetch cancelation result, if any
 					if canceled, cancelResult := execInternal.IsCanceledForPolicy(e.PolicyIndex); canceled {
 						result = cancelResult
-					}
-					// Cancel context
-					if ctxCancel != nil {
-						ctxCancel()
 					}
 					// Close canceled channel without recording a result
 					execInternal.Cancel(e.PolicyIndex, nil)

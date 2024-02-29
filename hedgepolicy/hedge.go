@@ -14,6 +14,9 @@ import (
 // have been started, they are left to run until a cancellable result is returned, then the remaining hedges are
 // canceled.
 //
+// If the execution is configured with a Context, a child context will be created for the execution and canceled when the
+// HedgePolicy is exceeded.
+//
 // This type is concurrency safe.
 type HedgePolicy[R any] interface {
 	failsafe.Policy[R]
@@ -58,6 +61,9 @@ var _ HedgePolicyBuilder[any] = &hedgePolicyConfig[any]{}
 // WithDelay returns a new HedgePolicy for execution result type R and the delay, which by default will allow a single
 // hedged execution to be performed, after the delay is elapsed, if the original execution is not done yet. Additional
 // hedged executions will be performed, with delay, up to the max configured hedges.
+//
+// If the execution is configured with a Context, a child context will be created for the execution and canceled when the
+// HedgePolicy is exceeded.
 func WithDelay[R any](delay time.Duration) HedgePolicy[R] {
 	return BuilderWithDelay[R](delay).Build()
 }
@@ -65,6 +71,9 @@ func WithDelay[R any](delay time.Duration) HedgePolicy[R] {
 // WithDelayFunc returns a new HedgePolicy for execution result type R and the delayFunc, which by default will allow a
 // single hedged execution to be performed, after the delayFunc result is elapsed, if the original execution is not done
 // yet. Additional hedged executions will be performed, with delay, up to the max configured hedges.
+//
+// If the execution is configured with a Context, a child context will be created for the execution and canceled when the
+// HedgePolicy is exceeded.
 func WithDelayFunc[R any](delayFunc failsafe.DelayFunc[R]) HedgePolicy[R] {
 	return BuilderWithDelayFunc[R](delayFunc).Build()
 }
@@ -72,6 +81,9 @@ func WithDelayFunc[R any](delayFunc failsafe.DelayFunc[R]) HedgePolicy[R] {
 // BuilderWithDelay returns a new HedgePolicyBuilder for execution result type R and the delay, which by default will
 // allow a single hedged execution to be performed, after the delay is elapsed, if the original execution is not done
 // yet. Additional hedged executions will be performed, with delay, up to the max configured hedges.
+//
+// If the execution is configured with a Context, a child context will be created for the execution and canceled when the
+// HedgePolicy is exceeded.
 func BuilderWithDelay[R any](delay time.Duration) HedgePolicyBuilder[R] {
 	return BuilderWithDelayFunc[R](func(exec failsafe.ExecutionAttempt[R]) time.Duration {
 		return delay
@@ -81,6 +93,9 @@ func BuilderWithDelay[R any](delay time.Duration) HedgePolicyBuilder[R] {
 // BuilderWithDelayFunc returns a new HedgePolicyBuilder for execution result type R and the delayFunc, which by default
 // will allow a single hedged execution to be performed, after the delayFunc result is elapsed, if the original execution
 // is not done yet. Additional hedged executions will be performed, with delay, up to the max configured hedges.
+//
+// If the execution is configured with a Context, a child context will be created for the execution and canceled when the
+// HedgePolicy is exceeded.
 func BuilderWithDelayFunc[R any](delayFunc failsafe.DelayFunc[R]) HedgePolicyBuilder[R] {
 	return &hedgePolicyConfig[R]{
 		BaseAbortablePolicy: &policy.BaseAbortablePolicy[R]{},

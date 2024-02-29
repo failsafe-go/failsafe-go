@@ -31,6 +31,6 @@ type ExecutionInternal[R any] interface {
 	// these may be changed if the execution is canceled.
 	CopyWithResult(result *common.PolicyResult[R]) failsafe.Execution[R]
 
-	// CopyWithContext returns a copy of the failsafe.Execution with the context.
-	CopyWithContext(ctx context.Context) failsafe.Execution[R]
+	// CopyWithContext returns a copy of the failsafe.Execution with the context and cancelFunc.
+	CopyWithContext(ctx context.Context, cancelFunc func()) failsafe.Execution[R]
 }
