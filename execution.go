@@ -63,8 +63,8 @@ type ExecutionAttempt[R any] interface {
 type Execution[R any] interface {
 	ExecutionAttempt[R]
 
-	// Context returns the context configured for the execution, else nil if none is configured. For executions involving a
-	// timeout or hedge, each attempt will get a separate child context.
+	// Context returns the context configured for the execution, else context.Background if none was configured. For
+	// executions involving a timeout or hedge, each attempt will get a separate child context.
 	Context() context.Context
 
 	// IsCanceled returns whether the execution has been canceled by an external Context or a timeout.Timeout.
