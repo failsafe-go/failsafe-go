@@ -3,6 +3,9 @@ package testutil
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
@@ -110,6 +113,26 @@ func ErrorNTimesThenError[R any](err error, errorTimes int, finalError error) fu
 		}
 		return *(new(R)), finalError
 	}
+}
+
+func MockResponse(statusCode int, body string) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		w.WriteHeader(statusCode)
+		fmt.Fprintf(w, body)
+	}))
+}
+
+func MockDelayedResponse(statusCode int, body string, delay time.Duration) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		timer := time.NewTimer(delay)
+		select {
+		case <-timer.C:
+			w.WriteHeader(statusCode)
+			fmt.Fprintf(w, body)
+		case <-request.Context().Done():
+			timer.Stop()
+		}
+	}))
 }
 
 type TestExecution[R any] struct {

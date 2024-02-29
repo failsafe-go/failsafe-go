@@ -1,5 +1,9 @@
 ## Upcoming Release
 
+## 0.6.0
+
+- Added HTTP support via `failsafehttp.NewRoundTripper`
+
 ## 0.5.0
 
 ### Improvements

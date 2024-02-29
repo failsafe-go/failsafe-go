@@ -25,11 +25,8 @@ func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.P
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
 
-		// Create child context if needed
-		var ctxCancel func()
-		if exec.Context() != nil {
-			execInternal = execInternal.CopyWithContext(context.WithCancel(exec.Context())).(policy.ExecutionInternal[R])
-		}
+		// Create child context
+		execInternal = execInternal.CopyWithContext(context.WithCancel(exec.Context())).(policy.ExecutionInternal[R])
 
 		var result atomic.Pointer[common.PolicyResult[R]]
 		timer := time.AfterFunc(e.config.timeLimit, func() {
@@ -51,9 +48,6 @@ func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.P
 		// Store result and ctxCancel timeout context if needed
 		if result.CompareAndSwap(nil, innerFn(execInternal)) {
 			timer.Stop()
-			if ctxCancel != nil {
-				ctxCancel()
-			}
 		}
 		return e.PostExecute(execInternal, result.Load())
 	}

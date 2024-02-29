@@ -22,10 +22,8 @@ func (e *hedgeExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.Pol
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
 
-		// Create child context if needed
-		if exec.Context() != nil {
-			execInternal = execInternal.CopyWithContext(context.WithCancel(exec.Context())).(policy.ExecutionInternal[R])
-		}
+		// Create child context
+		execInternal = execInternal.CopyWithContext(context.WithCancel(exec.Context())).(policy.ExecutionInternal[R])
 
 		// Guard against a race between execution results
 		done := atomic.Bool{}

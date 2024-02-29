@@ -139,12 +139,15 @@ type executor[R any] struct {
 func NewExecutor[R any](policies ...Policy[R]) Executor[R] {
 	return &executor[R]{
 		policies: policies,
+		ctx:      context.Background(),
 	}
 }
 
 func (e *executor[R]) WithContext(ctx context.Context) Executor[R] {
 	c := *e
-	c.ctx = ctx
+	if ctx != nil {
+		c.ctx = ctx
+	}
 	return &c
 }
 
