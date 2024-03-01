@@ -36,13 +36,12 @@ func (e *hedgeExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.Pol
 				result := innerFn(hedgeExec)
 				isFinalResult := int(resultCount.Add(1)) == e.config.maxHedges+1
 				isCancellable := e.config.IsAbortable(result.Result, result.Error)
+
 				if (isFinalResult || isCancellable) && done.CompareAndSwap(false, true) {
-					// Fetch cancelation result, if any
-					if canceled, cancelResult := execInternal.IsCanceledForPolicy(e.PolicyIndex); canceled {
+					// Close canceled channel without recording a result, and get existing cancel result if any
+					if cancelResult := execInternal.Cancel(e.PolicyIndex, nil); cancelResult != nil {
 						result = cancelResult
 					}
-					// Close canceled channel without recording a result
-					execInternal.Cancel(e.PolicyIndex, nil)
 					resultChan <- result
 				}
 			}(hedgeExec)

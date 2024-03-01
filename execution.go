@@ -218,11 +218,11 @@ func (e *execution[R]) InitializeHedge(policyIndex int) *common.PolicyResult[R] 
 	return nil
 }
 
-func (e *execution[R]) Cancel(policyIndex int, result *common.PolicyResult[R]) {
+func (e *execution[R]) Cancel(policyIndex int, result *common.PolicyResult[R]) *common.PolicyResult[R] {
 	e.mtx.Lock()
 	defer e.mtx.Unlock()
 	if e.isCanceled() {
-		return
+		return *e.canceledResult
 	}
 	*e.canceledIndex = policyIndex
 	*e.canceledResult = result
@@ -238,6 +238,7 @@ func (e *execution[R]) Cancel(policyIndex int, result *common.PolicyResult[R]) {
 	if e.cancelFunc != nil {
 		e.cancelFunc()
 	}
+	return result
 }
 
 // Requires locking externally.

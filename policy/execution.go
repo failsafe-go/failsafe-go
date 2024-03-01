@@ -18,12 +18,13 @@ type ExecutionInternal[R any] interface {
 	// cancellation result is returned.
 	InitializeHedge(policyIndex int) *common.PolicyResult[R]
 
-	// Cancel marks the execution as having been cancelled by the policyExecutor, which will also cancel pending executions
-	// of any inner policies of the policyExecutor, and also records the result. Outer policies of the policyExecutor will be
-	// unaffected.
-	Cancel(policyIndex int, result *common.PolicyResult[R])
+	// Cancel marks the execution as having been canceled by the policyIndex, if it wasn't already canceled, and returns the
+	// cancel result. Any pending executions of any inner policies of the policyIndex will be canceled. Outer policies of the
+	// policyIndex will be unaffected.
+	Cancel(policyIndex int, result *common.PolicyResult[R]) *common.PolicyResult[R]
 
-	// IsCanceledForPolicy returns whether the execution has been canceled, along with the associated cancellation result if so.
+	// IsCanceledForPolicy returns whether the execution has been canceled for the policyIndex, along with the associated
+	// cancellation result if so.
 	IsCanceledForPolicy(policyIndex int) (bool, *common.PolicyResult[R])
 
 	// CopyWithResult returns a copy of the failsafe.Execution with the result. If the result is nil, this will preserve a
