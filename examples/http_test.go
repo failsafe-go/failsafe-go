@@ -15,7 +15,7 @@ import (
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
 )
 
-// Test test demonstrates how to use a RetryPolicy with HTTP using two different approaches:
+// This test demonstrates how to use a RetryPolicy with HTTP using two different approaches:
 //
 //   - a failsafe http.RoundTripper
 //   - a failsafe execution
@@ -24,7 +24,7 @@ func TestRetryPolicyWithHttp(t *testing.T) {
 	counter := atomic.Int32{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if counter.Add(1) < 3 {
-			fmt.Println("replying with 400")
+			fmt.Println("Replying with 400")
 			w.WriteHeader(400)
 		} else {
 			fmt.Fprintf(w, "pong")
@@ -33,11 +33,13 @@ func TestRetryPolicyWithHttp(t *testing.T) {
 	defer server.Close()
 
 	// Create a RetryPolicy that handles 400 responses
-	retryPolicy := retrypolicy.Builder[*http.Response]().HandleIf(func(response *http.Response, err error) bool {
+	retryPolicy := retrypolicy.Builder[*http.Response]().HandleIf(func(response *http.Response, _ error) bool {
 		return response.StatusCode == 400
+	}).OnRetry(func(_ failsafe.ExecutionEvent[*http.Response]) {
+		fmt.Println("Retrying ping")
 	}).Build()
 
-	// Demonstrates how to use a RetryPoilicy with a failsafe RoundTripper
+	// Use the RetryPoilicy with a failsafe RoundTripper
 	t.Run("with failsafe round tripper", func(t *testing.T) {
 		executor := failsafe.NewExecutor[*http.Response](retryPolicy)
 		roundTripper := failsafehttp.NewRoundTripper(executor, nil)
@@ -45,25 +47,15 @@ func TestRetryPolicyWithHttp(t *testing.T) {
 
 		fmt.Println("Sending ping")
 		resp, err := client.Get(server.URL)
-		if err != nil {
-			return
-		}
 
-		defer resp.Body.Close()
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return
-		}
-
-		fmt.Println("Received", string(body))
+		readAndPrintResponse(resp, err)
 	})
 
-	// Demonstrates how to use a RetryPoilicy with an HTTP client via a failsafe execution
+	// Use the RetryPoilicy with an HTTP client via a failsafe execution
 	t.Run("with failsafe execution", func(t *testing.T) {
 		counter.Store(0)
-		fmt.Println("Sending ping")
 
-		// Perform a failsafe execution
+		fmt.Println("Sending ping")
 		resp, err := failsafe.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
 			// Include the execution context in the request, so that cancellations are propagated
 			req, _ := http.NewRequestWithContext(exec.Context(), http.MethodGet, server.URL, nil)
@@ -71,17 +63,7 @@ func TestRetryPolicyWithHttp(t *testing.T) {
 			return client.Do(req)
 		}, retryPolicy)
 
-		if err != nil {
-			return
-		}
-
-		defer resp.Body.Close()
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return
-		}
-
-		fmt.Println("Received", string(body))
+		readAndPrintResponse(resp, err)
 	})
 }
 
@@ -110,37 +92,25 @@ func TestHedgePolicyWithHttp(t *testing.T) {
 	hedgePolicy := hedgepolicy.BuilderWithDelay[*http.Response](time.Second).
 		WithMaxHedges(2).
 		OnHedge(func(f failsafe.ExecutionEvent[*http.Response]) {
-			fmt.Println("Sending hedge request")
+			fmt.Println("Sending hedged ping")
 		}).
 		Build()
 
-	// Demonstrates how to use a HedgePolicy with a failsafe RoundTripper
+	// Use the HedgePolicy with a failsafe RoundTripper
 	t.Run("with failsafe round tripper", func(t *testing.T) {
-		// Create a client with a failsafe RoundTripper
 		executor := failsafe.NewExecutor[*http.Response](hedgePolicy)
 		roundTripper := failsafehttp.NewRoundTripper(executor, nil)
 		client := &http.Client{Transport: roundTripper}
 
 		fmt.Println("Sending ping")
 		resp, err := client.Get(server.URL)
-		if err != nil {
-			return
-		}
 
-		defer resp.Body.Close()
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return
-		}
-
-		fmt.Println("Received", string(body))
+		readAndPrintResponse(resp, err)
 	})
 
-	// Demonstrates how to use a HedgePolicy with an HTTP client via a failsafe execution
+	// Use the HedgePolicy with an HTTP client via a failsafe execution
 	t.Run("with failsafe execution", func(t *testing.T) {
 		fmt.Println("Sending ping")
-
-		// Perform a failsafe execution
 		resp, err := failsafe.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
 			// Include the execution context in the request, so that cancellations are propagated
 			req, _ := http.NewRequestWithContext(exec.Context(), http.MethodGet, server.URL, nil)
@@ -148,16 +118,20 @@ func TestHedgePolicyWithHttp(t *testing.T) {
 			return client.Do(req)
 		}, hedgePolicy)
 
-		if err != nil {
-			return
-		}
-
-		defer resp.Body.Close()
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return
-		}
-
-		fmt.Println("Received", string(body))
+		readAndPrintResponse(resp, err)
 	})
+}
+
+func readAndPrintResponse(response *http.Response, err error) {
+	if err != nil {
+		return
+	}
+
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return
+	}
+
+	fmt.Println("Received", string(body))
 }
