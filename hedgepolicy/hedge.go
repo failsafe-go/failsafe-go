@@ -92,7 +92,7 @@ func BuilderWithDelay[R any](delay time.Duration) HedgePolicyBuilder[R] {
 
 // BuilderWithDelayFunc returns a new HedgePolicyBuilder for execution result type R and the delayFunc, which by default
 // will allow a single hedged execution to be performed, after the delayFunc result is elapsed, if the original execution
-// is not done yet. Additional hedged executions will be performed, with delay, up to the max configured hedges.
+// is not done yet. Additional hedged executions will be performed, after additional delays, up to the max configured hedges.
 //
 // If the execution is configured with a Context, a child context will be created for the execution and canceled when the
 // HedgePolicy is exceeded.
