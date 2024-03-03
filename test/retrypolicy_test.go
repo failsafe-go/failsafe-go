@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -135,4 +136,20 @@ func TestShouldReturnLastFailure(t *testing.T) {
 			return err
 		},
 		4, 4, err)
+}
+
+// Asserts that a RetryPolicy configured with unlimited attempts, behaves as expected.
+func TestUnlimitedAttempts(t *testing.T) {
+	// Given
+	rp := retrypolicy.Builder[bool]().WithMaxAttempts(-1).Build()
+	stub, reset := testutil.ErrorNTimesThenReturn(testutil.ErrInvalidState, 5, true)
+	setup := func() context.Context {
+		reset()
+		return nil
+	}
+
+	// When / Then
+	testutil.TestGetSuccess[bool](t, setup, failsafe.NewExecutor[bool](rp),
+		stub,
+		6, 6, true)
 }
