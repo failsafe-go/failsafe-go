@@ -15,6 +15,9 @@ import (
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
 )
 
+// Test test demonstrates how to use a RetryPolicy with HTTP using two different approaches:
+//   - a failsafe http.RoundTripper
+//   - a failsafe execution
 func TestRetryPolicyWithHttp(t *testing.T) {
 	// Setup a test http server that returns 400 on the first two requests
 	counter := atomic.Int32{}
@@ -33,24 +36,51 @@ func TestRetryPolicyWithHttp(t *testing.T) {
 		return response.StatusCode == 400
 	}).Build()
 
-	// Create a client with a failsafe RoundTripper
-	executor := failsafe.NewExecutor[*http.Response](retryPolicy)
-	roundTripper := failsafehttp.NewRoundTripper(executor, nil)
-	client := &http.Client{Transport: roundTripper}
+	// Demonstrates how to use a RetryPoilicy with a failsafe RoundTripper
+	t.Run("with failsafe round tripper", func(t *testing.T) {
+		executor := failsafe.NewExecutor[*http.Response](retryPolicy)
+		roundTripper := failsafehttp.NewRoundTripper(executor, nil)
+		client := &http.Client{Transport: roundTripper}
 
-	fmt.Println("Sending ping")
-	resp, err := client.Get(server.URL)
-	if err != nil {
-		return
-	}
+		fmt.Println("Sending ping")
+		resp, err := client.Get(server.URL)
+		if err != nil {
+			return
+		}
 
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return
-	}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return
+		}
 
-	fmt.Println("Received", string(body))
+		fmt.Println("Received", string(body))
+	})
+
+	// Demonstrates how to use a RetryPoilicy with an HTTP client via a failsafe execution
+	t.Run("with failsafe execution", func(t *testing.T) {
+		counter.Store(0)
+		fmt.Println("Sending ping")
+
+		// Perform a failsafe execution
+		resp, err := failsafe.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
+			req, _ := http.NewRequestWithContext(exec.Context(), http.MethodGet, server.URL, nil)
+			client := &http.Client{}
+			return client.Do(req)
+		}, retryPolicy)
+
+		if err != nil {
+			return
+		}
+
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return
+		}
+
+		fmt.Println("Received", string(body))
+	})
 }
 
 // This test demonstrates how to use a HedgePolicy with HTTP using two different approaches:
@@ -82,7 +112,7 @@ func TestHedgePolicyWithHttp(t *testing.T) {
 		}).
 		Build()
 
-	// Demonstrates how to use a HedgePolicy with a failsafe round tripper
+	// Demonstrates how to use a HedgePolicy with a failsafe RoundTripper
 	t.Run("with failsafe round tripper", func(t *testing.T) {
 		// Create a client with a failsafe RoundTripper
 		executor := failsafe.NewExecutor[*http.Response](hedgePolicy)
