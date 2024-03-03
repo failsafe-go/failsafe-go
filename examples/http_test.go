@@ -15,31 +15,24 @@ import (
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
 )
 
-// This test demonstrates how to use a RetryPolicy with HTTP using two different approaches:
+// This test demonstrates how to use a failsafehttp.RetryPolicyBuilder using two different approaches:
 //
 //   - a failsafe http.RoundTripper
 //   - a failsafe execution
 func TestRetryPolicyWithHttp(t *testing.T) {
-	// Setup a test http server that returns 400 on the first two requests
-	counter := atomic.Int32{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		if counter.Add(1) < 3 {
-			fmt.Println("Replying with 400")
-			w.WriteHeader(400)
-		} else {
-			fmt.Fprintf(w, "pong")
-		}
-	}))
+	// Setup a test http server that returns 500 on the first two requests
+	failureCounter := &atomic.Int32{}
+	server := flakyServer(2, failureCounter)
 	defer server.Close()
 
-	// Create a RetryPolicy that handles 400 responses
-	retryPolicy := retrypolicy.Builder[*http.Response]().HandleIf(func(response *http.Response, _ error) bool {
-		return response.StatusCode == 400
-	}).OnRetry(func(_ failsafe.ExecutionEvent[*http.Response]) {
-		fmt.Println("Retrying ping")
-	}).Build()
+	// Create a RetryPolicy that handles non-terminal responses, with backoff delays between retries
+	retryPolicy := failsafehttp.RetryPolicyBuilder().
+		WithBackoff(time.Second, 10*time.Second).
+		OnRetry(func(e failsafe.ExecutionEvent[*http.Response]) {
+			fmt.Println("Ping retry", e.Retries())
+		}).Build()
 
-	// Use the RetryPoilicy with a failsafe RoundTripper
+	// Use the RetryPolicy with a failsafe RoundTripper
 	t.Run("with failsafe round tripper", func(t *testing.T) {
 		executor := failsafe.NewExecutor[*http.Response](retryPolicy)
 		roundTripper := failsafehttp.NewRoundTripper(executor, nil)
@@ -51,9 +44,9 @@ func TestRetryPolicyWithHttp(t *testing.T) {
 		readAndPrintResponse(resp, err)
 	})
 
-	// Use the RetryPoilicy with an HTTP client via a failsafe execution
+	// Use the RetryPolicy with an HTTP client via a failsafe execution
 	t.Run("with failsafe execution", func(t *testing.T) {
-		counter.Store(0)
+		failureCounter.Store(0)
 
 		fmt.Println("Sending ping")
 		resp, err := failsafe.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
@@ -65,6 +58,30 @@ func TestRetryPolicyWithHttp(t *testing.T) {
 
 		readAndPrintResponse(resp, err)
 	})
+}
+
+// This test demonstrates how to use a RetryPolicy with custom response handling HTTP using a failsafe RoundTripper.
+func TestCustomRetryPolicyWithHttp(t *testing.T) {
+	// Setup a test http server that returns 500 on the first two requests
+	server := flakyServer(2, &atomic.Int32{})
+	defer server.Close()
+
+	// Create a RetryPolicy that only handles 500 responses
+	retryPolicy := retrypolicy.Builder[*http.Response]().HandleIf(func(response *http.Response, _ error) bool {
+		return response.StatusCode == 500
+	}).OnRetry(func(e failsafe.ExecutionEvent[*http.Response]) {
+		fmt.Println("Ping retry", e.Retries())
+	}).Build()
+
+	// Use the RetryPoilicy with a failsafe RoundTripper
+	executor := failsafe.NewExecutor[*http.Response](retryPolicy)
+	roundTripper := failsafehttp.NewRoundTripper(executor, nil)
+	client := &http.Client{Transport: roundTripper}
+
+	fmt.Println("Sending ping")
+	resp, err := client.Get(server.URL)
+
+	readAndPrintResponse(resp, err)
 }
 
 // This test demonstrates how to use a HedgePolicy with HTTP using two different approaches:
@@ -120,6 +137,17 @@ func TestHedgePolicyWithHttp(t *testing.T) {
 
 		readAndPrintResponse(resp, err)
 	})
+}
+
+func flakyServer(failTimes int, failureCounter *atomic.Int32) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if failureCounter.Add(1) <= int32(failTimes) {
+			fmt.Println("Replying with 500")
+			w.WriteHeader(500)
+		} else {
+			fmt.Fprintf(w, "pong")
+		}
+	}))
 }
 
 func readAndPrintResponse(response *http.Response, err error) {
