@@ -16,6 +16,7 @@ import (
 )
 
 // Test test demonstrates how to use a RetryPolicy with HTTP using two different approaches:
+//
 //   - a failsafe http.RoundTripper
 //   - a failsafe execution
 func TestRetryPolicyWithHttp(t *testing.T) {
@@ -64,6 +65,7 @@ func TestRetryPolicyWithHttp(t *testing.T) {
 
 		// Perform a failsafe execution
 		resp, err := failsafe.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
+			// Include the execution context in the request, so that cancellations are propagated
 			req, _ := http.NewRequestWithContext(exec.Context(), http.MethodGet, server.URL, nil)
 			client := &http.Client{}
 			return client.Do(req)
@@ -140,6 +142,7 @@ func TestHedgePolicyWithHttp(t *testing.T) {
 
 		// Perform a failsafe execution
 		resp, err := failsafe.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
+			// Include the execution context in the request, so that cancellations are propagated
 			req, _ := http.NewRequestWithContext(exec.Context(), http.MethodGet, server.URL, nil)
 			client := &http.Client{}
 			return client.Do(req)
