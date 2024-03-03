@@ -2,7 +2,13 @@
 
 ## 0.6.0
 
+### Improvements
+
 - Added HTTP support via `failsafehttp.NewRoundTripper`
+
+### Bug Fixes
+
+- Fixed #32 - RetryPolicy with no max retries.
 
 ## 0.5.0
 
