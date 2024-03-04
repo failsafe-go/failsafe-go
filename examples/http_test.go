@@ -5,11 +5,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/circuitbreaker"
 	"github.com/failsafe-go/failsafe-go/failsafehttp"
 	"github.com/failsafe-go/failsafe-go/hedgepolicy"
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
@@ -20,16 +22,15 @@ import (
 //   - a failsafe http.RoundTripper
 //   - a failsafe execution
 func TestRetryPolicyWithHttp(t *testing.T) {
-	// Setup a test http server that returns 500 on the first two requests
+	// Setup a test http server that returns 429 on the first two requests with a 1 second Retry-After header
 	failureCounter := &atomic.Int32{}
-	server := flakyServer(2, failureCounter)
+	server := flakyServer(2, failureCounter, 429, time.Second)
 	defer server.Close()
 
-	// Create a RetryPolicy that handles non-terminal responses, with backoff delays between retries
+	// Create a RetryPolicy that handles non-terminal responses
 	retryPolicy := failsafehttp.RetryPolicyBuilder().
-		WithBackoff(time.Second, 10*time.Second).
-		OnRetry(func(e failsafe.ExecutionEvent[*http.Response]) {
-			fmt.Println("Ping retry", e.Retries())
+		OnRetryScheduled(func(e failsafe.ExecutionScheduledEvent[*http.Response]) {
+			fmt.Println("Ping retry", e.Attempts(), "after delay of", e.Delay)
 		}).Build()
 
 	// Use the RetryPolicy with a failsafe RoundTripper
@@ -63,15 +64,18 @@ func TestRetryPolicyWithHttp(t *testing.T) {
 // This test demonstrates how to use a RetryPolicy with custom response handling HTTP using a failsafe RoundTripper.
 func TestCustomRetryPolicyWithHttp(t *testing.T) {
 	// Setup a test http server that returns 500 on the first two requests
-	server := flakyServer(2, &atomic.Int32{})
+	server := flakyServer(2, &atomic.Int32{}, 500, 0)
 	defer server.Close()
 
-	// Create a RetryPolicy that only handles 500 responses
-	retryPolicy := retrypolicy.Builder[*http.Response]().HandleIf(func(response *http.Response, _ error) bool {
-		return response.StatusCode == 500
-	}).OnRetry(func(e failsafe.ExecutionEvent[*http.Response]) {
-		fmt.Println("Ping retry", e.Retries())
-	}).Build()
+	// Create a RetryPolicy that only handles 500 responses, with backoff delays between retries
+	retryPolicy := retrypolicy.Builder[*http.Response]().
+		HandleIf(func(response *http.Response, _ error) bool {
+			return response.StatusCode == 500
+		}).
+		WithBackoff(time.Second, 10*time.Second).
+		OnRetryScheduled(func(e failsafe.ExecutionScheduledEvent[*http.Response]) {
+			fmt.Println("Ping retry", e.Attempts(), "after delay of", e.Delay)
+		}).Build()
 
 	// Use the RetryPoilicy with a failsafe RoundTripper
 	executor := failsafe.NewExecutor[*http.Response](retryPolicy)
@@ -82,6 +86,40 @@ func TestCustomRetryPolicyWithHttp(t *testing.T) {
 	resp, err := client.Get(server.URL)
 
 	readAndPrintResponse(resp, err)
+}
+
+// This test demonstrates how to use a CircuitBreaker with HTTP via a RoundTripper.
+func TestCircuitBreakerWithHttp(t *testing.T) {
+	// Setup a test http server that returns 429 on the first two requests with a 1 second Retry-After header
+	server := flakyServer(1, &atomic.Int32{}, 429, time.Second)
+	defer server.Close()
+
+	// Create a CircuitBreaker that handles 429 responses and uses a half-open delay based on the Retry-After header
+	circuitBreaker := circuitbreaker.Builder[*http.Response]().
+		HandleIf(func(response *http.Response, err error) bool {
+			return response.StatusCode == 429
+		}).
+		WithDelayFunc(failsafehttp.DelayFunc()).
+		OnStateChanged(func(event circuitbreaker.StateChangedEvent) {
+			fmt.Println("circuit breaker state changed", event)
+		}).
+		Build()
+
+	// Use the RetryPoilicy with a failsafe RoundTripper
+	executor := failsafe.NewExecutor[*http.Response](circuitBreaker)
+	roundTripper := failsafehttp.NewRoundTripper(executor, nil)
+	client := &http.Client{Transport: roundTripper}
+
+	sendPing := func() {
+		fmt.Println("Sending ping")
+		resp, err := client.Get(server.URL)
+		readAndPrintResponse(resp, err)
+	}
+
+	sendPing()                                  // Should fail, breaker opens
+	sendPing()                                  // Should fail since breaker is currently open
+	time.Sleep(circuitBreaker.RemainingDelay()) // Wait for expected delay, indicated by the Retry-After header
+	sendPing()                                  // Should succeed, breaker closes
 }
 
 // This test demonstrates how to use a HedgePolicy with HTTP using two different approaches:
@@ -139,11 +177,14 @@ func TestHedgePolicyWithHttp(t *testing.T) {
 	})
 }
 
-func flakyServer(failTimes int, failureCounter *atomic.Int32) *httptest.Server {
+func flakyServer(failTimes int, failureCounter *atomic.Int32, responseCode int, retryAfterDelay time.Duration) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if failureCounter.Add(1) <= int32(failTimes) {
-			fmt.Println("Replying with 500")
-			w.WriteHeader(500)
+			if retryAfterDelay > 0 {
+				w.Header().Add("Retry-After", strconv.Itoa(int(retryAfterDelay.Seconds())))
+			}
+			fmt.Println("Replying with", responseCode)
+			w.WriteHeader(responseCode)
 		} else {
 			fmt.Fprintf(w, "pong")
 		}
@@ -152,14 +193,15 @@ func flakyServer(failTimes int, failureCounter *atomic.Int32) *httptest.Server {
 
 func readAndPrintResponse(response *http.Response, err error) {
 	if err != nil {
+		fmt.Println("Received", err)
 		return
 	}
-
 	defer response.Body.Close()
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		return
 	}
-
-	fmt.Println("Received", string(body))
+	if len(body) > 0 {
+		fmt.Println("Received", string(body))
+	}
 }
