@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/failsafe-go/failsafe-go"
-	"github.com/failsafe-go/failsafe-go/failsafehttp"
 )
 
 type Given func() context.Context
@@ -118,8 +117,7 @@ func testRequest(t *testing.T, url string, executor failsafe.Executor[*http.Resp
 	executorFn, assertResult := prepareTest(t, nil, executor, expectedAttempts, expectedExecutions, nil, expectedError, expectedSuccess, then...)
 
 	// Build and send HTTP request
-	failsafeTransport := failsafehttp.NewRoundTripper(executorFn(), nil)
-	client := http.Client{Transport: failsafeTransport}
+	client := http.Client{Transport: &roundTripper{executor: executorFn()}}
 	resp, err := client.Get(url)
 
 	var body string
@@ -138,4 +136,14 @@ func testRequest(t *testing.T, url string, executor failsafe.Executor[*http.Resp
 	if expectedResult != nil {
 		assert.Equal(t, expectedResult, body)
 	}
+}
+
+type roundTripper struct {
+	executor failsafe.Executor[*http.Response]
+}
+
+func (f *roundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f.executor.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
+		return http.DefaultTransport.RoundTrip(request.WithContext(exec.Context()))
+	})
 }

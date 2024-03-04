@@ -10,9 +10,13 @@ import (
 type ExecutionInternal[R any] interface {
 	failsafe.Execution[R]
 
+	// RecordResult records an execution result, such as before a retry attempt, and returns the result or the cancel result,
+	// if any.
+	RecordResult(policyIndex int, result *common.PolicyResult[R]) *common.PolicyResult[R]
+
 	// InitializeRetry prepares a new execution retry. If the retry could not be initialized because was canceled, the associated
 	// cancellation result is returned.
-	InitializeRetry(policyIndex int, lastResult *common.PolicyResult[R]) *common.PolicyResult[R]
+	InitializeRetry(policyIndex int) *common.PolicyResult[R]
 
 	// InitializeHedge prepares a new hedge execution. If the attempt could not be initialized because was canceled, the associated
 	// cancellation result is returned.

@@ -153,3 +153,21 @@ func TestUnlimitedAttempts(t *testing.T) {
 		stub,
 		6, 6, true)
 }
+
+// Asserts that backoff delays are as expected.
+func TestBackoffDelay(t *testing.T) {
+	var delays []time.Duration
+	rp := retrypolicy.Builder[any]().
+		WithBackoff(time.Millisecond, 10*time.Millisecond).
+		WithMaxRetries(6).
+		OnRetryScheduled(func(e failsafe.ExecutionScheduledEvent[any]) {
+			delays = append(delays, e.Delay)
+		}).Build()
+
+	failsafe.Run(func() error {
+		return testutil.ErrInvalidState
+	}, rp)
+
+	expected := []time.Duration{time.Millisecond, 2 * time.Millisecond, 4 * time.Millisecond, 8 * time.Millisecond, 10 * time.Millisecond, 10 * time.Millisecond}
+	assert.ElementsMatch(t, expected, delays)
+}

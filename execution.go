@@ -182,7 +182,21 @@ func (e *execution[_]) Canceled() <-chan any {
 	return *e.canceled
 }
 
-func (e *execution[R]) InitializeRetry(policyIndex int, lastResult *common.PolicyResult[R]) *common.PolicyResult[R] {
+func (e *execution[R]) RecordResult(policyIndex int, result *common.PolicyResult[R]) *common.PolicyResult[R] {
+	// Lock to guard against a race with a Timeout canceling the execution
+	e.mtx.Lock()
+	defer e.mtx.Unlock()
+	if canceled, cancelResult := e.isCanceledForPolicy(policyIndex); canceled {
+		return cancelResult
+	}
+	if result != nil {
+		e.lastResult = result.Result
+		e.lastError = result.Error
+	}
+	return nil
+}
+
+func (e *execution[R]) InitializeRetry(policyIndex int) *common.PolicyResult[R] {
 	// Lock to guard against a race with a Timeout canceling the execution
 	e.mtx.Lock()
 	defer e.mtx.Unlock()
@@ -197,10 +211,6 @@ func (e *execution[R]) InitializeRetry(policyIndex int, lastResult *common.Polic
 	*e.canceledIndex = -1
 	*e.canceledResult = nil
 	*e.canceled = nil
-	if lastResult != nil {
-		e.lastResult = lastResult.Result
-		e.lastError = lastResult.Error
-	}
 	return nil
 }
 

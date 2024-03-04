@@ -46,6 +46,11 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *co
 				return result
 			}
 
+			// Record result
+			if cancelResult := execInternal.RecordResult(rpe.PolicyIndex, result); cancelResult != nil {
+				return cancelResult
+			}
+
 			// Delay
 			delay := rpe.getDelay(exec)
 			if rpe.config.onRetryScheduled != nil {
@@ -62,7 +67,7 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *co
 			}
 
 			// Prepare for next iteration
-			if cancelResult := execInternal.InitializeRetry(rpe.PolicyIndex, result); cancelResult != nil {
+			if cancelResult := execInternal.InitializeRetry(rpe.PolicyIndex); cancelResult != nil {
 				return cancelResult
 			}
 
