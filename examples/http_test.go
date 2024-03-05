@@ -15,6 +15,7 @@ import (
 	"github.com/failsafe-go/failsafe-go/failsafehttp"
 	"github.com/failsafe-go/failsafe-go/hedgepolicy"
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
+	"github.com/failsafe-go/failsafe-go/timeout"
 )
 
 // This test demonstrates how to use a failsafehttp.RetryPolicyBuilder using two different approaches:
@@ -22,11 +23,6 @@ import (
 //   - a failsafe http.RoundTripper
 //   - a failsafe execution
 func TestHttpWithRetryPolicy(t *testing.T) {
-	// Setup a test http server that returns 429 on the first two requests with a 1 second Retry-After header
-	failureCounter := &atomic.Int32{}
-	server := flakyServer(2, failureCounter, 429, time.Second)
-	defer server.Close()
-
 	// Create a RetryPolicy that handles non-terminal responses
 	retryPolicy := failsafehttp.RetryPolicyBuilder().
 		OnRetryScheduled(func(e failsafe.ExecutionScheduledEvent[*http.Response]) {
@@ -35,6 +31,10 @@ func TestHttpWithRetryPolicy(t *testing.T) {
 
 	// Use the RetryPolicy with a failsafe RoundTripper
 	t.Run("with failsafe round tripper", func(t *testing.T) {
+		// Setup a test http server that returns 429 on the first two requests with a 1 second Retry-After header
+		server := flakyServer(2, 429, time.Second)
+		defer server.Close()
+
 		executor := failsafe.NewExecutor[*http.Response](retryPolicy)
 		roundTripper := failsafehttp.NewRoundTripper(executor, nil)
 		client := &http.Client{Transport: roundTripper}
@@ -47,7 +47,9 @@ func TestHttpWithRetryPolicy(t *testing.T) {
 
 	// Use the RetryPolicy with an HTTP client via a failsafe execution
 	t.Run("with failsafe execution", func(t *testing.T) {
-		failureCounter.Store(0)
+		// Setup a test http server that returns 429 on the first two requests with a 1 second Retry-After header
+		server := flakyServer(2, 429, time.Second)
+		defer server.Close()
 
 		fmt.Println("Sending ping")
 		resp, err := failsafe.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
@@ -64,7 +66,7 @@ func TestHttpWithRetryPolicy(t *testing.T) {
 // This test demonstrates how to use a RetryPolicy with custom response handling HTTP using a failsafe RoundTripper.
 func TestHttpWithCustomRetryPolicy(t *testing.T) {
 	// Setup a test http server that returns 500 on the first two requests
-	server := flakyServer(2, &atomic.Int32{}, 500, 0)
+	server := flakyServer(2, 500, 0)
 	defer server.Close()
 
 	// Create a RetryPolicy that only handles 500 responses, with backoff delays between retries
@@ -77,7 +79,7 @@ func TestHttpWithCustomRetryPolicy(t *testing.T) {
 			fmt.Println("Ping retry", e.Attempts(), "after delay of", e.Delay)
 		}).Build()
 
-	// Use the RetryPoilicy with a failsafe RoundTripper
+	// Use the RetryPolicy with a failsafe RoundTripper
 	executor := failsafe.NewExecutor[*http.Response](retryPolicy)
 	roundTripper := failsafehttp.NewRoundTripper(executor, nil)
 	client := &http.Client{Transport: roundTripper}
@@ -91,7 +93,7 @@ func TestHttpWithCustomRetryPolicy(t *testing.T) {
 // This test demonstrates how to use a CircuitBreaker with HTTP via a RoundTripper.
 func TestHttpWithCircuitBreaker(t *testing.T) {
 	// Setup a test http server that returns 429 on the first request with a 1 second Retry-After header
-	server := flakyServer(1, &atomic.Int32{}, 429, time.Second)
+	server := flakyServer(1, 429, time.Second)
 	defer server.Close()
 
 	// Create a CircuitBreaker that handles 429 responses and uses a half-open delay based on the Retry-After header
@@ -105,7 +107,7 @@ func TestHttpWithCircuitBreaker(t *testing.T) {
 		}).
 		Build()
 
-	// Use the RetryPoilicy with a failsafe RoundTripper
+	// Use the RetryPolicy with a failsafe RoundTripper
 	executor := failsafe.NewExecutor[*http.Response](circuitBreaker)
 	roundTripper := failsafehttp.NewRoundTripper(executor, nil)
 	client := &http.Client{Transport: roundTripper}
@@ -131,16 +133,8 @@ func TestHttpWithCircuitBreaker(t *testing.T) {
 // will delay 5 seconds before responding to any of the requests. After the first successul response is received by the
 // client, the context for any outstanding requests will be canceled.
 func TestHttpWithHedgePolicy(t *testing.T) {
-	// Setup a test http server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		timer := time.After(5 * time.Second)
-		select {
-		// request.Context() will be done as soon as the first successful response is handled by the client
-		case <-request.Context().Done():
-		case <-timer:
-			fmt.Fprintf(w, "pong")
-		}
-	}))
+	// Setup a test http server that takes 5 seconds to respond
+	server := slowServer(5 * time.Second)
 	defer server.Close()
 
 	// Create a HedgePolicy that sends up to 2 hedges after a 1 second delay each
@@ -177,15 +171,47 @@ func TestHttpWithHedgePolicy(t *testing.T) {
 	})
 }
 
-func flakyServer(failTimes int, failureCounter *atomic.Int32, responseCode int, retryAfterDelay time.Duration) *httptest.Server {
+// This test demonstrates how to use a Timeout with HTTP via a RoundTripper.
+func TestHttpWithTimeout(t *testing.T) {
+	// Setup a test http server that takes 5 seconds to respond
+	server := slowServer(5 * time.Second)
+	defer server.Close()
+
+	// Create a Timeout for 1 second
+	timeOut := timeout.With[*http.Response](time.Second)
+
+	// Use the Timeout with a failsafe RoundTripper
+	executor := failsafe.NewExecutor[*http.Response](timeOut)
+	roundTripper := failsafehttp.NewRoundTripper(executor, nil)
+	client := &http.Client{Transport: roundTripper}
+
+	fmt.Println("Sending ping")
+	resp, err := client.Get(server.URL)
+	readAndPrintResponse(resp, err)
+}
+
+func flakyServer(failTimes int, responseCode int, retryAfterDelay time.Duration) *httptest.Server {
+	failures := atomic.Int32{}
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		if failureCounter.Add(1) <= int32(failTimes) {
+		if failures.Add(1) <= int32(failTimes) {
 			if retryAfterDelay > 0 {
 				w.Header().Add("Retry-After", strconv.Itoa(int(retryAfterDelay.Seconds())))
 			}
 			fmt.Println("Replying with", responseCode)
 			w.WriteHeader(responseCode)
 		} else {
+			fmt.Fprintf(w, "pong")
+		}
+	}))
+}
+
+func slowServer(delay time.Duration) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		timer := time.After(delay)
+		select {
+		// request.Context() will be done as soon as the first successful response is handled by the client
+		case <-request.Context().Done():
+		case <-timer:
 			fmt.Fprintf(w, "pong")
 		}
 	}))
