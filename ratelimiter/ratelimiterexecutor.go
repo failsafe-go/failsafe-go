@@ -7,7 +7,7 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// rateLimiterExecutor is a failsafe.Executor that handles failures according to a RateLimiter.
+// rateLimiterExecutor is a policy.Executor that handles failures according to a RateLimiter.
 type rateLimiterExecutor[R any] struct {
 	*policy.BaseExecutor[R]
 	*rateLimiter[R]

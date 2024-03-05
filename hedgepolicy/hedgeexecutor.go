@@ -10,7 +10,7 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// hedgeExecutor is a failsafe.Executor that handles failures according to a HedgePolicy.
+// hedgeExecutor is a policy.Executor that handles failures according to a HedgePolicy.
 type hedgeExecutor[R any] struct {
 	*policy.BaseExecutor[R]
 	*hedgePolicy[R]

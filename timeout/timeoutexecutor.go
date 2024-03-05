@@ -12,7 +12,7 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// timeoutExecutor is a failsafe.Executor that handles failures according to a Timeout.
+// timeoutExecutor is a policy.Executor that handles failures according to a Timeout.
 type timeoutExecutor[R any] struct {
 	*policy.BaseExecutor[R]
 	*timeout[R]

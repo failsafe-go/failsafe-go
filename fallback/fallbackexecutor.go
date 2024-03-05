@@ -6,7 +6,7 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// fallbackExecutor is a failsafe.Executor that handles failures according to a Fallback.
+// fallbackExecutor is a policy.Executor that handles failures according to a Fallback.
 type fallbackExecutor[R any] struct {
 	*policy.BaseExecutor[R]
 	*fallback[R]

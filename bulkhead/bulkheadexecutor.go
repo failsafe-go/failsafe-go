@@ -7,7 +7,7 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// bulkheadExecutor is a failsafe.Executor that handles failures according to a Bulkhead.
+// bulkheadExecutor is a policy.Executor that handles failures according to a Bulkhead.
 type bulkheadExecutor[R any] struct {
 	*policy.BaseExecutor[R]
 	*bulkhead[R]
