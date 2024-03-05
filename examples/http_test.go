@@ -21,7 +21,7 @@ import (
 //
 //   - a failsafe http.RoundTripper
 //   - a failsafe execution
-func TestRetryPolicyWithHttp(t *testing.T) {
+func TestHttpWithRetryPolicy(t *testing.T) {
 	// Setup a test http server that returns 429 on the first two requests with a 1 second Retry-After header
 	failureCounter := &atomic.Int32{}
 	server := flakyServer(2, failureCounter, 429, time.Second)
@@ -62,7 +62,7 @@ func TestRetryPolicyWithHttp(t *testing.T) {
 }
 
 // This test demonstrates how to use a RetryPolicy with custom response handling HTTP using a failsafe RoundTripper.
-func TestCustomRetryPolicyWithHttp(t *testing.T) {
+func TestHttpWithCustomRetryPolicy(t *testing.T) {
 	// Setup a test http server that returns 500 on the first two requests
 	server := flakyServer(2, &atomic.Int32{}, 500, 0)
 	defer server.Close()
@@ -89,8 +89,8 @@ func TestCustomRetryPolicyWithHttp(t *testing.T) {
 }
 
 // This test demonstrates how to use a CircuitBreaker with HTTP via a RoundTripper.
-func TestCircuitBreakerWithHttp(t *testing.T) {
-	// Setup a test http server that returns 429 on the first two requests with a 1 second Retry-After header
+func TestHttpWithCircuitBreaker(t *testing.T) {
+	// Setup a test http server that returns 429 on the first request with a 1 second Retry-After header
 	server := flakyServer(1, &atomic.Int32{}, 429, time.Second)
 	defer server.Close()
 
@@ -116,9 +116,9 @@ func TestCircuitBreakerWithHttp(t *testing.T) {
 		readAndPrintResponse(resp, err)
 	}
 
-	sendPing()                                  // Should fail, breaker opens
-	sendPing()                                  // Should fail since breaker is currently open
-	time.Sleep(circuitBreaker.RemainingDelay()) // Wait for expected delay, indicated by the Retry-After header
+	sendPing()                                  // Should fail with 429, breaker opens
+	sendPing()                                  // Should fail with circuitbreaker.ErrOpen
+	time.Sleep(circuitBreaker.RemainingDelay()) // Wait for circuit breaker's delay, provided by the Retry-After header
 	sendPing()                                  // Should succeed, breaker closes
 }
 
@@ -130,7 +130,7 @@ func TestCircuitBreakerWithHttp(t *testing.T) {
 // Each test will send a request and the HedgePolicy will delay for 1 second before sending up to 2 hedges. The server
 // will delay 5 seconds before responding to any of the requests. After the first successul response is received by the
 // client, the context for any outstanding requests will be canceled.
-func TestHedgePolicyWithHttp(t *testing.T) {
+func TestHttpWithHedgePolicy(t *testing.T) {
 	// Setup a test http server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		timer := time.After(5 * time.Second)
