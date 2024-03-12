@@ -202,6 +202,6 @@ func (e TestExecution[R]) IsCanceled() bool {
 	panic("unimplemented stub")
 }
 
-func (e TestExecution[R]) Canceled() <-chan any {
+func (e TestExecution[R]) Canceled() <-chan struct{} {
 	panic("unimplemented stub")
 }

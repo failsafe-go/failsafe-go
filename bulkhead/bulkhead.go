@@ -131,12 +131,10 @@ func (b *bulkhead[R]) ReleasePermit() {
 	b.semaphore.Release(1)
 }
 
-func (b *bulkhead[R]) ToExecutor(policyIndex int, _ R) any {
+func (b *bulkhead[R]) ToExecutor(_ R) any {
 	be := &bulkheadExecutor[R]{
-		BaseExecutor: &policy.BaseExecutor[R]{
-			PolicyIndex: policyIndex,
-		},
-		bulkhead: b,
+		BaseExecutor: &policy.BaseExecutor[R]{},
+		bulkhead:     b,
 	}
 	be.Executor = be
 	return be

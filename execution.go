@@ -72,7 +72,7 @@ type Execution[R any] interface {
 
 	// Canceled returns a channel that is closed when the execution is canceled, either by an external Context or a
 	// timeout.Timeout.
-	Canceled() <-chan any
+	Canceled() <-chan struct{}
 }
 
 // A closed channel that can be used as a canceled channel where the canceled channel would have been closed before it
@@ -88,17 +88,15 @@ type execution[R any] struct {
 	// Shared state across instances
 	mtx        *sync.Mutex
 	startTime  time.Time
-	ctx        context.Context
-	cancelFunc func()
 	attempts   *atomic.Uint32
 	retries    *atomic.Uint32
 	hedges     *atomic.Uint32
 	executions *atomic.Uint32
 
-	// Shared state, except for hedges
-	canceledIndex  *int
+	// Partly shared cancellation state
+	ctx            context.Context
+	cancelFunc     context.CancelFunc
 	canceledResult **common.PolicyResult[R]
-	canceled       *chan any
 
 	// Per execution state
 	attemptStartTime time.Time
@@ -151,6 +149,9 @@ func (e *execution[R]) LastResult() R {
 }
 
 func (e *execution[R]) LastError() error {
+	if e.lastError == nil && e.ctx.Err() != nil {
+		return e.ctx.Err()
+	}
 	return e.lastError
 }
 
@@ -167,26 +168,18 @@ func (e *execution[_]) ElapsedAttemptTime() time.Duration {
 }
 
 func (e *execution[_]) IsCanceled() bool {
-	e.mtx.Lock()
-	defer e.mtx.Unlock()
-	return *e.canceledIndex > -1
+	return e.ctx.Err() != nil
 }
 
-func (e *execution[_]) Canceled() <-chan any {
-	e.mtx.Lock()
-	defer e.mtx.Unlock()
-	// Create channel lazily
-	if *e.canceled == nil {
-		*e.canceled = make(chan any, 1)
-	}
-	return *e.canceled
+func (e *execution[_]) Canceled() <-chan struct{} {
+	return e.ctx.Done()
 }
 
-func (e *execution[R]) RecordResult(policyIndex int, result *common.PolicyResult[R]) *common.PolicyResult[R] {
+func (e *execution[R]) RecordResult(result *common.PolicyResult[R]) *common.PolicyResult[R] {
 	// Lock to guard against a race with a Timeout canceling the execution
 	e.mtx.Lock()
 	defer e.mtx.Unlock()
-	if canceled, cancelResult := e.isCanceledForPolicy(policyIndex); canceled {
+	if canceled, cancelResult := e.isCanceledWithResult(); canceled {
 		return cancelResult
 	}
 	if result != nil {
@@ -196,11 +189,11 @@ func (e *execution[R]) RecordResult(policyIndex int, result *common.PolicyResult
 	return nil
 }
 
-func (e *execution[R]) InitializeRetry(policyIndex int) *common.PolicyResult[R] {
+func (e *execution[R]) InitializeRetry() *common.PolicyResult[R] {
 	// Lock to guard against a race with a Timeout canceling the execution
 	e.mtx.Lock()
 	defer e.mtx.Unlock()
-	if canceled, cancelResult := e.isCanceledForPolicy(policyIndex); canceled {
+	if canceled, cancelResult := e.isCanceledWithResult(); canceled {
 		return cancelResult
 	}
 
@@ -208,42 +201,21 @@ func (e *execution[R]) InitializeRetry(policyIndex int) *common.PolicyResult[R] 
 		e.retries.Add(1)
 	}
 	e.attemptStartTime = time.Now()
-	*e.canceledIndex = -1
 	*e.canceledResult = nil
-	*e.canceled = nil
 	return nil
 }
 
-func (e *execution[R]) InitializeHedge(policyIndex int) *common.PolicyResult[R] {
-	// Lock to guard against a race with a Timeout canceling the execution
+func (e *execution[R]) Cancel(result *common.PolicyResult[R]) *common.PolicyResult[R] {
 	e.mtx.Lock()
 	defer e.mtx.Unlock()
-	if canceled, cancelResult := e.isCanceledForPolicy(policyIndex); canceled {
+	if canceled, cancelResult := e.isCanceledWithResult(); canceled {
 		return cancelResult
 	}
 
-	e.isHedge = true
-	e.attempts.Add(1)
-	e.hedges.Add(1)
-	return nil
-}
-
-func (e *execution[R]) Cancel(policyIndex int, result *common.PolicyResult[R]) *common.PolicyResult[R] {
-	e.mtx.Lock()
-	defer e.mtx.Unlock()
-	if e.isCanceled() {
-		return *e.canceledResult
-	}
-	*e.canceledIndex = policyIndex
 	*e.canceledResult = result
 	if result != nil {
 		e.lastResult = result.Result
 		e.lastError = result.Error
-	}
-	if *e.canceled != nil {
-		close(*e.canceled)
-	} else {
-		*e.canceled = closedChan
 	}
 	if e.cancelFunc != nil {
 		e.cancelFunc()
@@ -251,43 +223,47 @@ func (e *execution[R]) Cancel(policyIndex int, result *common.PolicyResult[R]) *
 	return result
 }
 
-// Requires locking externally.
-func (e *execution[R]) isCanceled() bool {
-	return *e.canceledIndex != -1
-}
-
-func (e *execution[R]) IsCanceledForPolicy(policyIndex int) (bool, *common.PolicyResult[R]) {
+func (e *execution[R]) IsCanceledWithResult() (bool, *common.PolicyResult[R]) {
 	e.mtx.Lock()
 	defer e.mtx.Unlock()
-	return e.isCanceledForPolicy(policyIndex)
+	return e.isCanceledWithResult()
 }
 
-// Requires locking externally.
-func (e *execution[R]) isCanceledForPolicy(policyIndex int) (bool, *common.PolicyResult[R]) {
-	if *e.canceledIndex >= policyIndex && *e.canceledIndex != -1 {
+// isCanceledWithResult must be locked externally
+func (e *execution[R]) isCanceledWithResult() (bool, *common.PolicyResult[R]) {
+	if e.ctx.Err() != nil {
+		if *e.canceledResult == nil {
+			return true, &common.PolicyResult[R]{
+				Error: e.ctx.Err(),
+				Done:  true,
+			}
+		}
 		return true, *e.canceledResult
 	}
 	return false, nil
 }
 
 func (e *execution[R]) CopyWithResult(result *common.PolicyResult[R]) Execution[R] {
-	e.mtx.Lock()
-	c := *e
-	e.mtx.Unlock()
+	c := e.copy()
 	if result != nil {
 		c.lastResult = result.Result
 		c.lastError = result.Error
 	}
-	return &c
+	return c
 }
 
-func (e *execution[R]) CopyWithContext(ctx context.Context, cancelFunc func()) Execution[R] {
-	e.mtx.Lock()
-	c := *e
-	e.mtx.Unlock()
-	c.ctx = ctx
-	c.cancelFunc = cancelFunc
-	return &c
+func (e *execution[R]) CopyForCancellable() Execution[R] {
+	c := e.copy()
+	c.ctx, c.cancelFunc = context.WithCancel(c.ctx)
+	return c
+}
+
+func (e *execution[R]) CopyForHedge() Execution[R] {
+	c := e.copy()
+	c.isHedge = true
+	c.attempts.Add(1)
+	c.hedges.Add(1)
+	return c
 }
 
 func (e *execution[R]) copy() *execution[R] {
@@ -307,9 +283,7 @@ func newExecution[R any](ctx context.Context) *execution[R] {
 	hedges := atomic.Uint32{}
 	executions := atomic.Uint32{}
 	attempts.Add(1)
-	canceledIndex := -1
 	var canceledResult *common.PolicyResult[R]
-	var canceled chan any
 	now := time.Now()
 	return &execution[R]{
 		ctx:              ctx,
@@ -318,9 +292,7 @@ func newExecution[R any](ctx context.Context) *execution[R] {
 		retries:          &retries,
 		hedges:           &hedges,
 		executions:       &executions,
-		canceledIndex:    &canceledIndex,
 		canceledResult:   &canceledResult,
-		canceled:         &canceled,
 		attemptStartTime: now,
 		startTime:        now,
 	}

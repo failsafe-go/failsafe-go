@@ -317,9 +317,6 @@ func (r *rateLimiter[R]) acquirePermitsWithMaxWait(ctx context.Context, exec fai
 		case <-exec.Canceled():
 			timer.Stop()
 			return exec.LastError()
-		case <-ctx.Done():
-			timer.Stop()
-			return ctx.Err()
 		}
 	}
 	return nil
@@ -349,12 +346,10 @@ func (r *rateLimiter[R]) TryReservePermits(requestedPermits uint, maxWaitTime ti
 	return r.stats.acquirePermits(int(requestedPermits), maxWaitTime)
 }
 
-func (r *rateLimiter[R]) ToExecutor(policyIndex int, _ R) any {
+func (r *rateLimiter[R]) ToExecutor(_ R) any {
 	rle := &rateLimiterExecutor[R]{
-		BaseExecutor: &policy.BaseExecutor[R]{
-			PolicyIndex: policyIndex,
-		},
-		rateLimiter: r,
+		BaseExecutor: &policy.BaseExecutor[R]{},
+		rateLimiter:  r,
 	}
 	rle.Executor = rle
 	return rle

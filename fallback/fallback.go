@@ -123,11 +123,10 @@ func (c *fallbackConfig[R]) Build() Fallback[R] {
 	}
 }
 
-func (fb *fallback[R]) ToExecutor(policyIndex int, _ R) any {
+func (fb *fallback[R]) ToExecutor(_ R) any {
 	fbe := &fallbackExecutor[R]{
 		BaseExecutor: &policy.BaseExecutor[R]{
 			BaseFailurePolicy: fb.config.BaseFailurePolicy,
-			PolicyIndex:       policyIndex,
 		},
 		fallback: fb,
 	}

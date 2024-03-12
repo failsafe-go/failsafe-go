@@ -2,7 +2,6 @@ package failsafe
 
 import (
 	"context"
-	"math"
 
 	"github.com/failsafe-go/failsafe-go/common"
 )
@@ -264,30 +263,14 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error), outerExec *
 	}
 
 	// Compose policy executors from the innermost policy to the outermost
-	for i, policyIndex := len(e.policies)-1, 0; i >= 0; i, policyIndex = i-1, policyIndex+1 {
-		pe := e.policies[i].ToExecutor(policyIndex, *(new(R))).(policyExecutor[R])
+	for i := len(e.policies) - 1; i >= 0; i-- {
+		pe := e.policies[i].ToExecutor(*(new(R))).(policyExecutor[R])
 		outerFn = pe.Apply(outerFn)
-	}
-
-	// Propagate context cancellations to the execution
-	var stopAfterFunc func() bool
-	if e.ctx != nil {
-		ctx := e.ctx
-		stopAfterFunc = context.AfterFunc(ctx, func() {
-			outerExec.Cancel(math.MaxInt, &common.PolicyResult[R]{
-				Error: ctx.Err(),
-				Done:  true,
-			})
-		})
 	}
 
 	// Execute
 	er := outerFn(outerExec)
 
-	// Stop the Context AfterFunc and call listeners
-	if stopAfterFunc != nil {
-		stopAfterFunc()
-	}
 	if e.onSuccess != nil && er.SuccessAll {
 		e.onSuccess(newExecutionDoneEvent(outerExec, er))
 	} else if e.onFailure != nil && !er.SuccessAll {

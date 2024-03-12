@@ -34,7 +34,7 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *co
 
 		for {
 			result := innerFn(exec)
-			if canceled, cancelResult := execInternal.IsCanceledForPolicy(rpe.PolicyIndex); canceled {
+			if canceled, cancelResult := execInternal.IsCanceledWithResult(); canceled {
 				return cancelResult
 			}
 			if rpe.retriesExceeded {
@@ -47,7 +47,7 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *co
 			}
 
 			// Record result
-			if cancelResult := execInternal.RecordResult(rpe.PolicyIndex, result); cancelResult != nil {
+			if cancelResult := execInternal.RecordResult(result); cancelResult != nil {
 				return cancelResult
 			}
 
@@ -67,7 +67,7 @@ func (rpe *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *co
 			}
 
 			// Prepare for next iteration
-			if cancelResult := execInternal.InitializeRetry(rpe.PolicyIndex); cancelResult != nil {
+			if cancelResult := execInternal.InitializeRetry(); cancelResult != nil {
 				return cancelResult
 			}
 

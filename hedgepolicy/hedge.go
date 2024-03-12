@@ -148,12 +148,10 @@ func (c *hedgePolicyConfig[R]) Build() HedgePolicy[R] {
 	}
 }
 
-func (h *hedgePolicy[R]) ToExecutor(policyIndex int, _ R) any {
+func (h *hedgePolicy[R]) ToExecutor(_ R) any {
 	he := &hedgeExecutor[R]{
-		BaseExecutor: &policy.BaseExecutor[R]{
-			PolicyIndex: policyIndex,
-		},
-		hedgePolicy: h,
+		BaseExecutor: &policy.BaseExecutor[R]{},
+		hedgePolicy:  h,
 	}
 	he.Executor = he
 	return he

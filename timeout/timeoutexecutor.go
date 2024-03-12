@@ -1,7 +1,6 @@
 package timeout
 
 import (
-	"context"
 	"errors"
 	"sync/atomic"
 	"time"
@@ -26,8 +25,7 @@ func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.P
 		execInternal := exec.(policy.ExecutionInternal[R])
 
 		// Create child context
-		execInternal = execInternal.CopyWithContext(context.WithCancel(exec.Context())).(policy.ExecutionInternal[R])
-
+		execInternal = execInternal.CopyForCancellable().(policy.ExecutionInternal[R])
 		var result atomic.Pointer[common.PolicyResult[R]]
 		timer := time.AfterFunc(e.config.timeLimit, func() {
 			timeoutResult := internal.FailureResult[R](ErrExceeded)
@@ -35,7 +33,7 @@ func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.P
 				// Sets the timeoutResult, overwriting any previously set result for the execution. This is correct, because while an
 				// execution may have completed, inner policies such as fallbacks may still be processing that result, in which case
 				// it's still important to interrupt them with a timeout.
-				execInternal.Cancel(e.PolicyIndex, timeoutResult)
+				execInternal.Cancel(timeoutResult)
 				if e.config.onTimeoutExceeded != nil {
 					e.config.onTimeoutExceeded(failsafe.ExecutionDoneEvent[R]{
 						ExecutionStats: execInternal,

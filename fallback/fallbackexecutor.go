@@ -23,7 +23,7 @@ func (e *fallbackExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.
 		if !result.Success {
 			// Call fallback fn
 			fallbackResult, fallbackError := e.config.fn(execInternal.CopyWithResult(result))
-			if canceled, cancelResult := execInternal.IsCanceledForPolicy(e.PolicyIndex); canceled {
+			if canceled, cancelResult := execInternal.IsCanceledWithResult(); canceled {
 				return cancelResult
 			}
 

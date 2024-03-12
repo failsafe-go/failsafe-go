@@ -48,6 +48,7 @@ func TestShouldHedgeWhenDelayExceeded(t *testing.T) {
 		})
 }
 
+// Asserts that the expected number of hedges are executed.
 func TestAllHedgesUsed(t *testing.T) {
 	// Given
 	stats := &policytesting.Stats{}
@@ -66,18 +67,20 @@ func TestAllHedgesUsed(t *testing.T) {
 		})
 }
 
+// Asserts that a specific cancellable hedge result is returned.
 func TestCancelOnResult(t *testing.T) {
 	// Given
 	stats := &policytesting.Stats{}
-	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[bool](10*time.Millisecond).
+	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[any](10*time.Millisecond).
 		WithMaxHedges(4).
-		CancelOnResult(true), stats).
+		CancelOnResult(true).
+		CancelOnResult(3), stats).
 		Build()
 
 	// When / Then
 	t.Run("first returned result triggers cancellation", func(t *testing.T) {
-		testutil.TestGetSuccess(t, policytesting.SetupFn(stats), failsafe.NewExecutor[bool](hp),
-			func(exec failsafe.Execution[bool]) (bool, error) {
+		testutil.TestGetSuccess(t, policytesting.SetupFn(stats), failsafe.NewExecutor[any](hp),
+			func(exec failsafe.Execution[any]) (any, error) {
 				attempt := exec.Attempts()
 				if attempt == 3 {
 					return true, nil
@@ -92,27 +95,19 @@ func TestCancelOnResult(t *testing.T) {
 
 	// When / Then
 	t.Run("third returned result triggers cancellation", func(t *testing.T) {
-		testutil.TestGetSuccess(t, policytesting.SetupFn(stats), failsafe.NewExecutor[bool](hp),
-			func(exec failsafe.Execution[bool]) (bool, error) {
-				attempt := exec.Attempts()
-
-				// First two results do not cause hedges to be cancelled
-				if attempt < 3 {
+		testutil.TestGetSuccess(t, policytesting.SetupFn(stats), failsafe.NewExecutor[any](hp),
+			func(exec failsafe.Execution[any]) (any, error) {
+				attempts := exec.Attempts()
+				if attempts <= 3 {
+					// First 3 results return before being canceled
 					time.Sleep(100 * time.Millisecond)
-					return false, nil
+				} else {
+					// Last 2 results are cancelled before being returned
+					testutil.WaitAndAssertCanceled(t, 100*time.Millisecond, exec)
 				}
-
-				// Third result causes hedges to be cancelled
-				if attempt != 3 {
-					time.Sleep(100 * time.Millisecond)
-					return true, nil
-				}
-
-				// Remaining hedges are cancelled
-				testutil.WaitAndAssertCanceled(t, time.Second, exec)
-				return false, nil
+				return attempts, nil
 			},
-			5, -1, true, func() {
+			5, -1, 3, func() {
 				assert.Equal(t, 4, stats.Hedges())
 			})
 	})

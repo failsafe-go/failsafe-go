@@ -335,11 +335,10 @@ func (c *retryPolicyConfig[R]) allowsRetries() bool {
 	return c.maxRetries == -1 || c.maxRetries > 0
 }
 
-func (rp *retryPolicy[R]) ToExecutor(policyIndex int, _ R) any {
+func (rp *retryPolicy[R]) ToExecutor(_ R) any {
 	rpe := &retryPolicyExecutor[R]{
 		BaseExecutor: &policy.BaseExecutor[R]{
 			BaseFailurePolicy: rp.config.BaseFailurePolicy,
-			PolicyIndex:       policyIndex,
 		},
 		retryPolicy: rp,
 	}

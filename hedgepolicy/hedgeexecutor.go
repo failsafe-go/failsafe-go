@@ -1,7 +1,6 @@
 package hedgepolicy
 
 import (
-	"context"
 	"sync/atomic"
 	"time"
 
@@ -22,13 +21,13 @@ func (e *hedgeExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.Pol
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
 
-		// Create child context
-		execInternal = execInternal.CopyWithContext(context.WithCancel(exec.Context())).(policy.ExecutionInternal[R])
+		// Create a cancellable parent execution for all attempts
+		parentExecution := execInternal.CopyForCancellable().(policy.ExecutionInternal[R])
+		execInternal = parentExecution
 
 		// Guard against a race between execution results
 		done := atomic.Bool{}
 		resultCount := atomic.Int32{}
-		hedgeExec := execInternal
 		resultChan := make(chan *common.PolicyResult[R], 1) // Only the first result is sent
 
 		for attempts := 1; ; attempts++ {
@@ -38,13 +37,13 @@ func (e *hedgeExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.Pol
 				isCancellable := e.config.IsAbortable(result.Result, result.Error)
 
 				if (isFinalResult || isCancellable) && done.CompareAndSwap(false, true) {
-					// Close canceled channel without recording a result, and get existing cancel result if any
-					if cancelResult := execInternal.Cancel(e.PolicyIndex, nil); cancelResult != nil {
+					// Cancel any outstanding attempts without recording a result
+					if cancelResult := parentExecution.Cancel(nil); cancelResult != nil {
 						result = cancelResult
 					}
 					resultChan <- result
 				}
-			}(hedgeExec)
+			}(execInternal)
 
 			if attempts-1 < e.config.maxHedges {
 				// Wait for hedge delay or result
@@ -63,17 +62,16 @@ func (e *hedgeExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.Pol
 				}
 			}
 
-			// Prepare for hedge execution
-			if hedgeExec == execInternal {
-				hedgeExec = execInternal.CopyWithResult(nil).(policy.ExecutionInternal[R])
-			}
-			if cancelResult := hedgeExec.InitializeHedge(e.PolicyIndex); cancelResult != nil {
+			if canceled, cancelResult := execInternal.IsCanceledWithResult(); canceled {
 				return cancelResult
 			}
 
+			// Prepare for hedge execution
+			execInternal = parentExecution.CopyForHedge().(policy.ExecutionInternal[R])
+
 			// Call hedge listener
 			if e.config.onHedge != nil {
-				e.config.onHedge(failsafe.ExecutionEvent[R]{ExecutionAttempt: hedgeExec.CopyWithResult(nil)})
+				e.config.onHedge(failsafe.ExecutionEvent[R]{ExecutionAttempt: execInternal.CopyWithResult(nil)})
 			}
 		}
 	}

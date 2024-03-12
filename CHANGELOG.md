@@ -1,5 +1,11 @@
 ## Upcoming Release
 
+## 0.6.1
+
+## Improvements
+
+- Better support for HedgePolicy and Timeout composition
+
 ## 0.6.0
 
 ### Improvements

@@ -308,3 +308,35 @@ func TestRetryPolicyBulkhead(t *testing.T) {
 			return errors.New("test")
 		}, 7, 0, bulkhead.ErrFull)
 }
+
+// HedgePolicy -> Timeout
+//
+// Hedge should be triggered twice since the timeouts are longer than the hedge delay.
+// Timeout should be triggered 3 times since the results from the hedges are not cancellable.
+func TestHedgePolicyTimeout(t *testing.T) {
+	// Given
+	stats := &policytesting.Stats{}
+	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[any](10*time.Millisecond).
+		CancelIf(func(a any, err error) bool {
+			return err == nil
+		}).
+		WithMaxHedges(2), stats).
+		Build()
+	toStats := &policytesting.Stats{}
+	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](100*time.Millisecond), toStats).Build()
+	setup := func() context.Context {
+		stats.Reset()
+		toStats.Reset()
+		return nil
+	}
+
+	// When / Then
+	testutil.TestRunFailure(t, setup, failsafe.NewExecutor[any](hp, to),
+		func(e failsafe.Execution[any]) error {
+			testutil.WaitAndAssertCanceled(t, time.Second, e)
+			return errors.New("not cancellable")
+		}, 3, -1, timeout.ErrExceeded, func() {
+			assert.Equal(t, 2, stats.Hedges())
+			assert.Equal(t, 3, toStats.Executions())
+		})
+}
