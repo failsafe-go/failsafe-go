@@ -38,7 +38,10 @@ jobs:
           go-version: "${{ matrix.go-version }}"
 
       - name: Run tests
-        run: go test ./... -v -race -coverprofile=coverage.txt -covermode=atomic
+        run: go test ./... -v -race -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic go test
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4.0.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: failsafe-go/failsafe-go
