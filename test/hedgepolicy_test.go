@@ -67,6 +67,24 @@ func TestAllHedgesUsed(t *testing.T) {
 		})
 }
 
+// Asserts that backup executions, which are hedges with 0 delay, are supported.
+func TestBackupExecutions(t *testing.T) {
+	// Given
+	stats := &policytesting.Stats{}
+	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[int](0).
+		WithMaxHedges(2).
+		CancelOnResult(3), stats).Build()
+
+	// When / Then
+	testutil.TestGetSuccess(t, policytesting.SetupFn(stats), failsafe.NewExecutor[int](hp),
+		func(exec failsafe.Execution[int]) (int, error) {
+			return exec.Attempts(), nil
+		},
+		3, -1, 1, func() {
+			assert.Equal(t, 2, stats.Hedges())
+		})
+}
+
 // Asserts that a specific cancellable hedge result is returned.
 func TestCancelOnResult(t *testing.T) {
 	// Given
