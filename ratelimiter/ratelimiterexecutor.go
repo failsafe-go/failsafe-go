@@ -15,12 +15,12 @@ type rateLimiterExecutor[R any] struct {
 
 var _ policy.Executor[any] = &rateLimiterExecutor[any]{}
 
-func (rle *rateLimiterExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
+func (e *rateLimiterExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
-		if err := rle.rateLimiter.acquirePermitsWithMaxWait(execInternal.Context(), exec, 1, rle.config.maxWaitTime); err != nil {
-			if rle.config.onRateLimitExceeded != nil {
-				rle.config.onRateLimitExceeded(failsafe.ExecutionEvent[R]{
+		if err := e.acquirePermitsWithMaxWait(execInternal.Context(), exec, 1, e.config.maxWaitTime); err != nil {
+			if e.config.onRateLimitExceeded != nil {
+				e.config.onRateLimitExceeded(failsafe.ExecutionEvent[R]{
 					ExecutionAttempt: execInternal,
 				})
 			}
