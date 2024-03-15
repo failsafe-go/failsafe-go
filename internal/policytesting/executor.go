@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/bulkhead"
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
 	"github.com/failsafe-go/failsafe-go/fallback"
 	"github.com/failsafe-go/failsafe-go/hedgepolicy"
@@ -117,6 +118,16 @@ func WithHedgeStatsAndLogs[R any](hp hedgepolicy.HedgePolicyBuilder[R], stats *S
 	return hp
 }
 
+func BulkheadStatsAndLogs[R any](bh bulkhead.BulkheadBuilder[R], stats *Stats, withLogging bool) bulkhead.BulkheadBuilder[R] {
+	bh.OnFull(func(event failsafe.ExecutionEvent[R]) {
+		if withLogging {
+			stats.fullCount.Add(1)
+			fmt.Printf("%s %p full\n", testutil.GetType(bh), bh)
+		}
+	})
+	return bh
+}
+
 func withStatsAndLogs[P any, R any](policy failsafe.FailurePolicyBuilder[P, R], stats *Stats, withLogging bool) {
 	policy.OnSuccess(func(e failsafe.ExecutionEvent[R]) {
 		stats.executionCount.Add(1)
@@ -148,6 +159,9 @@ type Stats struct {
 
 	// Hedge specific stats
 	hedgeCount atomic.Int32
+
+	// Bulkhead specific stats
+	fullCount atomic.Int32
 }
 
 func (s *Stats) Executions() int {
@@ -178,6 +192,10 @@ func (s *Stats) Aborts() int {
 	return int(s.abortCount.Load())
 }
 
+func (s *Stats) Fulls() int {
+	return int(s.fullCount.Load())
+}
+
 func (s *Stats) Reset() {
 	s.executionCount.Store(0)
 	s.successCount.Store(0)
@@ -190,6 +208,9 @@ func (s *Stats) Reset() {
 
 	// Hedge specific stats
 	s.hedgeCount.Store(0)
+
+	// Bulkhead specific stats
+	s.fullCount.Store(0)
 }
 
 func SetupFn(stats *Stats) func() context.Context {

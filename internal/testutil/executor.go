@@ -12,6 +12,7 @@ import (
 	"github.com/failsafe-go/failsafe-go"
 )
 
+// Given performs pre-test setup that may involve resetting state so that the same fixtures can be used for sync and async tests.
 type Given func() context.Context
 type WhenRun[R any] func(execution failsafe.Execution[R]) error
 type WhenGet[R any] func(execution failsafe.Execution[R]) (R, error)
