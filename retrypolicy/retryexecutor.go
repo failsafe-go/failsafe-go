@@ -24,10 +24,6 @@ type retryPolicyExecutor[R any] struct {
 
 var _ policy.Executor[any] = &retryPolicyExecutor[any]{}
 
-func (e *retryPolicyExecutor[R]) PreExecute(exec policy.ExecutionInternal[R]) *common.PolicyResult[R] {
-	return e.BaseExecutor.PreExecute(exec)
-}
-
 func (e *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
