@@ -80,7 +80,7 @@ func TestBackupExecutions(t *testing.T) {
 		func(exec failsafe.Execution[int]) (int, error) {
 			return exec.Attempts(), nil
 		},
-		3, -1, 1, func() {
+		3, -1, 3, func() {
 			assert.Equal(t, 2, stats.Hedges())
 		})
 }

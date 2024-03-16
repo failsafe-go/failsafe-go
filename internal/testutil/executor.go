@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,7 +37,7 @@ func TestGetFailure[R any](t *testing.T, given Given, executor failsafe.Executor
 
 func testRun[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenRun[R], expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
 	defaultR := *(new(R))
-	executorFn, assertResult := prepareTest(t, given, executor, expectedAttempts, expectedExecutions, defaultR, expectedError, expectedError == nil, then...)
+	executorFn, assertResult := prepareTest(t, given, executor, expectedAttempts, expectedExecutions, defaultR, &expectedError, expectedError == nil, then...)
 
 	// Run sync
 	fmt.Println("Testing sync")
@@ -47,7 +49,7 @@ func testRun[R any](t *testing.T, given Given, executor failsafe.Executor[R], wh
 }
 
 func testGet[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenGet[R], expectedAttempts int, expectedExecutions int, expectedResult R, expectedError error, then ...func()) {
-	executorFn, assertResult := prepareTest(t, given, executor, expectedAttempts, expectedExecutions, expectedResult, expectedError, expectedError == nil, then...)
+	executorFn, assertResult := prepareTest(t, given, executor, expectedAttempts, expectedExecutions, expectedResult, &expectedError, expectedError == nil, then...)
 
 	// Run sync
 	fmt.Println("Testing sync")
@@ -58,16 +60,16 @@ func testGet[R any](t *testing.T, given Given, executor failsafe.Executor[R], wh
 	assertResult(executorFn().GetWithExecutionAsync(when).Get())
 }
 
-func prepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R], expectedAttempts int, expectedExecutions int, expectedResult R, expectedError error, expectedSuccess bool, then ...func()) (executorFn func() failsafe.Executor[R], assertResult func(R, error)) {
+func prepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R], expectedAttempts int, expectedExecutions int, expectedResult R, expectedError *error, expectedSuccess bool, then ...func()) (executorFn func() failsafe.Executor[R], assertResult func(R, error)) {
 	var doneEvent *failsafe.ExecutionDoneEvent[R]
-	onSuccessCalled := false
-	onFailureCalled := false
+	var onSuccessCalled atomic.Bool
+	var onFailureCalled atomic.Bool
 	executor = executor.OnDone(func(e failsafe.ExecutionDoneEvent[R]) {
 		doneEvent = &e
 	}).OnSuccess(func(e failsafe.ExecutionDoneEvent[R]) {
-		onSuccessCalled = true
+		onSuccessCalled.Store(true)
 	}).OnFailure(func(e failsafe.ExecutionDoneEvent[R]) {
-		onFailureCalled = true
+		onFailureCalled.Store(true)
 	})
 	executorFn = func() failsafe.Executor[R] {
 		if given != nil {
@@ -76,27 +78,26 @@ func prepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R]
 		return executor
 	}
 	assertResult = func(result R, err error) {
-		if len(then) > 0 {
+		if len(then) > 0 && then[0] != nil {
 			then[0]()
 		}
-		if expectedAttempts != -1 {
-			assert.Equal(t, expectedAttempts, doneEvent.Attempts(), "expected attempts did not match")
+		if doneEvent != nil {
+			if expectedAttempts != -1 {
+				assert.Equal(t, expectedAttempts, doneEvent.Attempts(), "expected attempts did not match")
+			}
+			if expectedExecutions != -1 {
+				assert.Equal(t, expectedExecutions, doneEvent.Executions(), "expected executions did not match")
+			}
 		}
-		if expectedExecutions != -1 {
-			assert.Equal(t, expectedExecutions, doneEvent.Executions(), "expected executions did not match")
-		}
-		// Assert non-http response results
-		_, isHttpResponse := any(result).(*http.Response)
-		if any(expectedResult) == nil && !isHttpResponse {
-			assert.Equal(t, expectedResult, result, "expected result did not match")
-		}
-		assert.ErrorIs(t, err, expectedError, "expected error did not match")
+
+		assert.Equal(t, expectedResult, result, "expected result did not match")
+		assert.ErrorIs(t, err, *expectedError, "expected error did not match")
 		if expectedSuccess {
-			assert.True(t, onSuccessCalled, "onSuccess should have been called")
-			assert.False(t, onFailureCalled, "onFailure should not have been called")
+			assert.True(t, onSuccessCalled.Load(), "onSuccess should have been called")
+			assert.False(t, onFailureCalled.Load(), "onFailure should not have been called")
 		} else {
-			assert.False(t, onSuccessCalled, "onSuccess should not have been called")
-			assert.True(t, onFailureCalled, "onFailure should have been called")
+			assert.False(t, onSuccessCalled.Load(), "onSuccess should not have been called")
+			assert.True(t, onFailureCalled.Load(), "onFailure should have been called")
 		}
 	}
 	return
@@ -110,33 +111,58 @@ func TestRequestFailureResult(t *testing.T, url string, executor failsafe.Execut
 	testRequest(t, url, executor, expectedAttempts, expectedExecutions, expectedStatus, expectedResult, nil, false, then...)
 }
 
+func TestRequestSuccessError(t *testing.T, url string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
+	testRequest(t, url, executor, expectedAttempts, expectedExecutions, -1, nil, expectedError, true, then...)
+}
+
 func TestRequestFailureError(t *testing.T, url string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
 	testRequest(t, url, executor, expectedAttempts, expectedExecutions, -1, nil, expectedError, false, then...)
 }
 
-func testRequest(t *testing.T, url string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult any, expectedError error, expectedSuccess bool, then ...func()) {
-	executorFn, assertResult := prepareTest(t, nil, executor, expectedAttempts, expectedExecutions, nil, expectedError, expectedSuccess, then...)
+func testRequest(t *testing.T, path string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult any, expectedError error, expectedSuccess bool, then ...func()) {
+	var expectedErrPtr *error
+	expectedErrPtr = &expectedError
+	executorFn, assertResult := prepareTest(t, nil, executor, expectedAttempts, expectedExecutions, nil, expectedErrPtr, expectedSuccess, then...)
 
-	// Build and send HTTP request
-	client := http.Client{Transport: &roundTripper{executor: executorFn()}}
-	resp, err := client.Get(url)
+	// Execute request
+	resp, err := executorFn().GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
+		req, _ := http.NewRequestWithContext(exec.Context(), http.MethodGet, path, nil)
+		client := &http.Client{}
+		return client.Do(req)
+	})
 
+	// Read body
 	var body string
 	if resp != nil {
 		defer resp.Body.Close()
 		bodyBytes, err := io.ReadAll(resp.Body)
-		assert.NoError(t, err)
-		body = string(bodyBytes)
+		if err == nil {
+			body = string(bodyBytes)
+		}
 	}
 
-	// Assert results
-	assertResult(resp, err)
-	if resp != nil {
-		assert.Equal(t, expectedStatus, resp.StatusCode)
-	}
+	// Assert result
 	if expectedResult != nil {
 		assert.Equal(t, expectedResult, body)
 	}
+
+	// Unwrap and assert URL errors
+	urlErr1, ok1 := err.(*url.Error)
+	urlErr2, ok2 := expectedError.(*url.Error)
+	if ok1 && ok2 {
+		assert.Equal(t, urlErr1.Err.Error(), urlErr2.Err.Error(), "expected error did not match")
+		// Clear error vars so that assertResult doesn't assert them
+		err = nil
+		*expectedErrPtr = nil
+	}
+
+	// Assert status
+	if resp != nil && expectedStatus != -1 {
+		assert.Equal(t, expectedStatus, resp.StatusCode)
+	}
+
+	// Assert remaining error and events
+	assertResult(nil, err)
 }
 
 type roundTripper struct {

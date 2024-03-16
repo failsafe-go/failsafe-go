@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
@@ -119,6 +121,21 @@ func MockResponse(statusCode int, body string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		w.WriteHeader(statusCode)
 		fmt.Fprintf(w, body)
+	}))
+}
+
+func MockFlakyServer(failTimes int, responseCode int, retryAfterDelay time.Duration, finalResponse string) *httptest.Server {
+	failures := atomic.Int32{}
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if failures.Add(1) <= int32(failTimes) {
+			if retryAfterDelay > 0 {
+				w.Header().Add("Retry-After", strconv.Itoa(int(retryAfterDelay.Seconds())))
+			}
+			fmt.Println("Replying with", responseCode)
+			w.WriteHeader(responseCode)
+		} else {
+			fmt.Fprintf(w, finalResponse)
+		}
 	}))
 }
 
