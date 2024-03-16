@@ -28,3 +28,23 @@ func (f *roundTripper) RoundTrip(request *http.Request) (*http.Response, error) 
 		return f.next.RoundTrip(request.WithContext(exec.Context()))
 	})
 }
+
+type Request struct {
+	executor failsafe.Executor[*http.Response]
+	request  *http.Request
+	client   *http.Client
+}
+
+func NewRequest(executor failsafe.Executor[*http.Response], request *http.Request, client *http.Client) *Request {
+	return &Request{
+		executor: executor,
+		request:  request,
+		client:   client,
+	}
+}
+
+func (c *Request) Do() (*http.Response, error) {
+	return c.executor.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
+		return c.client.Do(c.request.WithContext(exec.Context()))
+	})
+}

@@ -2,7 +2,6 @@ package test
 
 import (
 	"context"
-	"net/http"
 	"testing"
 	"time"
 
@@ -242,33 +241,6 @@ func TestCancelWithTimeoutDuringHedge(t *testing.T) {
 		3, -1, timeout.ErrExceeded, func() {
 			waiter.AwaitWithTimeout(3, 3*time.Second)
 		})
-}
-
-// Tests that a failsafe roundtripper's requests are canceled when an external context is canceled.
-func TestCancelWithContextDuringHttpRequest(t *testing.T) {
-	// Given
-	server := testutil.MockDelayedResponse(200, "bad", time.Second)
-	defer server.Close()
-	rp := retrypolicy.WithDefaults[*http.Response]()
-	ctx := testutil.SetupWithContextSleep(50 * time.Millisecond)()
-	executor := failsafe.NewExecutor[*http.Response](rp).WithContext(ctx)
-
-	// When / Then
-	testutil.TestRequestFailureError(t, server.URL, executor,
-		1, 1, context.Canceled)
-}
-
-// Tests that a failsafe roundtripper's requests are canceled when an external context is canceled.
-func TestCancelWithTimeoutDuringHttpRequest(t *testing.T) {
-	// Given
-	server := testutil.MockDelayedResponse(200, "bad", time.Second)
-	defer server.Close()
-	to := timeout.With[*http.Response](100 * time.Millisecond)
-	executor := failsafe.NewExecutor[*http.Response](to)
-
-	// When / Then
-	testutil.TestRequestFailureError(t, server.URL, executor,
-		1, 1, timeout.ErrExceeded)
 }
 
 // Tests a scenario where a canceled channel is closed before it's accessed, which should use the internally shared

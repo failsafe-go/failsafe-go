@@ -3,9 +3,6 @@ package testutil
 import (
 	"context"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"sync/atomic"
 	"testing"
 
@@ -37,7 +34,7 @@ func TestGetFailure[R any](t *testing.T, given Given, executor failsafe.Executor
 
 func testRun[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenRun[R], expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
 	defaultR := *(new(R))
-	executorFn, assertResult := prepareTest(t, given, executor, expectedAttempts, expectedExecutions, defaultR, &expectedError, expectedError == nil, then...)
+	executorFn, assertResult := PrepareTest(t, given, executor, expectedAttempts, expectedExecutions, defaultR, &expectedError, expectedError == nil, then...)
 
 	// Run sync
 	fmt.Println("Testing sync")
@@ -49,7 +46,7 @@ func testRun[R any](t *testing.T, given Given, executor failsafe.Executor[R], wh
 }
 
 func testGet[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenGet[R], expectedAttempts int, expectedExecutions int, expectedResult R, expectedError error, then ...func()) {
-	executorFn, assertResult := prepareTest(t, given, executor, expectedAttempts, expectedExecutions, expectedResult, &expectedError, expectedError == nil, then...)
+	executorFn, assertResult := PrepareTest(t, given, executor, expectedAttempts, expectedExecutions, expectedResult, &expectedError, expectedError == nil, then...)
 
 	// Run sync
 	fmt.Println("Testing sync")
@@ -60,7 +57,7 @@ func testGet[R any](t *testing.T, given Given, executor failsafe.Executor[R], wh
 	assertResult(executorFn().GetWithExecutionAsync(when).Get())
 }
 
-func prepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R], expectedAttempts int, expectedExecutions int, expectedResult R, expectedError *error, expectedSuccess bool, then ...func()) (executorFn func() failsafe.Executor[R], assertResult func(R, error)) {
+func PrepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R], expectedAttempts int, expectedExecutions int, expectedResult R, expectedError *error, expectedSuccess bool, then ...func()) (executorFn func() failsafe.Executor[R], assertResult func(R, error)) {
 	var doneEvent *failsafe.ExecutionDoneEvent[R]
 	var onSuccessCalled atomic.Bool
 	var onFailureCalled atomic.Bool
@@ -101,76 +98,4 @@ func prepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R]
 		}
 	}
 	return
-}
-
-func TestRequestSuccess(t *testing.T, url string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult any, then ...func()) {
-	testRequest(t, url, executor, expectedAttempts, expectedExecutions, expectedStatus, expectedResult, nil, true, then...)
-}
-
-func TestRequestFailureResult(t *testing.T, url string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult any, then ...func()) {
-	testRequest(t, url, executor, expectedAttempts, expectedExecutions, expectedStatus, expectedResult, nil, false, then...)
-}
-
-func TestRequestSuccessError(t *testing.T, url string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
-	testRequest(t, url, executor, expectedAttempts, expectedExecutions, -1, nil, expectedError, true, then...)
-}
-
-func TestRequestFailureError(t *testing.T, url string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
-	testRequest(t, url, executor, expectedAttempts, expectedExecutions, -1, nil, expectedError, false, then...)
-}
-
-func testRequest(t *testing.T, path string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult any, expectedError error, expectedSuccess bool, then ...func()) {
-	var expectedErrPtr *error
-	expectedErrPtr = &expectedError
-	executorFn, assertResult := prepareTest(t, nil, executor, expectedAttempts, expectedExecutions, nil, expectedErrPtr, expectedSuccess, then...)
-
-	// Execute request
-	resp, err := executorFn().GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
-		req, _ := http.NewRequestWithContext(exec.Context(), http.MethodGet, path, nil)
-		client := &http.Client{}
-		return client.Do(req)
-	})
-
-	// Read body
-	var body string
-	if resp != nil {
-		defer resp.Body.Close()
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err == nil {
-			body = string(bodyBytes)
-		}
-	}
-
-	// Assert result
-	if expectedResult != nil {
-		assert.Equal(t, expectedResult, body)
-	}
-
-	// Unwrap and assert URL errors
-	urlErr1, ok1 := err.(*url.Error)
-	urlErr2, ok2 := expectedError.(*url.Error)
-	if ok1 && ok2 {
-		assert.Equal(t, urlErr1.Err.Error(), urlErr2.Err.Error(), "expected error did not match")
-		// Clear error vars so that assertResult doesn't assert them
-		err = nil
-		*expectedErrPtr = nil
-	}
-
-	// Assert status
-	if resp != nil && expectedStatus != -1 {
-		assert.Equal(t, expectedStatus, resp.StatusCode)
-	}
-
-	// Assert remaining error and events
-	assertResult(nil, err)
-}
-
-type roundTripper struct {
-	executor failsafe.Executor[*http.Response]
-}
-
-func (f *roundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	return f.executor.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
-		return http.DefaultTransport.RoundTrip(request.WithContext(exec.Context()))
-	})
 }

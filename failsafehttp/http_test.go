@@ -2,6 +2,7 @@ package failsafehttp
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
@@ -26,7 +29,7 @@ func TestSuccess(t *testing.T) {
 	executor := failsafe.NewExecutor[*http.Response](RetryPolicyBuilder().Build())
 
 	// When / Then
-	testutil.TestRequestSuccess(t, server.URL, executor,
+	testRequestSuccess(t, server.URL, executor,
 		1, 1, 200, "foo")
 }
 
@@ -34,7 +37,7 @@ func TestError(t *testing.T) {
 	executor := failsafe.NewExecutor[*http.Response](retrypolicy.Builder[*http.Response]().ReturnLastFailure().Build())
 
 	// When / Then
-	testutil.TestRequestFailureError(t, "http://localhost:55555", executor,
+	testRequestFailureError(t, "http://localhost:55555", executor,
 		3, 3, syscall.ECONNREFUSED)
 }
 
@@ -47,7 +50,7 @@ func TestRetryPolicyWith429(t *testing.T) {
 	executor := failsafe.NewExecutor[*http.Response](rp)
 
 	// When / Then
-	testutil.TestRequestFailureResult(t, server.URL, executor,
+	testRequestFailureResult(t, server.URL, executor,
 		3, 3, 429, "foo")
 }
 
@@ -58,7 +61,7 @@ func TestRetryPolicyWith429ThenSuccess(t *testing.T) {
 	executor := failsafe.NewExecutor[*http.Response](RetryPolicyBuilder().Build())
 
 	// When / Then
-	testutil.TestRequestSuccess(t, server.URL, executor,
+	testRequestSuccess(t, server.URL, executor,
 		3, 3, 200, "foo")
 }
 
@@ -77,7 +80,7 @@ func TestRetryPolicyWithRedirects(t *testing.T) {
 		Err: errors.New("stopped after 10 redirects"),
 	}
 	// expected attempts and executions are only 1 since redirects are followed by the HTTP client
-	testutil.TestRequestSuccessError(t, server.URL, executor,
+	testRequestSuccessError(t, server.URL, executor,
 		1, 1, expectedErr)
 }
 
@@ -93,7 +96,7 @@ func TestRetryPolicyWithUnsupportedProtocolScheme(t *testing.T) {
 		URL: "rstp://localhost",
 		Err: errors.New("unsupported protocol scheme \"rstp\""),
 	}
-	testutil.TestRequestSuccessError(t, "rstp://localhost", executor,
+	testRequestSuccessError(t, "rstp://localhost", executor,
 		1, 1, expectedErr)
 }
 
@@ -113,7 +116,7 @@ func TestRetryPolicyFallback(t *testing.T) {
 	executor := failsafe.NewExecutor[*http.Response](fb, rp)
 
 	// When / Then
-	testutil.TestRequestSuccess(t, server.URL, executor,
+	testRequestSuccess(t, server.URL, executor,
 		3, 3, 200, "fallback")
 }
 
@@ -125,7 +128,7 @@ func TestCircuitBreaker(t *testing.T) {
 	cb.Open()
 
 	// When / Then
-	testutil.TestRequestFailureError(t, "", executor,
+	testRequestFailureError(t, "", executor,
 		3, 0, circuitbreaker.ErrOpen)
 }
 
@@ -135,6 +138,93 @@ func TestTimeout(t *testing.T) {
 	executor := failsafe.NewExecutor[*http.Response](timeout.With[*http.Response](100 * time.Millisecond))
 
 	// When / Then
-	testutil.TestRequestFailureError(t, server.URL, executor,
+	testRequestFailureError(t, server.URL, executor,
 		1, 1, timeout.ErrExceeded)
+}
+
+// Tests that a failsafe roundtripper's requests are canceled when an external context is canceled.
+func TestCancelWithContext(t *testing.T) {
+	// Given
+	server := testutil.MockDelayedResponse(200, "bad", time.Second)
+	defer server.Close()
+	rp := retrypolicy.WithDefaults[*http.Response]()
+	ctx := testutil.SetupWithContextSleep(50 * time.Millisecond)()
+	executor := failsafe.NewExecutor[*http.Response](rp).WithContext(ctx)
+
+	// When / Then
+	testRequestFailureError(t, server.URL, executor,
+		1, 1, context.Canceled)
+}
+
+// Tests that a failsafe roundtripper's requests are canceled when an external context is canceled.
+func TestCancelWithTimeout(t *testing.T) {
+	// Given
+	server := testutil.MockDelayedResponse(200, "bad", time.Second)
+	defer server.Close()
+	to := timeout.With[*http.Response](100 * time.Millisecond)
+	executor := failsafe.NewExecutor[*http.Response](to)
+
+	// When / Then
+	testRequestFailureError(t, server.URL, executor,
+		1, 1, timeout.ErrExceeded)
+}
+
+func testRequestSuccess(t *testing.T, url string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult any, then ...func()) {
+	testRequest(t, url, executor, expectedAttempts, expectedExecutions, expectedStatus, expectedResult, nil, true, then...)
+}
+
+func testRequestFailureResult(t *testing.T, url string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult any, then ...func()) {
+	testRequest(t, url, executor, expectedAttempts, expectedExecutions, expectedStatus, expectedResult, nil, false, then...)
+}
+
+func testRequestSuccessError(t *testing.T, url string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
+	testRequest(t, url, executor, expectedAttempts, expectedExecutions, -1, nil, expectedError, true, then...)
+}
+
+func testRequestFailureError(t *testing.T, url string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
+	testRequest(t, url, executor, expectedAttempts, expectedExecutions, -1, nil, expectedError, false, then...)
+}
+
+func testRequest(t *testing.T, path string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult any, expectedError error, expectedSuccess bool, then ...func()) {
+	var expectedErrPtr *error
+	expectedErrPtr = &expectedError
+	executorFn, assertResult := testutil.PrepareTest(t, nil, executor, expectedAttempts, expectedExecutions, nil, expectedErrPtr, expectedSuccess, then...)
+
+	// Execute request
+	req, _ := http.NewRequest(http.MethodGet, path, nil)
+	resp, err := NewRequest(executorFn(), req, http.DefaultClient).Do()
+	http.DefaultClient.Get("http://failsafe-go.dev")
+
+	// Read body
+	var body string
+	if resp != nil {
+		defer resp.Body.Close()
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err == nil {
+			body = string(bodyBytes)
+		}
+	}
+
+	// Assert result
+	if expectedResult != nil {
+		assert.Equal(t, expectedResult, body)
+	}
+
+	// Unwrap and assert URL errors
+	urlErr1, ok1 := err.(*url.Error)
+	urlErr2, ok2 := expectedError.(*url.Error)
+	if ok1 && ok2 {
+		assert.Equal(t, urlErr1.Err.Error(), urlErr2.Err.Error(), "expected error did not match")
+		// Clear error vars so that assertResult doesn't assert them
+		err = nil
+		*expectedErrPtr = nil
+	}
+
+	// Assert status
+	if resp != nil && expectedStatus != -1 {
+		assert.Equal(t, expectedStatus, resp.StatusCode)
+	}
+
+	// Assert remaining error and events
+	assertResult(nil, err)
 }
