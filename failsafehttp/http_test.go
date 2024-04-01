@@ -192,7 +192,7 @@ func testRequest(t *testing.T, path string, executor failsafe.Executor[*http.Res
 
 	// Execute request
 	req, _ := http.NewRequest(http.MethodGet, path, nil)
-	resp, err := NewRequest(executorFn(), req, http.DefaultClient).Do()
+	resp, err := NewRequestWithExecutor(req, http.DefaultClient, executorFn()).Do()
 	http.DefaultClient.Get("http://failsafe-go.dev")
 
 	// Read body
