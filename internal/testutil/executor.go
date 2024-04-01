@@ -58,11 +58,11 @@ func testGet[R any](t *testing.T, given Given, executor failsafe.Executor[R], wh
 }
 
 func PrepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R], expectedAttempts int, expectedExecutions int, expectedResult R, expectedError *error, expectedSuccess bool, then ...func()) (executorFn func() failsafe.Executor[R], assertResult func(R, error)) {
-	var doneEvent *failsafe.ExecutionDoneEvent[R]
+	var doneEvent atomic.Pointer[failsafe.ExecutionDoneEvent[R]]
 	var onSuccessCalled atomic.Bool
 	var onFailureCalled atomic.Bool
 	executor = executor.OnDone(func(e failsafe.ExecutionDoneEvent[R]) {
-		doneEvent = &e
+		doneEvent.Store(&e)
 	}).OnSuccess(func(e failsafe.ExecutionDoneEvent[R]) {
 		onSuccessCalled.Store(true)
 	}).OnFailure(func(e failsafe.ExecutionDoneEvent[R]) {
@@ -78,12 +78,12 @@ func PrepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R]
 		if len(then) > 0 && then[0] != nil {
 			then[0]()
 		}
-		if doneEvent != nil {
+		if doneEvent.Load() != nil {
 			if expectedAttempts != -1 {
-				assert.Equal(t, expectedAttempts, doneEvent.Attempts(), "expected attempts did not match")
+				assert.Equal(t, expectedAttempts, doneEvent.Load().Attempts(), "expected attempts did not match")
 			}
 			if expectedExecutions != -1 {
-				assert.Equal(t, expectedExecutions, doneEvent.Executions(), "expected executions did not match")
+				assert.Equal(t, expectedExecutions, doneEvent.Load().Executions(), "expected executions did not match")
 			}
 		}
 
