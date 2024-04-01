@@ -12,7 +12,8 @@ type roundTripper struct {
 }
 
 // NewRoundTripper returns a new http.RoundTripper that will perform failsafe round trips via the policies and
-// innerRoundTripper. If innerRoundTripper is nil, http.DefaultTransport will be used.
+// innerRoundTripper. If innerRoundTripper is nil, http.DefaultTransport will be used. The policies are composed around
+// requests and will handle responses in reverse order.
 func NewRoundTripper(innerRoundTripper http.RoundTripper, policies ...failsafe.Policy[*http.Response]) http.RoundTripper {
 	if innerRoundTripper == nil {
 		innerRoundTripper = http.DefaultTransport
@@ -35,12 +36,14 @@ type Request struct {
 	client   *http.Client
 }
 
-// NewRequest creates and returns a new Request that will perform failsafe round trips via the request, client, and policies.
+// NewRequest creates and returns a new Request that will perform failsafe round trips via the request, client, and
+// policies. The policies are composed around requests and will handle responses in reverse order.
 func NewRequest(request *http.Request, client *http.Client, policies ...failsafe.Policy[*http.Response]) *Request {
 	return NewRequestWithExecutor(request, client, failsafe.NewExecutor(policies...))
 }
 
-// NewRequestWithExecutor creates and returns a new Request that will perform failsafe round trips via the request, client, and executor.
+// NewRequestWithExecutor creates and returns a new Request that will perform failsafe round trips via the request,
+// client, and executor.
 func NewRequestWithExecutor(request *http.Request, client *http.Client, executor failsafe.Executor[*http.Response]) *Request {
 	return &Request{
 		executor: executor,
