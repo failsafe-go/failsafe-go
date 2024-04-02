@@ -20,17 +20,8 @@ Check out the [contributing guidelines](https://github.com/failsafe-go/failsafe-
 
 ## License
 
-Copyright Jonathan Halterman and friends. Released under the [Apache-2.0 License](https://github.com/failsafe-go/failsafe-go/blob/master/LICENSE-APACHE) and [MIT License](https://github.com/failsafe-go/failsafe-go/blob/master/LICENSE-MIT).
-
-## License
-
 &copy; 2023-present Jonathan Halterman and contributors.
 
-This project is licensed under either of
+This project is licensed under [MIT license](https://opensource.org/licenses/MIT) ([`LICENSE-MIT`](LICENSE-MIT)).
 
-- [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0) ([`LICENSE-APACHE`](LICENSE-APACHE))
-- [MIT license](https://opensource.org/licenses/MIT) ([`LICENSE-MIT`](LICENSE-MIT))
-
-at your option.
-
-The [SPDX](https://spdx.dev) license identifier for this project is `MIT OR Apache-2.0`.
+The [SPDX](https://spdx.dev) license identifier for this project is `MIT`.
