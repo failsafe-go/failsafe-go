@@ -35,8 +35,7 @@ func TestHttpWithRetryPolicy(t *testing.T) {
 		server := flakyServer(2, 429, time.Second)
 		defer server.Close()
 
-		executor := failsafe.NewExecutor[*http.Response](retryPolicy)
-		roundTripper := failsafehttp.NewRoundTripper(executor, nil)
+		roundTripper := failsafehttp.NewRoundTripper(nil, retryPolicy)
 		client := &http.Client{Transport: roundTripper}
 
 		fmt.Println("Sending ping")
@@ -80,8 +79,7 @@ func TestHttpWithCustomRetryPolicy(t *testing.T) {
 		}).Build()
 
 	// Use the RetryPolicy with a failsafe RoundTripper
-	executor := failsafe.NewExecutor[*http.Response](retryPolicy)
-	roundTripper := failsafehttp.NewRoundTripper(executor, nil)
+	roundTripper := failsafehttp.NewRoundTripper(nil, retryPolicy)
 	client := &http.Client{Transport: roundTripper}
 
 	fmt.Println("Sending ping")
@@ -108,8 +106,7 @@ func TestHttpWithCircuitBreaker(t *testing.T) {
 		Build()
 
 	// Use the RetryPolicy with a failsafe RoundTripper
-	executor := failsafe.NewExecutor[*http.Response](circuitBreaker)
-	roundTripper := failsafehttp.NewRoundTripper(executor, nil)
+	roundTripper := failsafehttp.NewRoundTripper(nil, circuitBreaker)
 	client := &http.Client{Transport: roundTripper}
 
 	sendPing := func() {
@@ -147,8 +144,7 @@ func TestHttpWithHedgePolicy(t *testing.T) {
 
 	// Use the HedgePolicy with a failsafe RoundTripper
 	t.Run("with failsafe round tripper", func(t *testing.T) {
-		executor := failsafe.NewExecutor[*http.Response](hedgePolicy)
-		roundTripper := failsafehttp.NewRoundTripper(executor, nil)
+		roundTripper := failsafehttp.NewRoundTripper(nil, hedgePolicy)
 		client := &http.Client{Transport: roundTripper}
 
 		fmt.Println("Sending ping")
@@ -181,8 +177,7 @@ func TestHttpWithTimeout(t *testing.T) {
 	timeOut := timeout.With[*http.Response](time.Second)
 
 	// Use the Timeout with a failsafe RoundTripper
-	executor := failsafe.NewExecutor[*http.Response](timeOut)
-	roundTripper := failsafehttp.NewRoundTripper(executor, nil)
+	roundTripper := failsafehttp.NewRoundTripper(nil, timeOut)
 	client := &http.Client{Transport: roundTripper}
 
 	fmt.Println("Sending ping")

@@ -56,6 +56,8 @@ func (s *smoothRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWait
 }
 
 func (s *smoothRateLimiterStats[R]) reset() {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
 	s.stopwatch.Reset()
 	s.nextFreePermitTime = 0
 }
@@ -119,6 +121,8 @@ func (s *burstyRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWait
 }
 
 func (s *burstyRateLimiterStats[R]) reset() {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
 	s.stopwatch.Reset()
 	s.availablePermits = s.config.periodPermits
 	s.currentPeriod = 0
