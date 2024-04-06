@@ -21,8 +21,4 @@ Check out the [contributing guidelines](https://github.com/failsafe-go/failsafe-
 
 ## License
 
-&copy; 2023-present Jonathan Halterman and contributors.
-
-This project is licensed under [MIT license](https://opensource.org/licenses/MIT) ([`LICENSE-MIT`](LICENSE-MIT)).
-
-The [SPDX](https://spdx.dev) license identifier for this project is `MIT`.
+&copy; 2023-present Jonathan Halterman and contributors. Released under the [MIT license](https://github.com/failsafe-go/failsafe-go/blob/master/LICENSE).
