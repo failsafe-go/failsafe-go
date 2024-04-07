@@ -9,6 +9,7 @@ import (
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/bulkhead"
+	"github.com/failsafe-go/failsafe-go/cachepolicy"
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
 	"github.com/failsafe-go/failsafe-go/fallback"
 	"github.com/failsafe-go/failsafe-go/hedgepolicy"
@@ -44,17 +45,17 @@ func WithRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *S
 
 func withRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *Stats, withLogging bool) retrypolicy.RetryPolicyBuilder[R] {
 	rp.OnRetry(func(e failsafe.ExecutionEvent[R]) {
-		stats.retryCount.Add(1)
+		stats.retries.Add(1)
 		if withLogging {
 			fmt.Printf("%s %p retrying [result: %v, error: %s]\n", testutil.GetType(rp), rp, e.LastResult(), e.LastError())
 		}
 	}).OnRetriesExceeded(func(e failsafe.ExecutionEvent[R]) {
-		stats.retriesExceededCount.Add(1)
+		stats.retriesExceeded.Add(1)
 		if withLogging {
 			fmt.Printf("%s %p retries exceeded\n", testutil.GetType(rp), rp)
 		}
 	}).OnAbort(func(e failsafe.ExecutionEvent[R]) {
-		stats.abortCount.Add(1)
+		stats.aborts.Add(1)
 		if withLogging {
 			fmt.Printf("%s %p abort\n", testutil.GetType(rp), rp)
 		}
@@ -95,7 +96,7 @@ func withBreakerStatsAndLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R], 
 
 func WithTimeoutStatsAndLogs[R any](to timeout.TimeoutBuilder[R], stats *Stats) timeout.TimeoutBuilder[R] {
 	to.OnTimeoutExceeded(func(e failsafe.ExecutionDoneEvent[R]) {
-		stats.executionCount.Add(1)
+		stats.executions.Add(1)
 		fmt.Printf("%s %p exceeded [attempts: %d, executions: %d]\n", testutil.GetType(to), to, e.Attempts(), e.Executions())
 	})
 	return to
@@ -103,7 +104,7 @@ func WithTimeoutStatsAndLogs[R any](to timeout.TimeoutBuilder[R], stats *Stats) 
 
 func WithFallbackStatsAndLogs[R any](fb fallback.FallbackBuilder[R], stats *Stats) fallback.FallbackBuilder[R] {
 	fb.OnFallbackExecuted(func(e failsafe.ExecutionDoneEvent[R]) {
-		stats.executionCount.Add(1)
+		stats.executions.Add(1)
 		fmt.Printf("%s %p done [result: %v, error: %s, attempts: %d, executions: %d]\n",
 			testutil.GetType(fb), fb, e.Result, e.Error, e.Attempts(), e.Executions())
 	})
@@ -112,34 +113,45 @@ func WithFallbackStatsAndLogs[R any](fb fallback.FallbackBuilder[R], stats *Stat
 
 func WithHedgeStatsAndLogs[R any](hp hedgepolicy.HedgePolicyBuilder[R], stats *Stats) hedgepolicy.HedgePolicyBuilder[R] {
 	hp.OnHedge(func(e failsafe.ExecutionEvent[R]) {
-		stats.hedgeCount.Add(1)
+		stats.hedges.Add(1)
 		fmt.Printf("%s %p hedging [attempts: %v]\n", testutil.GetType(hp), hp, e.Attempts())
 	})
 	return hp
 }
 
-func BulkheadStatsAndLogs[R any](bh bulkhead.BulkheadBuilder[R], stats *Stats, withLogging bool) bulkhead.BulkheadBuilder[R] {
+func WithBulkheadStatsAndLogs[R any](bh bulkhead.BulkheadBuilder[R], stats *Stats, withLogging bool) bulkhead.BulkheadBuilder[R] {
 	bh.OnFull(func(event failsafe.ExecutionEvent[R]) {
 		if withLogging {
-			stats.fullCount.Add(1)
+			stats.fulls.Add(1)
 			fmt.Printf("%s %p full\n", testutil.GetType(bh), bh)
 		}
 	})
 	return bh
 }
 
+func WithCacheStats[R any](cp cachepolicy.CachePolicyBuilder[R], stats *Stats) cachepolicy.CachePolicyBuilder[R] {
+	cp.OnCacheHit(func(e failsafe.ExecutionDoneEvent[R]) {
+		stats.cacheHits.Add(1)
+	}).OnCacheMiss(func(e failsafe.ExecutionEvent[R]) {
+		stats.cacheMisses.Add(1)
+	}).OnResultCached(func(event failsafe.ExecutionEvent[R]) {
+		stats.caches.Add(1)
+	})
+	return cp
+}
+
 func withStatsAndLogs[P any, R any](policy failsafe.FailurePolicyBuilder[P, R], stats *Stats, withLogging bool) {
 	policy.OnSuccess(func(e failsafe.ExecutionEvent[R]) {
-		stats.executionCount.Add(1)
-		stats.successCount.Add(1)
+		stats.executions.Add(1)
+		stats.successes.Add(1)
 		if withLogging {
 			fmt.Printf("%s %p success [result: %v, attempts: %d, executions: %d]\n",
 				testutil.GetType(policy), policy, e.LastResult(), e.Attempts(), e.Executions())
 		}
 	})
 	policy.OnFailure(func(e failsafe.ExecutionEvent[R]) {
-		stats.executionCount.Add(1)
-		stats.failureCount.Add(1)
+		stats.executions.Add(1)
+		stats.failures.Add(1)
 		if withLogging {
 			fmt.Printf("%s %p failure [result: %v, error: %s, attempts: %d, executions: %d]\n",
 				testutil.GetType(policy), policy, e.LastResult(), e.LastError(), e.Attempts(), e.Executions())
@@ -148,69 +160,92 @@ func withStatsAndLogs[P any, R any](policy failsafe.FailurePolicyBuilder[P, R], 
 }
 
 type Stats struct {
-	executionCount atomic.Int32
-	successCount   atomic.Int32
-	failureCount   atomic.Int32
+	executions atomic.Int32
+	successes  atomic.Int32
+	failures   atomic.Int32
 
 	// Retry specific stats
-	retryCount           atomic.Int32
-	retriesExceededCount atomic.Int32
-	abortCount           atomic.Int32
+	retries         atomic.Int32
+	retriesExceeded atomic.Int32
+	aborts          atomic.Int32
 
 	// Hedge specific stats
-	hedgeCount atomic.Int32
+	hedges atomic.Int32
 
 	// Bulkhead specific stats
-	fullCount atomic.Int32
+	fulls atomic.Int32
+
+	// Cache specific stats
+	caches      atomic.Int32
+	cacheHits   atomic.Int32
+	cacheMisses atomic.Int32
+	cachedCount atomic.Int32
 }
 
 func (s *Stats) Executions() int {
-	return int(s.executionCount.Load())
+	return int(s.executions.Load())
 }
 
 func (s *Stats) Successes() int {
-	return int(s.successCount.Load())
+	return int(s.successes.Load())
 }
 
 func (s *Stats) Failures() int {
-	return int(s.failureCount.Load())
+	return int(s.failures.Load())
 }
 
 func (s *Stats) Retries() int {
-	return int(s.retryCount.Load())
+	return int(s.retries.Load())
 }
 
 func (s *Stats) RetriesExceeded() int {
-	return int(s.retriesExceededCount.Load())
+	return int(s.retriesExceeded.Load())
 }
 
 func (s *Stats) Hedges() int {
-	return int(s.hedgeCount.Load())
+	return int(s.hedges.Load())
 }
 
 func (s *Stats) Aborts() int {
-	return int(s.abortCount.Load())
+	return int(s.aborts.Load())
 }
 
 func (s *Stats) Fulls() int {
-	return int(s.fullCount.Load())
+	return int(s.fulls.Load())
+}
+
+func (s *Stats) CacheHits() int {
+	return int(s.cacheHits.Load())
+}
+
+func (s *Stats) CacheMisses() int {
+	return int(s.cacheMisses.Load())
+}
+
+func (s *Stats) Caches() int {
+	return int(s.caches.Load())
 }
 
 func (s *Stats) Reset() {
-	s.executionCount.Store(0)
-	s.successCount.Store(0)
-	s.failureCount.Store(0)
+	s.executions.Store(0)
+	s.successes.Store(0)
+	s.failures.Store(0)
 
 	// Retry specific stats
-	s.retryCount.Store(0)
-	s.retriesExceededCount.Store(0)
-	s.abortCount.Store(0)
+	s.retries.Store(0)
+	s.retriesExceeded.Store(0)
+	s.aborts.Store(0)
 
 	// Hedge specific stats
-	s.hedgeCount.Store(0)
+	s.hedges.Store(0)
 
 	// Bulkhead specific stats
-	s.fullCount.Store(0)
+	s.fulls.Store(0)
+
+	// Cache specific stats
+	s.caches.Store(0)
+	s.cacheHits.Store(0)
+	s.cacheMisses.Store(0)
 }
 
 func SetupFn(stats *Stats) func() context.Context {
