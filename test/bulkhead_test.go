@@ -37,7 +37,7 @@ func TestBulkheadPermitAcquiredAfterWait(t *testing.T) {
 func TestBulkheadFull(t *testing.T) {
 	// Given
 	stats := &policytesting.Stats{}
-	bh := policytesting.BulkheadStatsAndLogs(bulkhead.Builder[any](2), stats, true).Build()
+	bh := policytesting.WithBulkheadStatsAndLogs(bulkhead.Builder[any](2), stats, true).Build()
 	bh.TryAcquirePermit()
 	bh.TryAcquirePermit() // bulkhead should be full
 

@@ -9,7 +9,7 @@
 
 Failsafe-go is a library for building fault tolerant Go applications. It works by wrapping executable logic with one or more resilience policies, which can be combined and composed as needed. 
 
-Policies include [Retry](https://failsafe-go.dev/retry/), [CircuitBreaker](https://failsafe-go.dev/circuit-breaker/), [RateLimiter](https://failsafe-go.dev/rate-limiter/), [Timeout](https://failsafe-go.dev/timeout/), [Fallback](https://failsafe-go.dev/fallback/), [Hedge](https://failsafe-go.dev/hedge/), and [Bulkhead](https://failsafe-go.dev/bulkhead/).
+Policies include [Retry](https://failsafe-go.dev/retry), [CircuitBreaker](https://failsafe-go.dev/circuit-breaker), [RateLimiter](https://failsafe-go.dev/rate-limiter), [Timeout](https://failsafe-go.dev/timeout), [Fallback](https://failsafe-go.dev/fallback), [Hedge](https://failsafe-go.dev/hedge/), [Bulkhead](https://failsafe-go.dev/bulkhead), and [Cache](https://failsafe-go.dev/cache).
 
 ## Usage
 

@@ -25,11 +25,15 @@ func TestRunFailure[R any](t *testing.T, given Given, executor failsafe.Executor
 }
 
 func TestGetSuccess[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenGet[R], expectedAttempts int, expectedExecutions int, expectedResult R, then ...func()) {
-	testGet(t, given, executor, when, expectedAttempts, expectedExecutions, expectedResult, nil, then...)
+	testGet(t, given, executor, when, expectedAttempts, expectedExecutions, expectedResult, nil, true, then...)
+}
+
+func TestGetSuccessError[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenGet[R], expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
+	testGet(t, given, executor, when, expectedAttempts, expectedExecutions, *(new(R)), expectedError, true, then...)
 }
 
 func TestGetFailure[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenGet[R], expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
-	testGet(t, given, executor, when, expectedAttempts, expectedExecutions, *(new(R)), expectedError, then...)
+	testGet(t, given, executor, when, expectedAttempts, expectedExecutions, *(new(R)), expectedError, false, then...)
 }
 
 func testRun[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenRun[R], expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
@@ -45,8 +49,8 @@ func testRun[R any](t *testing.T, given Given, executor failsafe.Executor[R], wh
 	assertResult(executorFn().RunWithExecutionAsync(when).Get())
 }
 
-func testGet[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenGet[R], expectedAttempts int, expectedExecutions int, expectedResult R, expectedError error, then ...func()) {
-	executorFn, assertResult := PrepareTest(t, given, executor, expectedAttempts, expectedExecutions, expectedResult, &expectedError, expectedError == nil, then...)
+func testGet[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenGet[R], expectedAttempts int, expectedExecutions int, expectedResult R, expectedError error, expectedSuccess bool, then ...func()) {
+	executorFn, assertResult := PrepareTest(t, given, executor, expectedAttempts, expectedExecutions, expectedResult, &expectedError, expectedSuccess, then...)
 
 	// Run sync
 	fmt.Println("Testing sync")

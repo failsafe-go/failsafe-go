@@ -10,6 +10,7 @@ import (
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/bulkhead"
+	"github.com/failsafe-go/failsafe-go/cachepolicy"
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
 	"github.com/failsafe-go/failsafe-go/fallback"
 	"github.com/failsafe-go/failsafe-go/hedgepolicy"
@@ -338,5 +339,39 @@ func TestHedgePolicyTimeout(t *testing.T) {
 		}, 3, -1, timeout.ErrExceeded, func() {
 			assert.Equal(t, 2, stats.Hedges())
 			assert.Equal(t, 3, toStats.Executions())
+		})
+}
+
+// CachePolicy -> RetryPolicy
+func TestCachePolicyRetryPolicy(t *testing.T) {
+	// Given
+	cpStats := &policytesting.Stats{}
+	cache, failsafeCache := policytesting.NewCache[any]()
+	cp := policytesting.WithCacheStats[any](cachepolicy.Builder(failsafeCache), cpStats).WithKey("foo").Build()
+	rpStats := &policytesting.Stats{}
+	rp := policytesting.WithRetryStats(retrypolicy.Builder[any](), rpStats).Build()
+	execution, reset := testutil.ErrorNTimesThenReturn[any](testutil.ErrInvalidState, 2, "bar")
+	setup := func() context.Context {
+		cpStats.Reset()
+		rpStats.Reset()
+		reset()
+		clear(cache)
+		return nil
+	}
+
+	// When / Then
+	testutil.TestGetSuccess(t, setup, failsafe.NewExecutor[any](cp, rp), execution,
+		3, 3, "bar", func() {
+			assert.Equal(t, 3, rpStats.Executions())
+			assert.Equal(t, 2, rpStats.Retries())
+			assert.Equal(t, 1, cpStats.Caches())
+			assert.Equal(t, 0, cpStats.CacheHits())
+			assert.Equal(t, 1, cpStats.CacheMisses())
+		})
+	testutil.TestGetSuccess(t, policytesting.SetupFn(cpStats), failsafe.NewExecutor[any](cp, rp), execution,
+		1, 0, "bar", func() {
+			assert.Equal(t, 0, cpStats.Caches())
+			assert.Equal(t, 1, cpStats.CacheHits())
+			assert.Equal(t, 0, cpStats.CacheMisses())
 		})
 }
