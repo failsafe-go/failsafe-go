@@ -19,7 +19,8 @@ type Cache[R any] interface {
 	Set(key string, value R)
 }
 
-// CachePolicy is a read through cachePolicy that returns a cached result for the CacheKey in the context provided with the execution, if it exists.
+// CachePolicy is a read through cache Policy that sets and gets cached results for some key. The cache key can be
+// configured via CachePolicyBuilder, or by setting a CacheKey value in a Context used with an execution.
 //
 // This type is concurrency safe.
 type CachePolicy[R any] interface {
@@ -28,11 +29,12 @@ type CachePolicy[R any] interface {
 
 // CachePolicyBuilder builds CachePolicy instances. In order for the cache policy to be used, a key must be provided via
 // WithKey, or via a Context when the execution is performed using a value stored under the CacheKey in the Context. A
-// cache key stored in a Context under the CacheKey takes precedence over a cache key configured via WithKey.
+// cache key stored in a Context takes precedence over a cache key configured via WithKey.
 //
 // This type is not concurrency safe.
 type CachePolicyBuilder[R any] interface {
-	// WithKey builds caches that store successful execution results in a cache with the key.
+	// WithKey builds caches that store successful execution results in a cache with the key. This key can be overridden by
+	// providing a CacheKey in a Context used with an execution.
 	WithKey(key string) CachePolicyBuilder[R]
 
 	// CacheIf specifies that a value result should only be cached if it satisfies the predicate. By default, any non-error
