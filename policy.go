@@ -49,6 +49,6 @@ type DelayablePolicyBuilder[S any, R any] interface {
 	// WithDelay configures the time to delay between execution attempts.
 	WithDelay(delay time.Duration) S
 
-	// WithDelayFunc accepts a function that configures the time to delay before the next execution attempt.
+	// WithDelayFunc configures a function that returns the time to delay before the next execution attempt.
 	WithDelayFunc(delayFunc DelayFunc[R]) S
 }

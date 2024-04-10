@@ -66,6 +66,12 @@ type CircuitBreakerBuilder[R any] interface {
 	// in a HalfOpenSttate state to determine whether to transition back to open or closed.
 	WithFailureRateThreshold(failureRateThreshold uint, failureExecutionThreshold uint, failureThresholdingPeriod time.Duration) CircuitBreakerBuilder[R]
 
+	// WithDelay configures the delay to wait in OpenState before transitioning to HalfOpenState.
+	WithDelay(delay time.Duration) CircuitBreakerBuilder[R]
+
+	// WithDelayFunc configures a function that provides the delay to wait in OpenState before transitioning to HalfOpenState.
+	WithDelayFunc(delayFunc failsafe.DelayFunc[R]) CircuitBreakerBuilder[R]
+
 	// WithSuccessThreshold configures count based success thresholding by setting the number of consecutive successful
 	// executions that must occur when in a HalfOpenState in order to close the circuit, else the circuit is re-opened when a
 	// failure occurs.
