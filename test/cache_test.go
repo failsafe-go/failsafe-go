@@ -68,29 +68,28 @@ func TestCache(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			setup := func() context.Context {
+			setup := func() {
 				stats.Reset()
 				clear(cache)
-				return nil
 			}
 
 			// Add item to cache
-			testutil.TestGetSuccess(t, setup, tc.executor,
-				func(execution failsafe.Execution[string]) (string, error) {
-					return "bar", nil
-				},
-				1, 1, "bar", func() {
+			testutil.Test[string](t).
+				WithExecutor(tc.executor).
+				Setup(setup).
+				Get(testutil.GetFn("bar", nil)).
+				AssertSuccess(1, 1, "bar", func() {
 					assert.Equal(t, tc.expectedCaches, stats.Caches())
 					assert.Equal(t, 0, stats.CacheHits())
 					assert.Equal(t, 1, stats.CacheMisses())
 				})
 
 			// Get item from cache
-			testutil.TestGetSuccess(t, policytesting.SetupFn(stats), tc.executor,
-				func(execution failsafe.Execution[string]) (string, error) {
-					return "missing", nil
-				},
-				1, tc.expectedExecutions, tc.expectedResult, func() {
+			testutil.Test[string](t).
+				WithExecutor(tc.executor).
+				Reset(stats).
+				Get(testutil.GetFn("missing", nil)).
+				AssertSuccess(1, tc.expectedExecutions, tc.expectedResult, func() {
 					assert.Equal(t, 0, stats.Caches())
 					assert.Equal(t, tc.expectedHits, stats.CacheHits())
 					assert.Equal(t, tc.expectedMisses, stats.CacheMisses())
@@ -130,18 +129,17 @@ func TestConditionalCache(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			setup := func() context.Context {
+			setup := func() {
 				stats.Reset()
 				clear(cache)
-				return nil
 			}
 
 			// When / Then
-			testutil.TestGetSuccess(t, setup, failsafe.NewExecutor[string](tc.cpb.Build()),
-				func(execution failsafe.Execution[string]) (string, error) {
-					return tc.result, nil
-				},
-				1, 1, tc.result, func() {
+			testutil.Test[string](t).
+				WithExecutor(failsafe.NewExecutor[string](tc.cpb.Build())).
+				Setup(setup).
+				Get(testutil.GetFn(tc.result, nil)).
+				AssertSuccess(1, 1, tc.result, func() {
 					assert.Equal(t, tc.expectedCaches, stats.Caches())
 					assert.Equal(t, 0, stats.CacheHits())
 					assert.Equal(t, 1, stats.CacheMisses())
@@ -160,11 +158,11 @@ func TestDoNotCacheOnError(t *testing.T) {
 		Build()
 
 	// When / Then
-	testutil.TestGetSuccessError(t, policytesting.SetupFn(stats), failsafe.NewExecutor[string](cp),
-		func(execution failsafe.Execution[string]) (string, error) {
-			return "", testutil.ErrInvalidState
-		},
-		1, 1, testutil.ErrInvalidState, func() {
+	testutil.Test[string](t).
+		With(cp).
+		Reset(stats).
+		Get(testutil.GetFn("", testutil.ErrInvalidState)).
+		AssertSuccessError(1, 1, testutil.ErrInvalidState, func() {
 			assert.Equal(t, 0, stats.Caches())
 			assert.Equal(t, 0, stats.CacheHits())
 			assert.Equal(t, 1, stats.CacheMisses())

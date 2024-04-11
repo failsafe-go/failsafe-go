@@ -1,7 +1,6 @@
 package test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -26,12 +25,13 @@ func TestTimeoutRetryPolicyTimeout(t *testing.T) {
 	retryPolicy := policytesting.WithRetryStatsAndLogs[any](retrypolicy.Builder[any]().WithMaxRetries(10), retryStats).Build()
 	outerTimeout := policytesting.WithTimeoutStatsAndLogs[any](timeout.Builder[any](500*time.Millisecond), outerTimeoutStats).Build()
 
-	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[any](outerTimeout, retryPolicy, innerTimeout),
-		func(exec failsafe.Execution[any]) error {
+	testutil.Test[any](t).
+		With(outerTimeout, retryPolicy, innerTimeout).
+		Run(func(exec failsafe.Execution[any]) error {
 			testutil.WaitAndAssertCanceled(t, 150*time.Millisecond, exec)
 			return nil
-		},
-		-1, -1, timeout.ErrExceeded, func() {
+		}).
+		AssertFailure(-1, -1, timeout.ErrExceeded, func() {
 			assert.True(t, innerTimeoutStats.Executions() >= 3)
 			assert.True(t, retryStats.Executions() >= 3)
 		})
@@ -47,18 +47,15 @@ func TestFallbackRetryPolicyTimeoutTimeout(t *testing.T) {
 	outerTimeout := policytesting.WithTimeoutStatsAndLogs[bool](timeout.Builder[bool](50*time.Millisecond), outerTimeoutStats).Build()
 	rp := retrypolicy.WithDefaults[bool]()
 	fb := fallback.WithResult(true)
-	setup := func() context.Context {
-		innerTimeoutStats.Reset()
-		outerTimeoutStats.Reset()
-		return nil
-	}
 
-	testutil.TestGetSuccess(t, setup, failsafe.NewExecutor[bool](fb, rp, outerTimeout, innerTimeout),
-		func(exec failsafe.Execution[bool]) (bool, error) {
+	testutil.Test[bool](t).
+		With(fb, rp, outerTimeout, innerTimeout).
+		Reset(innerTimeoutStats, outerTimeoutStats).
+		Get(func(exec failsafe.Execution[bool]) (bool, error) {
 			testutil.WaitAndAssertCanceled(t, 150*time.Millisecond, exec)
 			return false, nil
-		},
-		3, 3, true, func() {
+		}).
+		AssertSuccess(3, 3, true, func() {
 			assert.Equal(t, 0, innerTimeoutStats.Executions())
 			assert.Equal(t, 3, outerTimeoutStats.Executions())
 		})
@@ -74,19 +71,15 @@ func TestCancelNestedTimeouts(t *testing.T) {
 	rp := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[any](), retryStats).Build()
 	innerTimeout := policytesting.WithTimeoutStatsAndLogs[any](timeout.Builder[any](time.Second), innerTimeoutStats).Build()
 	outerTimeout := policytesting.WithTimeoutStatsAndLogs[any](timeout.Builder[any](200*time.Millisecond), outerTimeoutStats).Build()
-	setup := func() context.Context {
-		retryStats.Reset()
-		innerTimeoutStats.Reset()
-		outerTimeoutStats.Reset()
-		return nil
-	}
 
-	testutil.TestRunFailure(t, setup, failsafe.NewExecutor[any](rp, outerTimeout, innerTimeout),
-		func(exec failsafe.Execution[any]) error {
+	testutil.Test[any](t).
+		With(rp, outerTimeout, innerTimeout).
+		Reset(retryStats, innerTimeoutStats, outerTimeoutStats).
+		Run(func(exec failsafe.Execution[any]) error {
 			testutil.WaitAndAssertCanceled(t, time.Second, exec)
 			return nil
-		},
-		3, 3, timeout.ErrExceeded, func() {
+		}).
+		AssertFailure(3, 3, timeout.ErrExceeded, func() {
 			assert.Equal(t, 3, retryStats.Executions())
 			assert.Equal(t, 0, innerTimeoutStats.Executions())
 			assert.Equal(t, 3, outerTimeoutStats.Executions())

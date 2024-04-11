@@ -16,71 +16,166 @@ type Given func() context.Context
 type WhenRun[R any] func(execution failsafe.Execution[R]) error
 type WhenGet[R any] func(execution failsafe.Execution[R]) (R, error)
 
-func TestRunSuccess[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenRun[R], expectedAttempts int, expectedExecutions int, then ...func()) {
-	testRun(t, given, executor, when, expectedAttempts, expectedExecutions, nil, then...)
+type Resetable interface {
+	Reset()
 }
 
-func TestRunFailure[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenRun[R], expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
-	testRun(t, given, executor, when, expectedAttempts, expectedExecutions, expectedError, then...)
+type Tester[R any] struct {
+	t *testing.T
+
+	// Given
+	given func() context.Context
+
+	// When
+	executor failsafe.Executor[R]
+	run      WhenRun[R]
+	get      WhenGet[R]
+
+	// Then
+	then               func()
+	expectedAttempts   int
+	expectedExecutions int
+	expectedResult     R
+	expectedError      *error
+	expectedSuccess    bool
+	expectedFailure    bool
 }
 
-func TestGetSuccess[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenGet[R], expectedAttempts int, expectedExecutions int, expectedResult R, then ...func()) {
-	testGet(t, given, executor, when, expectedAttempts, expectedExecutions, expectedResult, nil, true, then...)
+func Test[R any](t *testing.T) *Tester[R] {
+	return &Tester[R]{
+		t: t,
+	}
 }
 
-func TestGetSuccessError[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenGet[R], expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
-	testGet(t, given, executor, when, expectedAttempts, expectedExecutions, *(new(R)), expectedError, true, then...)
+func (t *Tester[R]) Setup(fn func()) *Tester[R] {
+	t.given = func() context.Context {
+		fn()
+		return nil
+	}
+	return t
 }
 
-func TestGetFailure[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenGet[R], expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
-	testGet(t, given, executor, when, expectedAttempts, expectedExecutions, *(new(R)), expectedError, false, then...)
+func (t *Tester[R]) Context(fn func() context.Context) *Tester[R] {
+	t.given = fn
+	return t
 }
 
-func testRun[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenRun[R], expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
-	defaultR := *(new(R))
-	executorFn, assertResult := PrepareTest(t, given, executor, expectedAttempts, expectedExecutions, defaultR, &expectedError, expectedError == nil, then...)
+func (t *Tester[R]) Reset(stats ...Resetable) *Tester[R] {
+	t.given = func() context.Context {
+		for _, s := range stats {
+			s.Reset()
+		}
+		return nil
+	}
+	return t
+}
+
+func (t *Tester[R]) With(policies ...failsafe.Policy[R]) *Tester[R] {
+	t.executor = failsafe.NewExecutor[R](policies...)
+	return t
+}
+
+func (t *Tester[R]) WithExecutor(executor failsafe.Executor[R]) *Tester[R] {
+	t.executor = executor
+	return t
+}
+
+func (t *Tester[R]) Run(when WhenRun[R]) *Tester[R] {
+	t.run = when
+	return t
+}
+
+func (t *Tester[R]) Get(when WhenGet[R]) *Tester[R] {
+	t.get = when
+	return t
+}
+
+func (t *Tester[R]) AssertSuccess(expectedAttempts int, expectedExecutions int, expectedResult R, then ...func()) {
+	t.expectedSuccess = true
+	t.expectedAttempts = expectedAttempts
+	t.expectedExecutions = expectedExecutions
+	t.expectedResult = expectedResult
+	if len(then) > 0 {
+		t.then = then[0]
+	}
+	t.do()
+}
+
+func (t *Tester[R]) AssertSuccessError(expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
+	t.expectedError = &expectedError
+	t.AssertSuccess(expectedAttempts, expectedExecutions, *(new(R)), then...)
+}
+
+func (t *Tester[R]) AssertFailure(expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
+	t.expectedFailure = true
+	t.expectedAttempts = expectedAttempts
+	t.expectedExecutions = expectedExecutions
+	t.expectedError = &expectedError
+	if len(then) > 0 {
+		t.then = then[0]
+	}
+	t.do()
+}
+
+func (t *Tester[R]) do() {
+	test := func(async bool) {
+		executorFn, assertFn := PrepareTest(t.t, t.given, t.executor, t.expectedAttempts, t.expectedExecutions, t.expectedResult, t.expectedError, t.expectedSuccess, t.expectedFailure, t.then)
+
+		// Execute
+		var result R
+		var err error
+		executor := executorFn()
+		if t.run != nil {
+			if !async {
+				err = executor.RunWithExecutionAsync(t.run).Error()
+			} else {
+				err = executor.RunWithExecution(t.run)
+			}
+		} else {
+			if !async {
+				result, err = executor.GetWithExecution(t.get)
+			} else {
+				result, err = executor.GetWithExecutionAsync(t.get).Get()
+			}
+		}
+
+		assertFn(result, err)
+	}
 
 	// Run sync
 	fmt.Println("Testing sync")
-	assertResult(defaultR, executorFn().RunWithExecution(when))
+	test(false)
 
 	// Run async
 	fmt.Println("\nTesting async")
-	assertResult(executorFn().RunWithExecutionAsync(when).Get())
+	test(true)
 }
 
-func testGet[R any](t *testing.T, given Given, executor failsafe.Executor[R], when WhenGet[R], expectedAttempts int, expectedExecutions int, expectedResult R, expectedError error, expectedSuccess bool, then ...func()) {
-	executorFn, assertResult := PrepareTest(t, given, executor, expectedAttempts, expectedExecutions, expectedResult, &expectedError, expectedSuccess, then...)
+func PrepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R], expectedAttempts int, expectedExecutions int, expectedResult R,
+	expectedError *error, expectedSuccess bool, expectedFailure bool, then func()) (executorFn func() failsafe.Executor[R], assertResult func(R, error)) {
 
-	// Run sync
-	fmt.Println("Testing sync")
-	assertResult(executorFn().GetWithExecution(when))
+	if given != nil {
+		if ctx := given(); ctx != nil {
+			executor = executor.WithContext(ctx)
+		}
+	}
 
-	// Run async
-	fmt.Println("\nTesting async")
-	assertResult(executorFn().GetWithExecutionAsync(when).Get())
-}
-
-func PrepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R], expectedAttempts int, expectedExecutions int, expectedResult R, expectedError *error, expectedSuccess bool, then ...func()) (executorFn func() failsafe.Executor[R], assertResult func(R, error)) {
 	var doneEvent atomic.Pointer[failsafe.ExecutionDoneEvent[R]]
 	var onSuccessCalled atomic.Bool
 	var onFailureCalled atomic.Bool
-	executor = executor.OnDone(func(e failsafe.ExecutionDoneEvent[R]) {
-		doneEvent.Store(&e)
-	}).OnSuccess(func(e failsafe.ExecutionDoneEvent[R]) {
-		onSuccessCalled.Store(true)
-	}).OnFailure(func(e failsafe.ExecutionDoneEvent[R]) {
-		onFailureCalled.Store(true)
-	})
 	executorFn = func() failsafe.Executor[R] {
-		if given != nil {
-			executor = executor.WithContext(given())
-		}
-		return executor
+		return executor.OnDone(func(e failsafe.ExecutionDoneEvent[R]) {
+			doneEvent.Store(&e)
+		}).OnSuccess(func(e failsafe.ExecutionDoneEvent[R]) {
+			onSuccessCalled.Store(true)
+		}).OnFailure(func(e failsafe.ExecutionDoneEvent[R]) {
+			onFailureCalled.Store(true)
+		})
 	}
+
 	assertResult = func(result R, err error) {
-		if len(then) > 0 && then[0] != nil {
-			then[0]()
+		if then != nil {
+			then()
 		}
 		if doneEvent.Load() != nil {
 			if expectedAttempts != -1 {
@@ -90,16 +185,64 @@ func PrepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R]
 				assert.Equal(t, expectedExecutions, doneEvent.Load().Executions(), "expected executions did not match")
 			}
 		}
-
 		assert.Equal(t, expectedResult, result, "expected result did not match")
-		assert.ErrorIs(t, err, *expectedError, "expected error did not match")
+		if expectedError == nil {
+			assert.Nil(t, err, " error should be nil")
+		} else {
+			assert.ErrorIs(t, err, *expectedError, "expected error did not match")
+		}
 		if expectedSuccess {
 			assert.True(t, onSuccessCalled.Load(), "onSuccess should have been called")
 			assert.False(t, onFailureCalled.Load(), "onFailure should not have been called")
-		} else {
+		} else if expectedFailure {
 			assert.False(t, onSuccessCalled.Load(), "onSuccess should not have been called")
 			assert.True(t, onFailureCalled.Load(), "onFailure should have been called")
 		}
 	}
-	return
+
+	return executorFn, assertResult
 }
+
+//
+//func PrepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R], expectedAttempts int, expectedExecutions int, expectedResult R, expectedError *error, expectedSuccess bool, then ...func()) (executorFn func() failsafe.Executor[R], assertResult func(R, error)) {
+//	var doneEvent atomic.Pointer[failsafe.ExecutionDoneEvent[R]]
+//	var onSuccessCalled atomic.Bool
+//	var onFailureCalled atomic.Bool
+//	executor = executor.OnDone(func(e failsafe.ExecutionDoneEvent[R]) {
+//		doneEvent.Store(&e)
+//	}).OnSuccess(func(e failsafe.ExecutionDoneEvent[R]) {
+//		onSuccessCalled.Store(true)
+//	}).OnFailure(func(e failsafe.ExecutionDoneEvent[R]) {
+//		onFailureCalled.Store(true)
+//	})
+//	executorFn = func() failsafe.Executor[R] {
+//		if given != nil {
+//			executor = executor.WithContext(given())
+//		}
+//		return executor
+//	}
+//	assertResult = func(result R, err error) {
+//		if len(then) > 0 && then[0] != nil {
+//			then[0]()
+//		}
+//		if doneEvent.Load() != nil {
+//			if expectedAttempts != -1 {
+//				assert.Equal(t, expectedAttempts, doneEvent.Load().Attempts(), "expected attempts did not match")
+//			}
+//			if expectedExecutions != -1 {
+//				assert.Equal(t, expectedExecutions, doneEvent.Load().Executions(), "expected executions did not match")
+//			}
+//		}
+//
+//		assert.Equal(t, expectedResult, result, "expected result did not match")
+//		assert.ErrorIs(t, err, *expectedError, "expected error did not match")
+//		if expectedSuccess {
+//			assert.True(t, onSuccessCalled.Load(), "onSuccess should have been called")
+//			assert.False(t, onFailureCalled.Load(), "onFailure should not have been called")
+//		} else {
+//			assert.False(t, onSuccessCalled.Load(), "onSuccess should not have been called")
+//			assert.True(t, onFailureCalled.Load(), "onFailure should have been called")
+//		}
+//	}
+//	return
+//}

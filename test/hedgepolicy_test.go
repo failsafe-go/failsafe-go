@@ -18,11 +18,11 @@ func TestShouldNotHedgeWhenDelayNotExceeded(t *testing.T) {
 	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[any](time.Second), stats).Build()
 
 	// When / Then
-	testutil.TestRunSuccess(t, policytesting.SetupFn(stats), failsafe.NewExecutor[any](hp),
-		func(exec failsafe.Execution[any]) error {
-			return nil
-		},
-		1, 1, func() {
+	testutil.Test[any](t).
+		With(hp).
+		Reset(stats).
+		Run(testutil.RunFn(nil)).
+		AssertSuccess(1, 1, nil, func() {
 			assert.Equal(t, 0, stats.Hedges())
 		})
 }
@@ -34,16 +34,18 @@ func TestShouldHedgeWhenDelayExceeded(t *testing.T) {
 	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[bool](10*time.Millisecond).WithMaxHedges(2), stats).Build()
 
 	// When / Then
-	testutil.TestGetSuccess(t, policytesting.SetupFn(stats), failsafe.NewExecutor[bool](hp),
-		func(exec failsafe.Execution[bool]) (bool, error) {
+	testutil.Test[bool](t).
+		With(hp).
+		Reset(stats).
+		Get(func(exec failsafe.Execution[bool]) (bool, error) {
 			if exec.Attempts() == 1 {
 				time.Sleep(100 * time.Millisecond)
 				return true, nil
 			}
 			testutil.WaitAndAssertCanceled(t, time.Second, exec)
 			return false, testutil.ErrInvalidState
-		},
-		3, -1, true, func() {
+		}).
+		AssertSuccess(3, -1, true, func() {
 			assert.Equal(t, 2, stats.Hedges())
 		})
 }
@@ -55,14 +57,16 @@ func TestAllHedgesUsed(t *testing.T) {
 	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[int](10*time.Millisecond).WithMaxHedges(2), stats).Build()
 
 	// When / Then
-	testutil.TestGetSuccess(t, policytesting.SetupFn(stats), failsafe.NewExecutor[int](hp),
-		func(exec failsafe.Execution[int]) (int, error) {
+	testutil.Test[int](t).
+		With(hp).
+		Reset(stats).
+		Get(func(exec failsafe.Execution[int]) (int, error) {
 			attempt := exec.Attempts()
 			assert.Equal(t, attempt > 1, exec.IsHedge())
 			time.Sleep(100 * time.Millisecond)
 			return attempt, nil
-		},
-		3, 1, 1, func() {
+		}).
+		AssertSuccess(3, 1, 1, func() {
 			assert.Equal(t, 2, stats.Hedges())
 		})
 }
@@ -76,11 +80,13 @@ func TestBackupExecutions(t *testing.T) {
 		CancelOnResult(3), stats).Build()
 
 	// When / Then
-	testutil.TestGetSuccess(t, policytesting.SetupFn(stats), failsafe.NewExecutor[int](hp),
-		func(exec failsafe.Execution[int]) (int, error) {
+	testutil.Test[int](t).
+		With(hp).
+		Reset(stats).
+		Get(func(exec failsafe.Execution[int]) (int, error) {
 			return exec.Attempts(), nil
-		},
-		3, -1, 3, func() {
+		}).
+		AssertSuccess(3, -1, 3, func() {
 			assert.Equal(t, 2, stats.Hedges())
 		})
 }
@@ -97,24 +103,28 @@ func TestCancelOnResult(t *testing.T) {
 
 	// When / Then
 	t.Run("first returned result triggers cancellation", func(t *testing.T) {
-		testutil.TestGetSuccess(t, policytesting.SetupFn(stats), failsafe.NewExecutor[any](hp),
-			func(exec failsafe.Execution[any]) (any, error) {
+		testutil.Test[any](t).
+			With(hp).
+			Reset(stats).
+			Get(func(exec failsafe.Execution[any]) (any, error) {
 				attempt := exec.Attempts()
 				if attempt == 3 {
 					return true, nil
 				}
 				testutil.WaitAndAssertCanceled(t, time.Second, exec)
 				return false, nil
-			},
-			3, -1, true, func() {
+			}).
+			AssertSuccess(3, -1, true, func() {
 				assert.Equal(t, 2, stats.Hedges())
 			})
 	})
 
 	// When / Then
 	t.Run("third returned result triggers cancellation", func(t *testing.T) {
-		testutil.TestGetSuccess(t, policytesting.SetupFn(stats), failsafe.NewExecutor[any](hp),
-			func(exec failsafe.Execution[any]) (any, error) {
+		testutil.Test[any](t).
+			With(hp).
+			Reset(stats).
+			Get(func(exec failsafe.Execution[any]) (any, error) {
 				attempts := exec.Attempts()
 				if attempts <= 3 {
 					// First 3 results return before being canceled
@@ -124,8 +134,8 @@ func TestCancelOnResult(t *testing.T) {
 					testutil.WaitAndAssertCanceled(t, 100*time.Millisecond, exec)
 				}
 				return attempts, nil
-			},
-			5, -1, 3, func() {
+			}).
+			AssertSuccess(5, -1, 3, func() {
 				assert.Equal(t, 4, stats.Hedges())
 			})
 	})

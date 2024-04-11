@@ -7,7 +7,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
 	"github.com/failsafe-go/failsafe-go/ratelimiter"
 )
@@ -20,11 +19,10 @@ func TestRateLimiterPermitAcquiredAfterWait(t *testing.T) {
 
 	// When / Then
 	limiter.TryAcquirePermit() // limiter should now be out of permits
-	testutil.TestGetSuccess(t, nil, failsafe.NewExecutor[string](limiter),
-		func(exec failsafe.Execution[string]) (string, error) {
-			return "test", nil
-		},
-		1, 1, "test")
+	testutil.Test[string](t).
+		With(limiter).
+		Get(testutil.GetFn("test", nil)).
+		AssertSuccess(1, 1, "test")
 }
 
 func TestShouldReturnRateLimitExceededError(t *testing.T) {
@@ -33,11 +31,10 @@ func TestShouldReturnRateLimitExceededError(t *testing.T) {
 
 	// When / Then
 	limiter.TryAcquirePermit() // limiter should now be out of permits
-	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[any](limiter),
-		func(execution failsafe.Execution[any]) error {
-			return nil
-		},
-		1, 0, ratelimiter.ErrExceeded)
+	testutil.Test[any](t).
+		With(limiter).
+		Run(testutil.RunFn(nil)).
+		AssertFailure(1, 0, ratelimiter.ErrExceeded)
 }
 
 // Asserts that an exceeded maxWaitTime causes ErrExceeded.
@@ -47,11 +44,10 @@ func TestRateLimiterMaxWaitTimeExceeded(t *testing.T) {
 
 	// When / Then
 	limiter.AcquirePermitsWithMaxWait(nil, 50, time.Minute) // limiter should now be well over its max permits
-	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[any](limiter),
-		func(execution failsafe.Execution[any]) error {
-			return nil
-		},
-		1, 0, ratelimiter.ErrExceeded)
+	testutil.Test[any](t).
+		With(limiter).
+		Run(testutil.RunFn(nil)).
+		AssertFailure(1, 0, ratelimiter.ErrExceeded)
 }
 
 func TestCancelRateLimiting(t *testing.T) {

@@ -26,12 +26,13 @@ func TestCancelWithTimeoutDuringExecution(t *testing.T) {
 	executor := failsafe.NewExecutor[any](to).WithContext(context.Background())
 
 	// When / Then
-	testutil.TestRunFailure(t, nil, executor,
-		func(exec failsafe.Execution[any]) error {
+	testutil.Test[any](t).
+		WithExecutor(executor).
+		Run(func(exec failsafe.Execution[any]) error {
 			testutil.WaitAndAssertCanceled(t, time.Second, exec)
 			return nil
-		},
-		1, 1, timeout.ErrExceeded)
+		}).
+		AssertFailure(1, 1, timeout.ErrExceeded)
 }
 
 // Asserts that an execution is marked as canceled when a provided Context is canceled.
@@ -41,12 +42,14 @@ func TestCancelWithContextDuringExecution(t *testing.T) {
 	setup := testutil.SetupWithContextSleep(100 * time.Millisecond)
 
 	// When / Then
-	testutil.TestRunFailure(t, setup, failsafe.NewExecutor[any](rp),
-		func(exec failsafe.Execution[any]) error {
+	testutil.Test[any](t).
+		With(rp).
+		Context(setup).
+		Run(func(exec failsafe.Execution[any]) error {
 			testutil.WaitAndAssertCanceled(t, time.Second, exec)
 			return nil
-		},
-		1, 1, context.Canceled)
+		}).
+		AssertFailure(1, 1, context.Canceled)
 }
 
 // Asserts that an execution is marked as canceled when a provided Context deadline is exceeded.
@@ -59,12 +62,14 @@ func TestCancelWithContextDeadlineDuringExecution(t *testing.T) {
 	}
 
 	// When / Then
-	testutil.TestRunFailure(t, setup, failsafe.NewExecutor[any](rp),
-		func(exec failsafe.Execution[any]) error {
+	testutil.Test[any](t).
+		With(rp).
+		Context(setup).
+		Run(func(exec failsafe.Execution[any]) error {
 			testutil.WaitAndAssertCanceled(t, time.Second, exec)
 			return nil
-		},
-		1, 1, context.DeadlineExceeded)
+		}).
+		AssertFailure(1, 1, context.DeadlineExceeded)
 }
 
 // Asserts that an execution is marked as canceled when it's canceled via an execution result.
@@ -97,9 +102,11 @@ func TestCancelWithContextDuringPendingRetry(t *testing.T) {
 	setup := testutil.SetupWithContextSleep(50 * time.Millisecond)
 
 	// When / Then
-	testutil.TestGetFailure(t, setup, failsafe.NewExecutor[any](rp),
-		testutil.GetWithExecutionFn[any](nil, testutil.ErrInvalidState),
-		1, 1, context.Canceled)
+	testutil.Test[any](t).
+		With(rp).
+		Context(setup).
+		Get(testutil.GetFn[any](nil, testutil.ErrInvalidState)).
+		AssertFailure(1, 1, context.Canceled)
 }
 
 // Asserts that a cancellation with a fallback returns the expected error.
@@ -109,12 +116,14 @@ func TestCancelWithContextWithFallback(t *testing.T) {
 	setup := testutil.SetupWithContextSleep(50 * time.Millisecond)
 
 	// When / Then
-	testutil.TestGetFailure(t, setup, failsafe.NewExecutor[any](fb),
-		func(execution failsafe.Execution[any]) (any, error) {
+	testutil.Test[any](t).
+		With(fb).
+		Context(setup).
+		Get(func(execution failsafe.Execution[any]) (any, error) {
 			time.Sleep(200 * time.Millisecond)
 			return nil, testutil.ErrInvalidArgument
-		},
-		1, 1, context.Canceled)
+		}).
+		AssertFailure(1, 1, context.Canceled)
 }
 
 // Asserts that waiting on a cancelation works from within a fallback function.
@@ -127,9 +136,11 @@ func TestCancelWithContextDuringFallbackFn(t *testing.T) {
 	setup := testutil.SetupWithContextSleep(100 * time.Millisecond)
 
 	// When / Then
-	testutil.TestGetFailure(t, setup, failsafe.NewExecutor[any](fb),
-		testutil.GetWithExecutionFn[any](nil, testutil.ErrInvalidState),
-		1, 1, context.Canceled)
+	testutil.Test[any](t).
+		With(fb).
+		Context(setup).
+		Get(testutil.GetFn[any](nil, testutil.ErrInvalidState)).
+		AssertFailure(1, 1, context.Canceled)
 }
 
 // Asserts that when a RateLimiter is blocked on a delay, canceling the context results in a Canceled error being returned.
@@ -140,9 +151,11 @@ func TestCancelWithContextDuringRateLimiterDelay(t *testing.T) {
 	rl.TryAcquirePermit() // All permits used
 
 	// When / Then
-	testutil.TestGetFailure(t, setup, failsafe.NewExecutor[any](rl),
-		testutil.GetWithExecutionFn[any](nil, nil),
-		1, 0, context.Canceled)
+	testutil.Test[any](t).
+		With(rl).
+		Context(setup).
+		Get(testutil.GetFn[any](nil, testutil.ErrInvalidState)).
+		AssertFailure(1, 0, context.Canceled)
 }
 
 // Asserts that when a RateLimiter is blocked on a delay, canceling with a timeout results in the rate limiter being unblocked.
@@ -153,9 +166,10 @@ func TestCancelWithTimeoutDuringRateLimiterDelay(t *testing.T) {
 	rl.TryAcquirePermit() // All permits used
 
 	// When / Then
-	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[any](to, rl),
-		testutil.GetWithExecutionFn[any](nil, nil),
-		1, 0, timeout.ErrExceeded)
+	testutil.Test[any](t).
+		With(to, rl).
+		Get(testutil.GetFn[any](nil, nil)).
+		AssertFailure(1, 0, timeout.ErrExceeded)
 }
 
 func TestCancelWithContextDuringBulkheadDelay(t *testing.T) {
@@ -166,9 +180,11 @@ func TestCancelWithContextDuringBulkheadDelay(t *testing.T) {
 	bh.TryAcquirePermit() // bulkhead should be full
 
 	// When / Then
-	testutil.TestGetFailure(t, setup, failsafe.NewExecutor[any](bh),
-		testutil.GetWithExecutionFn[any](nil, nil),
-		1, 0, context.Canceled)
+	testutil.Test[any](t).
+		With(bh).
+		Context(setup).
+		Get(testutil.GetFn[any](nil, nil)).
+		AssertFailure(1, 0, context.Canceled)
 }
 
 func TestCancelWithTimeoutDuringBulkheadDelay(t *testing.T) {
@@ -179,9 +195,10 @@ func TestCancelWithTimeoutDuringBulkheadDelay(t *testing.T) {
 	bh.TryAcquirePermit() // bulkhead should be full
 
 	// When / Then
-	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[any](to, bh),
-		testutil.GetWithExecutionFn[any](nil, nil),
-		1, 0, timeout.ErrExceeded)
+	testutil.Test[any](t).
+		With(to, bh).
+		Get(testutil.GetFn[any](nil, nil)).
+		AssertFailure(1, 0, timeout.ErrExceeded)
 }
 
 // Tests canceling an execution that is blocked, before hedges have started.
@@ -189,19 +206,18 @@ func TestCancelWithContextBeforeHedge(t *testing.T) {
 	// Given
 	stats := &policytesting.Stats{}
 	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[any](time.Second).WithMaxHedges(2), stats).Build()
-	setupInner := testutil.SetupWithContextSleep(100 * time.Millisecond)
-	setup := func() context.Context {
-		stats.Reset()
-		return setupInner()
-	}
+	setup := testutil.SetupWithContextSleep(100 * time.Millisecond)
 
 	// When / Then
-	testutil.TestRunFailure(t, setup, failsafe.NewExecutor[any](hp),
-		func(exec failsafe.Execution[any]) error {
+	testutil.Test[any](t).
+		With(hp).
+		Reset(stats).
+		Context(setup).
+		Run(func(exec failsafe.Execution[any]) error {
 			testutil.WaitAndAssertCanceled(t, time.Second, exec)
 			return nil
-		},
-		1, 1, context.Canceled, func() {
+		}).
+		AssertFailure(1, 1, context.Canceled, func() {
 			assert.Equal(t, 0, stats.Hedges())
 		})
 }
@@ -214,13 +230,15 @@ func TestCancelWithContextDuringHedge(t *testing.T) {
 	waiter := testutil.NewWaiter()
 
 	// When / Then
-	testutil.TestRunFailure(t, setup, failsafe.NewExecutor[any](hp),
-		func(exec failsafe.Execution[any]) error {
+	testutil.Test[any](t).
+		With(hp).
+		Context(setup).
+		Run(func(exec failsafe.Execution[any]) error {
 			testutil.WaitAndAssertCanceled(t, time.Second, exec)
 			waiter.Resume()
 			return nil
-		},
-		3, -1, context.Canceled, func() {
+		}).
+		AssertFailure(3, -1, context.Canceled, func() {
 			waiter.AwaitWithTimeout(3, time.Second)
 		})
 }
@@ -232,13 +250,14 @@ func TestCancelWithTimeoutDuringHedge(t *testing.T) {
 	waiter := testutil.NewWaiter()
 
 	// When / Then
-	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[any](to, hp),
-		func(exec failsafe.Execution[any]) error {
+	testutil.Test[any](t).
+		With(to, hp).
+		Run(func(exec failsafe.Execution[any]) error {
 			testutil.WaitAndAssertCanceled(t, time.Second, exec)
 			waiter.Resume()
 			return nil
-		},
-		3, -1, timeout.ErrExceeded, func() {
+		}).
+		AssertFailure(3, -1, timeout.ErrExceeded, func() {
 			waiter.AwaitWithTimeout(3, 3*time.Second)
 		})
 }
@@ -250,11 +269,12 @@ func TestCloseCanceledChannelBeforeAccessingIt(t *testing.T) {
 	to := timeout.With[any](10 * time.Millisecond)
 
 	// When / Then
-	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[any](to),
-		func(e failsafe.Execution[any]) error {
+	testutil.Test[any](t).
+		With(to).
+		Run(func(e failsafe.Execution[any]) error {
 			time.Sleep(100 * time.Millisecond)
 			<-e.Canceled()
 			return nil
-		},
-		1, 1, timeout.ErrExceeded)
+		}).
+		AssertFailure(1, 1, timeout.ErrExceeded)
 }

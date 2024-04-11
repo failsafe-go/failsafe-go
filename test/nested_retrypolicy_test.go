@@ -1,7 +1,6 @@
 package test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,16 +24,18 @@ func TestNestedRetryPoliciesWhereInnerIsExceeded(t *testing.T) {
 	outerRetryPolicy := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[bool]().WithMaxRetries(10), outerRetryStats).Build()
 	innerRetryPolicy := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[bool]().WithMaxRetries(1), innerRetryStats).Build()
 	fn, reset := testutil.ErrorNTimesThenReturn[bool](testutil.ErrConnecting, 5, true)
-	setup := func() context.Context {
+	setup := func() {
 		reset()
 		outerRetryStats.Reset()
 		innerRetryStats.Reset()
-		return nil
 	}
 
 	// When / Then
-	testutil.TestGetSuccess(t, setup, failsafe.NewExecutor[bool](outerRetryPolicy, innerRetryPolicy), fn,
-		6, 6, true, func() {
+	testutil.Test[bool](t).
+		With(outerRetryPolicy, innerRetryPolicy).
+		Setup(setup).
+		Get(fn).
+		AssertSuccess(6, 6, true, func() {
 			assert.Equal(t, 5, outerRetryStats.Executions())
 			assert.Equal(t, 4, outerRetryStats.Failures())
 			assert.Equal(t, 1, outerRetryStats.Successes())
@@ -52,11 +53,10 @@ Asserts that attempt counts are as expected when using nested retry policies.
 func TestRetryPolicyRetryPolicyAttempts(t *testing.T) {
 	rp1 := policytesting.WithRetryLogs(retrypolicy.Builder[any]()).Build()
 	rp2 := policytesting.WithRetryLogs(retrypolicy.Builder[any]()).Build()
-	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[any](rp2, rp1),
-		func(execution failsafe.Execution[any]) (any, error) {
-			return nil, testutil.ErrInvalidArgument
-		},
-		5, 5, testutil.ErrInvalidArgument)
+	testutil.Test[any](t).
+		With(rp2, rp1).
+		Get(testutil.GetFn[any](nil, testutil.ErrInvalidArgument)).
+		AssertFailure(5, 5, testutil.ErrInvalidArgument)
 }
 
 /*
@@ -75,15 +75,17 @@ func TestFallbackRetryPolicyRetryPolicy(t *testing.T) {
 		}
 		return false, testutil.ErrInvalidArgument
 	}
-	setup := func() context.Context {
+	setup := func() {
 		retryPolicy1Stats.Reset()
 		retryPolicy2Stats.Reset()
-		return nil
 	}
 
 	// When / Then
-	testutil.TestGetSuccess(t, setup, failsafe.NewExecutor[any](fb, retryPolicy2, retryPolicy1), fn,
-		5, 5, true, func() {
+	testutil.Test[any](t).
+		With(fb, retryPolicy2, retryPolicy1).
+		Setup(setup).
+		Get(fn).
+		AssertSuccess(5, 5, true, func() {
 			// Expected RetryPolicy failure sequence:
 			//    rp1 ErrInvalidState - failure, retry
 			//    rp1 ErrInvalidArgument - success
@@ -102,8 +104,11 @@ func TestFallbackRetryPolicyRetryPolicy(t *testing.T) {
 		})
 
 	// When / Then
-	testutil.TestGetSuccess(t, setup, failsafe.NewExecutor[any](fb, retryPolicy1, retryPolicy2), fn,
-		5, 5, true, func() {
+	testutil.Test[any](t).
+		With(fb, retryPolicy1, retryPolicy2).
+		Setup(setup).
+		Get(fn).
+		AssertSuccess(5, 5, true, func() {
 			// Expected RetryPolicy failure sequence:
 			//    rp2 ErrInvalidState - success
 			//    rp1 ErrInvalidState - failure, retry

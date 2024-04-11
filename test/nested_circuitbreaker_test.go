@@ -1,7 +1,6 @@
 package test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,12 +16,12 @@ func TestNestedCircuitBreakers(t *testing.T) {
 	innerCb := circuitbreaker.Builder[any]().HandleErrors(testutil.ErrInvalidArgument).Build()
 	outerCb := circuitbreaker.Builder[any]().HandleErrors(testutil.ErrInvalidState).Build()
 
-	failsafe.Run(testutil.RunFn(testutil.ErrInvalidArgument), innerCb, outerCb)
+	failsafe.RunWithExecution(testutil.RunFn(testutil.ErrInvalidArgument), innerCb, outerCb)
 	assert.True(t, innerCb.IsOpen())
 	assert.True(t, outerCb.IsClosed())
 
 	innerCb.Close()
-	failsafe.Run(testutil.RunFn(testutil.ErrInvalidArgument), innerCb, outerCb)
+	failsafe.RunWithExecution(testutil.RunFn(testutil.ErrInvalidArgument), innerCb, outerCb)
 	assert.True(t, innerCb.IsOpen())
 	assert.True(t, outerCb.IsClosed())
 }
@@ -32,27 +31,26 @@ func TestCircuitBreakerCircuitBreaker(t *testing.T) {
 	// Given
 	cb1 := circuitbreaker.Builder[any]().HandleErrors(testutil.ErrInvalidState).Build()
 	cb2 := circuitbreaker.Builder[any]().HandleErrors(testutil.ErrInvalidArgument).Build()
-	setup := func() context.Context {
+	setup := func() {
 		policytesting.ResetCircuitBreaker(cb1)
 		policytesting.ResetCircuitBreaker(cb2)
-		return nil
 	}
 
-	testutil.TestRunFailure[any](t, setup, failsafe.NewExecutor[any](cb2, cb1),
-		func(execution failsafe.Execution[any]) error {
-			return testutil.ErrInvalidState
-		},
-		1, 1, testutil.ErrInvalidState)
+	testutil.Test[any](t).
+		With(cb2, cb1).
+		Setup(setup).
+		Run(testutil.RunFn(testutil.ErrInvalidState)).
+		AssertFailure(1, 1, testutil.ErrInvalidState)
 	assert.Equal(t, uint(1), cb1.Metrics().Failures())
 	assert.Equal(t, uint(0), cb2.Metrics().Failures())
 	assert.True(t, cb1.IsOpen())
 	assert.True(t, cb2.IsClosed())
 
-	testutil.TestRunFailure[any](t, setup, failsafe.NewExecutor[any](cb2, cb1),
-		func(execution failsafe.Execution[any]) error {
-			return testutil.ErrInvalidArgument
-		},
-		1, 1, testutil.ErrInvalidArgument)
+	testutil.Test[any](t).
+		With(cb2, cb1).
+		Setup(setup).
+		Run(testutil.RunFn(testutil.ErrInvalidArgument)).
+		AssertFailure(1, 1, testutil.ErrInvalidArgument)
 	assert.Equal(t, uint(0), cb1.Metrics().Failures())
 	assert.Equal(t, uint(1), cb2.Metrics().Failures())
 	assert.True(t, cb1.IsClosed())

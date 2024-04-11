@@ -1,7 +1,6 @@
 package test
 
 import (
-	"context"
 	"errors"
 	"testing"
 	"time"
@@ -20,11 +19,10 @@ func TestShouldRetryOnFailure(t *testing.T) {
 	rp := retrypolicy.WithDefaults[bool]()
 
 	// When / Then
-	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[bool](rp),
-		func(exec failsafe.Execution[bool]) (bool, error) {
-			return false, testutil.ErrConnecting
-		},
-		3, 3, testutil.ErrConnecting)
+	testutil.Test[bool](t).
+		With(rp).
+		Get(testutil.GetFn(false, testutil.ErrConnecting)).
+		AssertFailure(3, 3, testutil.ErrConnecting)
 }
 
 func TestShouldReturnRetriesExceededError(t *testing.T) {
@@ -33,11 +31,11 @@ func TestShouldReturnRetriesExceededError(t *testing.T) {
 	rp := policytesting.WithRetryStats(retrypolicy.Builder[bool](), stats).Build()
 
 	// When / Then
-	testutil.TestGetFailure(t, policytesting.SetupFn(stats), failsafe.NewExecutor[bool](rp),
-		func(exec failsafe.Execution[bool]) (bool, error) {
-			return false, testutil.ErrConnecting
-		},
-		3, 3, &retrypolicy.ExceededError{}, func() {
+	testutil.Test[bool](t).
+		With(rp).
+		Reset(stats).
+		Get(testutil.GetFn(false, testutil.ErrConnecting)).
+		AssertFailure(3, 3, &retrypolicy.ExceededError{}, func() {
 			assert.Equal(t, 2, stats.Retries())
 			assert.Equal(t, 1, stats.RetriesExceeded())
 		})
@@ -75,11 +73,10 @@ func TestShouldNotRetryOnSuccess(t *testing.T) {
 	rp := retrypolicy.WithDefaults[bool]()
 
 	// When / Then
-	testutil.TestGetSuccess(t, nil, failsafe.NewExecutor[bool](rp),
-		func(exec failsafe.Execution[bool]) (bool, error) {
-			return false, nil
-		},
-		1, 1, false)
+	testutil.Test[bool](t).
+		With(rp).
+		Get(testutil.GetFn(false, nil)).
+		AssertSuccess(1, 1, false)
 }
 
 // Asserts that a non-handled error does not trigger retries.
@@ -91,14 +88,15 @@ func TestShouldNotRetryOnNonRetriableFailure(t *testing.T) {
 		Build()
 
 	// When / Then
-	testutil.TestGetSuccess(t, nil, failsafe.NewExecutor[int](rp),
-		func(exec failsafe.Execution[int]) (int, error) {
+	testutil.Test[int](t).
+		With(rp).
+		Get(func(exec failsafe.Execution[int]) (int, error) {
 			if exec.Attempts() <= 2 {
 				return 500, nil
 			}
 			return 0, nil
-		},
-		3, 3, 0)
+		}).
+		AssertSuccess(3, 3, 0)
 }
 
 // Asserts that an execution is failed when the max duration is exceeded.
@@ -111,14 +109,15 @@ func TestShouldFailWhenMaxDurationExceeded(t *testing.T) {
 		Build()
 
 	// When / Then
-	testutil.TestGetFailure(t, nil, failsafe.NewExecutor[bool](rp),
-		func(exec failsafe.Execution[bool]) (bool, error) {
+	testutil.Test[bool](t).
+		With(rp).
+		Get(func(exec failsafe.Execution[bool]) (bool, error) {
 			if exec.Attempts() == 2 {
 				time.Sleep(120 * time.Millisecond)
 			}
 			return false, errors.New("test")
-		},
-		2, 2, &retrypolicy.ExceededError{})
+		}).
+		AssertFailure(2, 2, &retrypolicy.ExceededError{})
 }
 
 // Asserts that the last failure is returned
@@ -131,11 +130,10 @@ func TestShouldReturnLastFailure(t *testing.T) {
 	err := errors.New("test")
 
 	// When / Then
-	testutil.TestRunFailure(t, nil, failsafe.NewExecutor[any](rp),
-		func(exec failsafe.Execution[any]) error {
-			return err
-		},
-		4, 4, err)
+	testutil.Test[any](t).
+		With(rp).
+		Run(testutil.RunFn(err)).
+		AssertFailure(4, 4, err)
 }
 
 // Asserts that a RetryPolicy configured with unlimited attempts, behaves as expected.
@@ -143,15 +141,13 @@ func TestUnlimitedAttempts(t *testing.T) {
 	// Given
 	rp := retrypolicy.Builder[bool]().WithMaxAttempts(-1).Build()
 	stub, reset := testutil.ErrorNTimesThenReturn(testutil.ErrInvalidState, 5, true)
-	setup := func() context.Context {
-		reset()
-		return nil
-	}
 
 	// When / Then
-	testutil.TestGetSuccess[bool](t, setup, failsafe.NewExecutor[bool](rp),
-		stub,
-		6, 6, true)
+	testutil.Test[bool](t).
+		With(rp).
+		Setup(reset).
+		Get(stub).
+		AssertSuccess(6, 6, true)
 }
 
 // Asserts that backoff delays are as expected.

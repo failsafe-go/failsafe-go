@@ -185,10 +185,14 @@ func testRequestFailureError(t *testing.T, url string, executor failsafe.Executo
 	testRequest(t, url, executor, expectedAttempts, expectedExecutions, -1, nil, expectedError, false, then...)
 }
 
-func testRequest(t *testing.T, path string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult any, expectedError error, expectedSuccess bool, then ...func()) {
+func testRequest(t *testing.T, path string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult any, expectedError error, expectedSuccess bool, thens ...func()) {
+	var then func()
+	if len(thens) > 0 {
+		then = thens[0]
+	}
 	var expectedErrPtr *error
 	expectedErrPtr = &expectedError
-	executorFn, assertResult := testutil.PrepareTest(t, nil, executor, expectedAttempts, expectedExecutions, nil, expectedErrPtr, expectedSuccess, then...)
+	executorFn, assertResult := testutil.PrepareTest(t, nil, executor, expectedAttempts, expectedExecutions, nil, expectedErrPtr, expectedSuccess, !expectedSuccess, then)
 
 	// Execute request
 	req, _ := http.NewRequest(http.MethodGet, path, nil)

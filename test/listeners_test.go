@@ -311,19 +311,19 @@ func TestRetryPolicyOnScheduledRetry(t *testing.T) {
 
 func TestListenersForRateLimiter(t *testing.T) {
 	// Given - Fail 4 times then succeed
-	rlBuilder := ratelimiter.SmoothBuilderWithMaxRate[bool](100 * time.Millisecond)
+	rlBuilder := ratelimiter.SmoothBuilderWithMaxRate[any](100 * time.Millisecond)
 	stats := &listenerStats{}
 	registerRlListeners(stats, rlBuilder)
-	executor := failsafe.NewExecutor[bool](rlBuilder.Build())
+	executor := failsafe.NewExecutor[any](rlBuilder.Build())
 	registerExecutorListeners(stats, executor)
 
 	// When
-	executor.Run(testutil.RunFn(nil)) // Success
-	executor.Run(testutil.RunFn(nil)) // Failure
+	executor.RunWithExecution(testutil.RunFn(nil)) // Success
+	executor.RunWithExecution(testutil.RunFn(nil)) // Failure
 	time.Sleep(110 * time.Millisecond)
-	executor.Run(testutil.RunFn(nil)) // Success
-	executor.Run(testutil.RunFn(nil)) // Failure
-	executor.Run(testutil.RunFn(nil)) // Failure
+	executor.RunWithExecution(testutil.RunFn(nil)) // Success
+	executor.RunWithExecution(testutil.RunFn(nil)) // Failure
+	executor.RunWithExecution(testutil.RunFn(nil)) // Failure
 
 	// Then
 	assert.Equal(t, 3, stats.rlExceeded)
