@@ -123,7 +123,7 @@ func Builder[R any]() CircuitBreakerBuilder[R] {
 	return &circuitBreakerConfig[R]{
 		BaseFailurePolicy: &policy.BaseFailurePolicy[R]{},
 		BaseDelayablePolicy: &policy.BaseDelayablePolicy[R]{
-			Delay: 1 * time.Minute,
+			Delay: time.Minute,
 		},
 		clock:                       util.NewClock(),
 		failureThreshold:            1,

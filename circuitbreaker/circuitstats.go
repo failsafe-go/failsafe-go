@@ -9,7 +9,8 @@ import (
 	"github.com/failsafe-go/failsafe-go/internal/util"
 )
 
-// stats for a CircuitBreaker.
+// Stats for a CircuitBreaker.
+// Implementations are not concurrency safe and must be guarded externally.
 type circuitStats interface {
 	getExecutionCount() uint
 	getFailureCount() uint
