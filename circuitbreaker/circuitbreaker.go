@@ -283,11 +283,19 @@ func (cb *circuitBreaker[R]) transitionTo(newState State, exec failsafe.Executio
 		case ClosedState:
 			cb.state = newClosedState(cb)
 		case OpenState:
-			delay := cb.config.ComputeDelay(exec)
-			if delay == -1 {
-				delay = cb.config.Delay
+			var frequency uint
+			if cb.config.percentageAllowedExecutions > 0 {
+				frequency = 100 / cb.config.percentageAllowedExecutions
 			}
-			cb.state = newOpenState(cb, cb.state, delay)
+			if frequency > 0 {
+				cb.state = newPartiallyOpenState(cb, cb.state, frequency)
+			} else {
+				delay := cb.config.ComputeDelay(exec)
+				if delay == -1 {
+					delay = cb.config.Delay
+				}
+				cb.state = newOpenState(cb, cb.state, delay)
+			}
 		case HalfOpenState:
 			cb.state = newHalfOpenState(cb)
 		}
