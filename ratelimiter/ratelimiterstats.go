@@ -130,8 +130,5 @@ func (s *burstyRateLimiterStats[R]) reset() {
 
 // exceedsMaxWaitTime returns whether the waitTime would exceed the maxWaitTime, else false if maxWaitTime is -1.
 func exceedsMaxWaitTime(waitTime time.Duration, maxWaitTime time.Duration) bool {
-	if maxWaitTime != -1 && waitTime > maxWaitTime {
-		return true
-	}
-	return false
+	return maxWaitTime != -1 && waitTime > maxWaitTime
 }
