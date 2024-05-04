@@ -69,8 +69,7 @@ RetryPolicyBuilder builds RetryPolicy instances.
     trigger policy handling.
   - The AbortOn, AbortWhen and AbortIf methods describe when retries should be aborted.
 
-This class extends failsafe.ListenablePolicyBuilder, failsafe.FailurePolicyBuilder and failsafe.DelayablePolicyBuilder
-which offer additional configuration.
+This class extends failsafe.FailurePolicyBuilder and failsafe.DelayablePolicyBuilder which offer additional configuration.
 
 This type is not concurrency safe.
 */
