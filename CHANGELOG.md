@@ -1,5 +1,11 @@
 ## Upcoming Release
 
+## 0.6.3
+
+### Improvements
+
+- Optimized memory usage in time based circuit breakers.
+
 ## 0.6.2
 
 ### Improvements
