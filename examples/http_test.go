@@ -99,7 +99,7 @@ func TestHttpWithCircuitBreaker(t *testing.T) {
 		HandleIf(func(response *http.Response, err error) bool {
 			return response.StatusCode == 429
 		}).
-		WithDelayFunc(failsafehttp.DelayFunc()).
+		WithDelayFunc(failsafehttp.DelayFunc).
 		OnStateChanged(func(event circuitbreaker.StateChangedEvent) {
 			fmt.Println("circuit breaker state changed", event)
 		}).

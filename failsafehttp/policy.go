@@ -58,22 +58,19 @@ func RetryPolicyBuilder() retrypolicy.RetryPolicyBuilder[*http.Response] {
 
 	return retrypolicy.Builder[*http.Response]().
 		HandleIf(retryHandleFunc).
-		WithDelayFunc(DelayFunc())
+		WithDelayFunc(DelayFunc)
 }
 
-// DelayFunc returns a failsafe.DelayFunc that delays according to an http.Response Retry-After header. This can be used
-// as a delay in a RetryPolicy or a CircuitBreaker.
-func DelayFunc() failsafe.DelayFunc[*http.Response] {
-	return func(exec failsafe.ExecutionAttempt[*http.Response]) time.Duration {
-		resp := exec.LastResult()
-		if resp != nil && (resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable) {
-			if header, ok := resp.Header["Retry-After"]; ok {
-				if seconds, err := strconv.Atoi(header[0]); err == nil {
-					return time.Second * time.Duration(seconds)
-				}
+// DelayFunc delays according to an http.Response Retry-After header. This can be used as a delay in a RetryPolicy or a CircuitBreaker.
+func DelayFunc(exec failsafe.ExecutionAttempt[*http.Response]) time.Duration {
+	resp := exec.LastResult()
+	if resp != nil && (resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable) {
+		if header, ok := resp.Header["Retry-After"]; ok {
+			if seconds, err := strconv.Atoi(header[0]); err == nil {
+				return time.Second * time.Duration(seconds)
 			}
 		}
-
-		return -1
 	}
+
+	return -1
 }
