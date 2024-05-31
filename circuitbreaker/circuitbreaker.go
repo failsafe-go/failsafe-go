@@ -294,16 +294,16 @@ func (cb *circuitBreaker[R]) transitionTo(newState State, exec failsafe.Executio
 		transitioned = true
 	}
 
-	if transitioned {
+	if transitioned && (listener != nil || cb.config.stateChangedListener != nil) {
 		event := StateChangedEvent{
 			OldState: currentState,
 			NewState: newState,
 		}
-		if cb.config.stateChangedListener != nil {
-			cb.config.stateChangedListener(event)
-		}
 		if listener != nil {
 			listener(event)
+		}
+		if cb.config.stateChangedListener != nil {
+			cb.config.stateChangedListener(event)
 		}
 	}
 }
