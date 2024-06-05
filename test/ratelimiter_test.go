@@ -42,8 +42,13 @@ func TestRateLimiterMaxWaitTimeExceeded(t *testing.T) {
 	// Given
 	limiter := ratelimiter.SmoothBuilderWithMaxRate[any](10 * time.Millisecond).Build()
 
-	// When / Then
-	assert.NoError(t, limiter.AcquirePermitsWithMaxWait(nil, 50, time.Minute)) // limiter should now be well over its max permits
+	// When
+	go func() {
+		assert.NoError(t, limiter.AcquirePermitsWithMaxWait(nil, 50, time.Minute)) // limiter should now be well over its max permits
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	// Then
 	testutil.Test[any](t).
 		With(limiter).
 		Run(testutil.RunFn(nil)).

@@ -21,9 +21,9 @@ func TestTimeoutRetryPolicyTimeout(t *testing.T) {
 	innerTimeoutStats := &policytesting.Stats{}
 	retryStats := &policytesting.Stats{}
 	outerTimeoutStats := &policytesting.Stats{}
-	innerTimeout := policytesting.WithTimeoutStatsAndLogs[any](timeout.Builder[any](100*time.Millisecond), innerTimeoutStats).Build()
-	retryPolicy := policytesting.WithRetryStatsAndLogs[any](retrypolicy.Builder[any]().WithMaxRetries(10), retryStats).Build()
-	outerTimeout := policytesting.WithTimeoutStatsAndLogs[any](timeout.Builder[any](500*time.Millisecond), outerTimeoutStats).Build()
+	innerTimeout := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](100*time.Millisecond), innerTimeoutStats).Build()
+	retryPolicy := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[any]().WithMaxRetries(10), retryStats).Build()
+	outerTimeout := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](500*time.Millisecond), outerTimeoutStats).Build()
 
 	testutil.Test[any](t).
 		With(outerTimeout, retryPolicy, innerTimeout).
@@ -69,8 +69,8 @@ func TestCancelNestedTimeouts(t *testing.T) {
 	innerTimeoutStats := &policytesting.Stats{}
 	outerTimeoutStats := &policytesting.Stats{}
 	rp := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[any](), retryStats).Build()
-	innerTimeout := policytesting.WithTimeoutStatsAndLogs[any](timeout.Builder[any](time.Second), innerTimeoutStats).Build()
-	outerTimeout := policytesting.WithTimeoutStatsAndLogs[any](timeout.Builder[any](200*time.Millisecond), outerTimeoutStats).Build()
+	innerTimeout := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](time.Second), innerTimeoutStats).Build()
+	outerTimeout := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](200*time.Millisecond), outerTimeoutStats).Build()
 
 	testutil.Test[any](t).
 		With(rp, outerTimeout, innerTimeout).

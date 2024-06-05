@@ -127,9 +127,9 @@ func (t *Tester[R]) do() {
 		executor := executorFn()
 		if t.run != nil {
 			if !async {
-				err = executor.RunWithExecutionAsync(t.run).Error()
-			} else {
 				err = executor.RunWithExecution(t.run)
+			} else {
+				err = executor.RunWithExecutionAsync(t.run).Error()
 			}
 		} else {
 			if !async {

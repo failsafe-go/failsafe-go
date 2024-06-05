@@ -30,16 +30,17 @@ func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.P
 		timer := time.AfterFunc(e.config.timeLimit, func() {
 			timeoutResult := internal.FailureResult[R](ErrExceeded)
 			if result.CompareAndSwap(nil, timeoutResult) {
-				// Sets the timeoutResult, overwriting any previously set result for the execution. This is correct, because while an
-				// execution may have completed, inner policies such as fallbacks may still be processing that result, in which case
-				// it's still important to interrupt them with a timeout.
-				execInternal.Cancel(timeoutResult)
 				if e.config.onTimeoutExceeded != nil {
 					e.config.onTimeoutExceeded(failsafe.ExecutionDoneEvent[R]{
 						ExecutionStats: execInternal,
 						Error:          ErrExceeded,
 					})
 				}
+
+				// Sets the timeoutResult, overwriting any previously set result for the execution. This is correct, because while an
+				// execution may have completed, inner policies such as fallbacks may still be processing that result, in which case
+				// it's still important to interrupt them with a timeout.
+				execInternal.Cancel(timeoutResult)
 			}
 		})
 

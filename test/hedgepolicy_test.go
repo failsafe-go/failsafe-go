@@ -54,7 +54,7 @@ func TestShouldHedgeWhenDelayExceeded(t *testing.T) {
 func TestAllHedgesUsed(t *testing.T) {
 	// Given
 	stats := &policytesting.Stats{}
-	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[int](10*time.Millisecond).WithMaxHedges(2), stats).Build()
+	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[int](20*time.Millisecond).WithMaxHedges(2), stats).Build()
 
 	// When / Then
 	testutil.Test[int](t).
