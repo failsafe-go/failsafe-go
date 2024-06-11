@@ -31,12 +31,25 @@ func TestBulkheadPermitAcquiredAfterWait(t *testing.T) {
 		AssertSuccess(1, 1, "test")
 }
 
+func TestBulkheadNotFull(t *testing.T) {
+	// Given
+	stats := &policytesting.Stats{}
+	bh := policytesting.WithBulkheadStatsAndLogs(bulkhead.Builder[any](2), stats, true).Build()
+
+	// When / Then
+	testutil.Test[any](t).
+		With(bh).
+		Reset(stats).
+		Get(testutil.GetFn[any]("test", nil)).
+		AssertSuccess(1, 1, "test")
+}
+
 func TestBulkheadFull(t *testing.T) {
 	// Given
 	stats := &policytesting.Stats{}
 	bh := policytesting.WithBulkheadStatsAndLogs(bulkhead.Builder[any](2), stats, true).Build()
-	bh.TryAcquirePermit()
-	bh.TryAcquirePermit() // bulkhead should be full
+	assert.True(t, bh.TryAcquirePermit())
+	assert.True(t, bh.TryAcquirePermit()) // bulkhead should be full
 
 	// When / Then
 	testutil.Test[any](t).
@@ -60,4 +73,16 @@ func TestBulkheadMaxWaitTimeExceeded(t *testing.T) {
 		With(bh).
 		Run(testutil.RunFn(nil)).
 		AssertFailure(1, 0, bulkhead.ErrFull)
+}
+
+// Asserts that a short maxWaitTime still allows a permit to be claimed.
+func TestBulkheadWithShortMaxWaitTime(t *testing.T) {
+	// Given
+	bh := bulkhead.Builder[any](1).WithMaxWaitTime(1 * time.Nanosecond).Build()
+
+	// When / Then
+	testutil.Test[any](t).
+		With(bh).
+		Run(testutil.RunFn(nil)).
+		AssertSuccess(1, 1, nil)
 }

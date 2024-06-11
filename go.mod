@@ -5,7 +5,6 @@ go 1.21
 require (
 	github.com/bits-and-blooms/bitset v1.13.0
 	github.com/stretchr/testify v1.9.0
-	golang.org/x/sync v0.7.0
 )
 
 require (
