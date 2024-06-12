@@ -1,5 +1,11 @@
 ## Upcoming Release
 
+## 0.6.4
+
+### Bug Fixes
+
+- Improve bulkhead handling of short max wait times.
+
 ## 0.6.3
 
 ### Improvements
