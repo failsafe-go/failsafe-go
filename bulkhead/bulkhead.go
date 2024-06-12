@@ -122,6 +122,9 @@ func (b *bulkhead[R]) AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime 
 	case b.semaphore <- struct{}{}:
 		return nil
 	default:
+		if maxWaitTime == 0 {
+			return ErrFull
+		}
 	}
 
 	// Second attempt with timer
