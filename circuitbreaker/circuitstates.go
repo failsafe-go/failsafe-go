@@ -103,6 +103,59 @@ func (s *openState[R]) tryAcquirePermit() bool {
 func (s *openState[R]) checkThresholdAndReleasePermit(_ failsafe.Execution[R]) {
 }
 
+type partiallyOpenState[R any] struct {
+	breaker        *circuitBreaker[R]
+	stats          circuitStats
+	executionCount uint
+	frequency      uint
+}
+
+func newPartiallyOpenState[R any](breaker *circuitBreaker[R], previousState circuitState[R], frequency uint) *partiallyOpenState[R] {
+	return &partiallyOpenState[R]{
+		breaker:        breaker,
+		stats:          previousState.getStats(),
+		executionCount: 0,
+		frequency:      frequency,
+	}
+}
+
+func (s *partiallyOpenState[R]) getState() State {
+	return OpenState
+}
+
+func (s *partiallyOpenState[R]) getStats() circuitStats {
+	return s.stats
+}
+
+func (s *partiallyOpenState[R]) getRemainingDelay() time.Duration {
+	return 0
+}
+
+func (s *partiallyOpenState[R]) tryAcquirePermit() bool {
+	s.executionCount++
+	return (s.executionCount-1)%s.frequency == 0
+}
+
+func (s *partiallyOpenState[R]) checkThresholdAndReleasePermit(_ failsafe.Execution[R]) {
+	var successesExceeded bool
+
+	// Failure rate threshold can only be set for time based thresholding
+	failureRateThreshold := s.breaker.config.failureRateThreshold
+	if failureRateThreshold != 0 {
+		// Execution threshold can only be set for time based thresholding
+		executionThresholdExceeded := s.stats.getExecutionCount() >= s.breaker.config.failureExecutionThreshold
+		successesExceeded = executionThresholdExceeded && s.stats.getSuccessRate() > 100-failureRateThreshold
+	} else {
+		failureThresholdingCapacity := s.breaker.config.failureThresholdingCapacity
+		failureThreshold := s.breaker.config.failureThreshold
+		successesExceeded = s.stats.getSuccessCount() > failureThresholdingCapacity-failureThreshold
+	}
+
+	if successesExceeded {
+		s.breaker.close()
+	}
+}
+
 type halfOpenState[R any] struct {
 	breaker             *circuitBreaker[R]
 	stats               circuitStats
