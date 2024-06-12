@@ -1,6 +1,8 @@
 package bulkhead
 
 import (
+	"errors"
+
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/common"
 	"github.com/failsafe-go/failsafe-go/internal"
@@ -18,7 +20,7 @@ var _ policy.Executor[any] = &bulkheadExecutor[any]{}
 func (e *bulkheadExecutor[R]) PreExecute(exec policy.ExecutionInternal[R]) *common.PolicyResult[R] {
 	execInternal := exec.(policy.ExecutionInternal[R])
 	if err := e.AcquirePermitWithMaxWait(execInternal.Context(), e.config.maxWaitTime); err != nil {
-		if e.config.onFull != nil {
+		if errors.Is(err, ErrFull) && e.config.onFull != nil {
 			e.config.onFull(failsafe.ExecutionEvent[R]{
 				ExecutionAttempt: execInternal,
 			})

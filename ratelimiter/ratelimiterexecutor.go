@@ -1,6 +1,8 @@
 package ratelimiter
 
 import (
+	"errors"
+
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/common"
 	"github.com/failsafe-go/failsafe-go/internal"
@@ -19,7 +21,7 @@ func (e *rateLimiterExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *comm
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
 		if err := e.acquirePermitsWithMaxWait(execInternal.Context(), exec, 1, e.config.maxWaitTime); err != nil {
-			if e.config.onRateLimitExceeded != nil {
+			if errors.Is(err, ErrExceeded) && e.config.onRateLimitExceeded != nil {
 				e.config.onRateLimitExceeded(failsafe.ExecutionEvent[R]{
 					ExecutionAttempt: execInternal,
 				})
