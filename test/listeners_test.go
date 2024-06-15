@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -8,8 +9,12 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/bulkhead"
+	"github.com/failsafe-go/failsafe-go/cachepolicy"
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
 	"github.com/failsafe-go/failsafe-go/fallback"
+	"github.com/failsafe-go/failsafe-go/hedgepolicy"
+	"github.com/failsafe-go/failsafe-go/internal/policytesting"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
 	"github.com/failsafe-go/failsafe-go/ratelimiter"
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
@@ -22,11 +27,14 @@ func TestListenersOnSuccess(t *testing.T) {
 	rpBuilder := retrypolicy.Builder[bool]().HandleResult(false).WithMaxAttempts(10)
 	cbBuilder := circuitbreaker.Builder[bool]().HandleResult(false).WithDelay(0)
 	fbBuilder := fallback.BuilderWithResult(false)
+	_, fsCache := policytesting.NewCache[bool]()
+	cpBuilder := cachepolicy.Builder(fsCache).WithKey("foo")
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
 	registerFbListeners(stats, fbBuilder)
-	executor := failsafe.NewExecutor[bool](fbBuilder.Build(), rpBuilder.Build(), cbBuilder.Build())
+	registerCpListeners(stats, cpBuilder)
+	executor := failsafe.NewExecutor[bool](fbBuilder.Build(), cpBuilder.Build(), rpBuilder.Build(), cbBuilder.Build())
 	registerExecutorListeners(stats, executor)
 
 	// When
@@ -50,6 +58,10 @@ func TestListenersOnSuccess(t *testing.T) {
 	assert.Equal(t, 0, stats.fbDone)
 	assert.Equal(t, 1, stats.fbSuccess)
 	assert.Equal(t, 0, stats.fbFailure)
+
+	assert.Equal(t, 1, stats.cpCached)
+	assert.Equal(t, 0, stats.cpHit)
+	assert.Equal(t, 1, stats.cpMiss)
 
 	assert.Equal(t, 1, stats.done)
 	assert.Equal(t, 1, stats.success)
@@ -333,6 +345,78 @@ func TestListenersForRateLimiter(t *testing.T) {
 	assert.Equal(t, 3, stats.failure)
 }
 
+func TestListenersForBulkhead(t *testing.T) {
+	// Given
+	bhBuilder := bulkhead.Builder[any](2)
+	stats := &listenerStats{}
+	registerBhListeners(stats, bhBuilder)
+	bh := bhBuilder.Build()
+	executor := failsafe.NewExecutor[any](bh)
+	registerExecutorListeners(stats, executor)
+	assert.NoError(t, bh.AcquirePermit(context.Background()))
+	assert.NoError(t, bh.AcquirePermit(context.Background()))
+
+	// When
+	assert.Error(t, bulkhead.ErrFull, executor.RunWithExecution(testutil.RunFn(nil)))
+	assert.Error(t, bulkhead.ErrFull, executor.RunWithExecution(testutil.RunFn(nil)))
+	bh.ReleasePermit()
+	bh.ReleasePermit()
+
+	// Then
+	assert.Equal(t, 2, stats.bhFull)
+
+	assert.Equal(t, 2, stats.done)
+	assert.Equal(t, 0, stats.success)
+	assert.Equal(t, 2, stats.failure)
+}
+
+func TestListenersForCache(t *testing.T) {
+	_, fsCache := policytesting.NewCache[any]()
+	cpBuilder := cachepolicy.Builder(fsCache).WithKey("foo")
+	stats := &listenerStats{}
+	registerCpListeners(stats, cpBuilder)
+	executor := failsafe.NewExecutor[any](cpBuilder.Build())
+	registerExecutorListeners(stats, executor)
+
+	// When
+	result, _ := executor.GetWithExecution(testutil.GetFn[any]("success1", nil))
+	assert.Equal(t, "success1", result)
+	result, _ = executor.GetWithExecution(testutil.GetFn[any]("success2", nil))
+	assert.Equal(t, "success1", result)
+
+	// Then
+	assert.Equal(t, 1, stats.cpCached)
+	assert.Equal(t, 1, stats.cpMiss)
+	assert.Equal(t, 1, stats.cpHit)
+
+	assert.Equal(t, 2, stats.done)
+	assert.Equal(t, 2, stats.success)
+	assert.Equal(t, 0, stats.failure)
+}
+
+func TestListenersForHedgePolicy(t *testing.T) {
+	hpBuilder := hedgepolicy.BuilderWithDelay[bool](10 * time.Millisecond).WithMaxHedges(2)
+	stats := &listenerStats{}
+	registerHpListeners(stats, hpBuilder)
+	executor := failsafe.NewExecutor[bool](hpBuilder.Build())
+	registerExecutorListeners(stats, executor)
+
+	// When
+	result, err := executor.GetWithExecution(func(exec failsafe.Execution[bool]) (bool, error) {
+		time.Sleep(100 * time.Millisecond)
+		return true, nil
+	})
+
+	// Then
+	assert.True(t, result)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, stats.hpHedge)
+
+	assert.Equal(t, 1, stats.done)
+	assert.Equal(t, 1, stats.success)
+	assert.Equal(t, 0, stats.failure)
+}
+
 // Asserts which listeners are called when a panic occurs.
 func TestListenersOnPanic(t *testing.T) {
 	// Given - Fail 2 times then panic
@@ -402,6 +486,17 @@ type listenerStats struct {
 	// RateLimiter
 	rlExceeded int
 
+	// Buulkhead
+	bhFull int
+
+	// Hedge
+	hpHedge int
+
+	// Cache
+	cpCached int
+	cpHit    int
+	cpMiss   int
+
 	// Executor
 	done    int
 	success int
@@ -459,6 +554,28 @@ func registerFbListeners[R any](stats *listenerStats, fbBuilder fallback.Fallbac
 func registerRlListeners[R any](stats *listenerStats, rlBuilder ratelimiter.RateLimiterBuilder[R]) {
 	rlBuilder.OnRateLimitExceeded(func(event failsafe.ExecutionEvent[R]) {
 		stats.rlExceeded++
+	})
+}
+
+func registerBhListeners[R any](stats *listenerStats, bhBuilder bulkhead.BulkheadBuilder[R]) {
+	bhBuilder.OnFull(func(event failsafe.ExecutionEvent[R]) {
+		stats.bhFull++
+	})
+}
+
+func registerHpListeners[R any](stats *listenerStats, hpBuilder hedgepolicy.HedgePolicyBuilder[R]) {
+	hpBuilder.OnHedge(func(f failsafe.ExecutionEvent[R]) {
+		stats.hpHedge++
+	})
+}
+
+func registerCpListeners[R any](stats *listenerStats, cpBuilder cachepolicy.CachePolicyBuilder[R]) {
+	cpBuilder.OnResultCached(func(event failsafe.ExecutionEvent[R]) {
+		stats.cpCached++
+	}).OnCacheHit(func(event failsafe.ExecutionDoneEvent[R]) {
+		stats.cpHit++
+	}).OnCacheMiss(func(event failsafe.ExecutionEvent[R]) {
+		stats.cpMiss++
 	})
 }
 

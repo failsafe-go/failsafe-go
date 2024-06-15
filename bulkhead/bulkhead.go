@@ -5,8 +5,6 @@ import (
 	"errors"
 	"time"
 
-	"golang.org/x/sync/semaphore"
-
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/policy"
 )
@@ -77,7 +75,7 @@ func (c *bulkheadConfig[R]) OnFull(listener func(event failsafe.ExecutionEvent[R
 func (c *bulkheadConfig[R]) Build() Bulkhead[R] {
 	return &bulkhead[R]{
 		config:    c, // TODO copy base fields
-		semaphore: semaphore.NewWeighted(int64(c.maxConcurrency)),
+		semaphore: make(chan struct{}, c.maxConcurrency),
 	}
 }
 
@@ -97,38 +95,62 @@ func Builder[R any](maxConcurrency uint) BulkheadBuilder[R] {
 
 type bulkhead[R any] struct {
 	config    *bulkheadConfig[R]
-	semaphore *semaphore.Weighted
+	semaphore chan struct{}
 }
 
 func (b *bulkhead[R]) AcquirePermit(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if err := b.semaphore.Acquire(ctx, 1); err != nil {
-		return ErrFull
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case b.semaphore <- struct{}{}:
+		return nil
 	}
-	return nil
 }
 
 func (b *bulkhead[R]) AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	ctx, cancel := context.WithTimeout(ctx, maxWaitTime)
-	err := b.semaphore.Acquire(ctx, 1)
-	if err != nil && errors.Is(err, context.DeadlineExceeded) {
-		err = ErrFull
+
+	// Initial attempt, in case permit is immediately available or context is done, so we don't race with a timer
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case b.semaphore <- struct{}{}:
+		return nil
+	default:
+		if maxWaitTime == 0 {
+			return ErrFull
+		}
 	}
-	cancel()
-	return err
+
+	// Second attempt with timer
+	timer := time.NewTimer(maxWaitTime)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case b.semaphore <- struct{}{}:
+		return nil
+	case <-timer.C:
+		return ErrFull
+	}
 }
 
 func (b *bulkhead[R]) TryAcquirePermit() bool {
-	return b.semaphore.TryAcquire(1)
+	select {
+	case b.semaphore <- struct{}{}:
+		return true
+	default:
+		return false
+	}
 }
 
 func (b *bulkhead[R]) ReleasePermit() {
-	b.semaphore.Release(1)
+	<-b.semaphore
 }
 
 func (b *bulkhead[R]) ToExecutor(_ R) any {

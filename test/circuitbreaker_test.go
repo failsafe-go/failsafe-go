@@ -134,7 +134,7 @@ func TestRejectedWithRetries(t *testing.T) {
 }
 
 // Tests circuit breaker time based failure thresholding state transitions.
-func TestSthouldSupportTimeBasedFailureThresholding(t *testing.T) {
+func TestShouldSupportTimeBasedFailureThresholding(t *testing.T) {
 	// Given
 	cb := circuitbreaker.Builder[bool]().
 		WithFailureThresholdPeriod(2, 200*time.Millisecond).
