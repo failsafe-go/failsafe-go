@@ -18,7 +18,7 @@ import (
 
 func TestUnaryClientInterceptorSuccess(t *testing.T) {
 	// Given
-	executor := failsafe.NewExecutor[any](
+	executor := failsafe.NewExecutor[*UnaryClientResponse](
 		UnaryCallRetryPolicyBuilder().Build(),
 	)
 	invoker := &testutil.MockInvoker{}
@@ -33,7 +33,7 @@ func TestUnaryClientInterceptorSuccess(t *testing.T) {
 	ctx := context.Background()
 	req := &testutil.MockInvokeRequest{}
 	reply := &testutil.MockInvokeResponse{}
-	testUnary(
+	testUnaryClient(
 		t,
 		executor,
 		ctx,
@@ -43,8 +43,13 @@ func TestUnaryClientInterceptorSuccess(t *testing.T) {
 		UnaryClientInterceptor(executor),
 		1,
 		1,
-		&testutil.MockInvokeResponse{
-			Message: "Success",
+		&UnaryClientResponse{
+			Ctx:    ctx,
+			Req:    req,
+			Method: "method",
+			Reply: &testutil.MockInvokeResponse{
+				Message: "Success",
+			},
 		},
 		nil,
 		true,
@@ -53,8 +58,8 @@ func TestUnaryClientInterceptorSuccess(t *testing.T) {
 
 func TestUnaryClientInterceptorError(t *testing.T) {
 	// Given
-	executor := failsafe.NewExecutor[any](
-		retrypolicy.Builder[any]().ReturnLastFailure().Build(),
+	executor := failsafe.NewExecutor[*UnaryClientResponse](
+		retrypolicy.Builder[*UnaryClientResponse]().ReturnLastFailure().Build(),
 	)
 	invoker := &testutil.MockInvoker{}
 	invoker.Test(t)
@@ -67,7 +72,7 @@ func TestUnaryClientInterceptorError(t *testing.T) {
 	ctx := context.Background()
 	req := &testutil.MockInvokeRequest{}
 	reply := &testutil.MockInvokeResponse{}
-	testUnary(
+	testUnaryClient(
 		t,
 		executor,
 		ctx,
@@ -83,17 +88,17 @@ func TestUnaryClientInterceptorError(t *testing.T) {
 	)
 }
 
-func TestUnaryClientInterceptorWithRetry(t *testing.T) {
+func TestUnaryClientInterceptorWithRetryOnResult(t *testing.T) {
 	// Given
-	executor := failsafe.NewExecutor[any](
-		retrypolicy.Builder[any]().
-			HandleIf(func(reply any, err error) bool {
-				resp, ok := reply.(*testutil.MockInvokeResponse)
+	executor := failsafe.NewExecutor[*UnaryClientResponse](
+		retrypolicy.Builder[*UnaryClientResponse]().
+			HandleIf(func(resp *UnaryClientResponse, err error) bool {
+				mockResp, ok := resp.Reply.(*testutil.MockInvokeResponse)
 				if !ok {
 					return false
 				}
 
-				return resp.Message == "Retry"
+				return mockResp.Message == "Retry"
 			}).
 			ReturnLastFailure().
 			Build(),
@@ -115,7 +120,7 @@ func TestUnaryClientInterceptorWithRetry(t *testing.T) {
 	ctx := context.Background()
 	req := &testutil.MockInvokeRequest{}
 	reply := &testutil.MockInvokeResponse{}
-	testUnary(
+	testUnaryClient(
 		t,
 		executor,
 		ctx,
@@ -125,8 +130,13 @@ func TestUnaryClientInterceptorWithRetry(t *testing.T) {
 		UnaryClientInterceptor(executor),
 		2,
 		2,
-		&testutil.MockInvokeResponse{
-			Message: "Success",
+		&UnaryClientResponse{
+			Ctx:    ctx,
+			Req:    req,
+			Method: "method",
+			Reply: &testutil.MockInvokeResponse{
+				Message: "Success",
+			},
 		},
 		nil,
 		true,
@@ -135,12 +145,18 @@ func TestUnaryClientInterceptorWithRetry(t *testing.T) {
 
 func TestUnaryClientInterceptorWithFallback(t *testing.T) {
 	// Given
-	executor := failsafe.NewExecutor[any](
-		fallback.BuilderWithFunc[any](func(exec failsafe.Execution[any]) (any, error) {
-			return &testutil.MockInvokeResponse{
-				Message: "Fallback",
+	executor := failsafe.NewExecutor[*UnaryClientResponse](
+		fallback.BuilderWithFunc[*UnaryClientResponse](func(exec failsafe.Execution[*UnaryClientResponse]) (*UnaryClientResponse, error) {
+			result := exec.LastResult()
+
+			return &UnaryClientResponse{
+				Ctx: result.Ctx,
+				Req: result.Req,
+				Reply: &testutil.MockInvokeResponse{
+					Message: "Fallback",
+				},
 			}, nil
-		}).HandleIf(func(reply any, err error) bool {
+		}).HandleIf(func(resp *UnaryClientResponse, err error) bool {
 			s, ok := status.FromError(err)
 			if !ok {
 				return false
@@ -148,7 +164,7 @@ func TestUnaryClientInterceptorWithFallback(t *testing.T) {
 
 			return s.Code() == codes.Unknown
 		}).Build(),
-		retrypolicy.Builder[any]().
+		retrypolicy.Builder[*UnaryClientResponse]().
 			ReturnLastFailure().
 			Build(),
 	)
@@ -163,7 +179,7 @@ func TestUnaryClientInterceptorWithFallback(t *testing.T) {
 	ctx := context.Background()
 	req := &testutil.MockInvokeRequest{}
 	reply := &testutil.MockInvokeResponse{}
-	testUnary(
+	testUnaryClient(
 		t,
 		executor,
 		ctx,
@@ -173,8 +189,13 @@ func TestUnaryClientInterceptorWithFallback(t *testing.T) {
 		UnaryClientInterceptor(executor),
 		3,
 		3,
-		&testutil.MockInvokeResponse{
-			Message: "Fallback",
+		&UnaryClientResponse{
+			Ctx:    ctx,
+			Req:    req,
+			Method: "method",
+			Reply: &testutil.MockInvokeResponse{
+				Message: "Fallback",
+			},
 		},
 		nil,
 		true,
@@ -183,8 +204,8 @@ func TestUnaryClientInterceptorWithFallback(t *testing.T) {
 
 func TestUnaryClientInterceptorWithCircuitBreaker(t *testing.T) {
 	// Given
-	cb := circuitbreaker.WithDefaults[any]()
-	executor := failsafe.NewExecutor[any](
+	cb := circuitbreaker.WithDefaults[*UnaryClientResponse]()
+	executor := failsafe.NewExecutor[*UnaryClientResponse](
 		cb,
 	)
 	cb.Open()
@@ -195,7 +216,7 @@ func TestUnaryClientInterceptorWithCircuitBreaker(t *testing.T) {
 	ctx := context.Background()
 	req := &testutil.MockInvokeRequest{}
 	reply := &testutil.MockInvokeResponse{}
-	testUnary(
+	testUnaryClient(
 		t,
 		executor,
 		ctx,
@@ -213,8 +234,8 @@ func TestUnaryClientInterceptorWithCircuitBreaker(t *testing.T) {
 
 func TestUnaryClientInterceptorWithContextTimeout(t *testing.T) {
 	// Given
-	executor := failsafe.NewExecutor[any](
-		retrypolicy.Builder[any]().ReturnLastFailure().Build(),
+	executor := failsafe.NewExecutor[*UnaryClientResponse](
+		retrypolicy.Builder[*UnaryClientResponse]().ReturnLastFailure().Build(),
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
@@ -230,7 +251,7 @@ func TestUnaryClientInterceptorWithContextTimeout(t *testing.T) {
 	// When / Then
 	req := &testutil.MockInvokeRequest{}
 	reply := &testutil.MockInvokeResponse{}
-	testUnary(
+	testUnaryClient(
 		t,
 		executor,
 		ctx,
@@ -248,8 +269,8 @@ func TestUnaryClientInterceptorWithContextTimeout(t *testing.T) {
 
 func TestUnaryClientInterceptorWithTimeout(t *testing.T) {
 	// Given
-	executor := failsafe.NewExecutor[any](
-		timeout.With[any](50 * time.Millisecond),
+	executor := failsafe.NewExecutor[*UnaryClientResponse](
+		timeout.With[*UnaryClientResponse](50 * time.Millisecond),
 	)
 	invoker := &testutil.MockInvoker{
 		Sleep: 100 * time.Millisecond,
@@ -264,7 +285,7 @@ func TestUnaryClientInterceptorWithTimeout(t *testing.T) {
 	ctx := context.Background()
 	req := &testutil.MockInvokeRequest{}
 	reply := &testutil.MockInvokeResponse{}
-	testUnary(
+	testUnaryClient(
 		t,
 		executor,
 		ctx,
@@ -274,7 +295,14 @@ func TestUnaryClientInterceptorWithTimeout(t *testing.T) {
 		UnaryClientInterceptor(executor),
 		1,
 		1,
-		nil,
+		&UnaryClientResponse{
+			Ctx:    ctx,
+			Req:    req,
+			Method: "method",
+			Reply: &testutil.MockInvokeResponse{
+				Message: "Success",
+			},
+		},
 		timeout.ErrExceeded,
 		false,
 	)
@@ -283,7 +311,7 @@ func TestUnaryClientInterceptorWithTimeout(t *testing.T) {
 
 func TestUnaryCallRetryPolicyWithRetryableError(t *testing.T) {
 	// Given
-	executor := failsafe.NewExecutor[any](
+	executor := failsafe.NewExecutor[*UnaryClientResponse](
 		UnaryCallRetryPolicyBuilder().
 			ReturnLastFailure().
 			Build(),
@@ -299,7 +327,7 @@ func TestUnaryCallRetryPolicyWithRetryableError(t *testing.T) {
 	ctx := context.Background()
 	req := &testutil.MockInvokeRequest{}
 	reply := &testutil.MockInvokeResponse{}
-	testUnary(
+	testUnaryClient(
 		t,
 		executor,
 		ctx,
@@ -309,7 +337,12 @@ func TestUnaryCallRetryPolicyWithRetryableError(t *testing.T) {
 		UnaryClientInterceptor(executor),
 		3,
 		3,
-		nil,
+		&UnaryClientResponse{
+			Ctx:    ctx,
+			Req:    req,
+			Method: "method",
+			Reply:  nil,
+		},
 		mockError,
 		false,
 	)
@@ -317,7 +350,7 @@ func TestUnaryCallRetryPolicyWithRetryableError(t *testing.T) {
 
 func TestUnaryCallRetryPolicyWithRetryableErrorAndSuccess(t *testing.T) {
 	// Given
-	executor := failsafe.NewExecutor[any](
+	executor := failsafe.NewExecutor[*UnaryClientResponse](
 		UnaryCallRetryPolicyBuilder().
 			Build(),
 	)
@@ -336,7 +369,7 @@ func TestUnaryCallRetryPolicyWithRetryableErrorAndSuccess(t *testing.T) {
 	ctx := context.Background()
 	req := &testutil.MockInvokeRequest{}
 	reply := &testutil.MockInvokeResponse{}
-	testUnary(
+	testUnaryClient(
 		t,
 		executor,
 		ctx,
@@ -346,8 +379,13 @@ func TestUnaryCallRetryPolicyWithRetryableErrorAndSuccess(t *testing.T) {
 		UnaryClientInterceptor(executor),
 		2,
 		2,
-		&testutil.MockInvokeResponse{
-			Message: "Success",
+		&UnaryClientResponse{
+			Ctx:    ctx,
+			Req:    req,
+			Method: "method",
+			Reply: &testutil.MockInvokeResponse{
+				Message: "Success",
+			},
 		},
 		nil,
 		true,
@@ -356,7 +394,7 @@ func TestUnaryCallRetryPolicyWithRetryableErrorAndSuccess(t *testing.T) {
 
 func TestUnaryCallRetryPolicyWithNonRetryableError(t *testing.T) {
 	// Given
-	executor := failsafe.NewExecutor[any](
+	executor := failsafe.NewExecutor[*UnaryClientResponse](
 		UnaryCallRetryPolicyBuilder().
 			ReturnLastFailure().
 			Build(),
@@ -371,7 +409,7 @@ func TestUnaryCallRetryPolicyWithNonRetryableError(t *testing.T) {
 	ctx := context.Background()
 	req := &testutil.MockInvokeRequest{}
 	reply := &testutil.MockInvokeResponse{}
-	testUnary(
+	testUnaryClient(
 		t,
 		executor,
 		ctx,
@@ -389,7 +427,7 @@ func TestUnaryCallRetryPolicyWithNonRetryableError(t *testing.T) {
 
 func TestStreamClientInterceptorSuccess(t *testing.T) {
 	// Given
-	executor := failsafe.NewExecutor[grpc.ClientStream](
+	executor := failsafe.NewExecutor[*StreamClientResponse](
 		StreamCallRetryPolicyBuilder().Build(),
 	)
 	streamer := &testutil.MockClientStreamer{}
@@ -402,7 +440,7 @@ func TestStreamClientInterceptorSuccess(t *testing.T) {
 	desc := &grpc.StreamDesc{}
 	cc := &grpc.ClientConn{}
 	method := "method"
-	testStream(
+	testStreamClient(
 		t,
 		executor,
 		ctx,
@@ -414,7 +452,12 @@ func TestStreamClientInterceptorSuccess(t *testing.T) {
 		StreamClientInterceptor(executor),
 		1,
 		1,
-		&testutil.MockClientStream{},
+		&StreamClientResponse{
+			Ctx:    ctx,
+			Desc:   desc,
+			Method: method,
+			Stream: &testutil.MockClientStream{},
+		},
 		nil,
 		true,
 	)
@@ -422,8 +465,8 @@ func TestStreamClientInterceptorSuccess(t *testing.T) {
 
 func TestStreamClientInterceptorError(t *testing.T) {
 	// Given
-	executor := failsafe.NewExecutor[grpc.ClientStream](
-		retrypolicy.Builder[grpc.ClientStream]().ReturnLastFailure().Build(),
+	executor := failsafe.NewExecutor[*StreamClientResponse](
+		retrypolicy.Builder[*StreamClientResponse]().ReturnLastFailure().Build(),
 	)
 	streamer := &testutil.MockClientStreamer{}
 	mockError := status.Error(codes.Unknown, "mock error")
@@ -436,7 +479,7 @@ func TestStreamClientInterceptorError(t *testing.T) {
 	desc := &grpc.StreamDesc{}
 	cc := &grpc.ClientConn{}
 	method := "method"
-	testStream(
+	testStreamClient(
 		t,
 		executor,
 		ctx,
@@ -448,24 +491,26 @@ func TestStreamClientInterceptorError(t *testing.T) {
 		StreamClientInterceptor(executor),
 		3,
 		3,
-		nil,
+		&StreamClientResponse{
+			Ctx:    ctx,
+			Desc:   desc,
+			Method: method,
+			Stream: nil,
+		},
 		mockError,
 		false,
 	)
 }
 
-func TestStreamClientInterceptorWithRetry(t *testing.T) {
+func TestStreamClientInterceptorWithRetryOnResult(t *testing.T) {
 	// Given
-	executor := failsafe.NewExecutor[grpc.ClientStream](
-		retrypolicy.Builder[grpc.ClientStream]().
-			HandleIf(func(stream grpc.ClientStream, err error) bool {
-				s, ok := stream.(*testutil.MockClientStream)
-				if !ok {
-					return false
-				}
+	executor := failsafe.NewExecutor[*StreamClientResponse](
+		retrypolicy.Builder[*StreamClientResponse]().
+			HandleIf(func(resp *StreamClientResponse, err error) bool {
+				stream := resp.Stream
 
 				buffer := &bytes.Buffer{}
-				err = s.RecvMsg(buffer)
+				err = stream.RecvMsg(buffer)
 				if err != nil {
 					return true
 				}
@@ -487,7 +532,7 @@ func TestStreamClientInterceptorWithRetry(t *testing.T) {
 	desc := &grpc.StreamDesc{}
 	cc := &grpc.ClientConn{}
 	method := "method"
-	testStream(
+	testStreamClient(
 		t,
 		executor,
 		ctx,
@@ -499,7 +544,12 @@ func TestStreamClientInterceptorWithRetry(t *testing.T) {
 		StreamClientInterceptor(executor),
 		2,
 		2,
-		&testutil.MockClientStream{},
+		&StreamClientResponse{
+			Ctx:    ctx,
+			Desc:   desc,
+			Method: method,
+			Stream: &testutil.MockClientStream{},
+		},
 		nil,
 		true,
 	)
@@ -507,10 +557,16 @@ func TestStreamClientInterceptorWithRetry(t *testing.T) {
 
 func TestStreamClientInterceptorWithFallback(t *testing.T) {
 	// Given
-	executor := failsafe.NewExecutor[grpc.ClientStream](
-		fallback.BuilderWithFunc[grpc.ClientStream](func(exec failsafe.Execution[grpc.ClientStream]) (grpc.ClientStream, error) {
-			return &testutil.MockClientStream{}, nil
-		}).HandleIf(func(stream grpc.ClientStream, err error) bool {
+	executor := failsafe.NewExecutor[*StreamClientResponse](
+		fallback.BuilderWithFunc[*StreamClientResponse](func(exec failsafe.Execution[*StreamClientResponse]) (*StreamClientResponse, error) {
+			result := exec.LastResult()
+			return &StreamClientResponse{
+				Ctx:    result.Ctx,
+				Desc:   result.Desc,
+				Method: result.Method,
+				Stream: &testutil.MockClientStream{},
+			}, nil
+		}).HandleIf(func(resp *StreamClientResponse, err error) bool {
 			s, ok := status.FromError(err)
 			if !ok {
 				return false
@@ -518,7 +574,7 @@ func TestStreamClientInterceptorWithFallback(t *testing.T) {
 
 			return s.Code() == codes.Unknown
 		}).Build(),
-		retrypolicy.Builder[grpc.ClientStream]().
+		retrypolicy.Builder[*StreamClientResponse]().
 			ReturnLastFailure().
 			Build(),
 	)
@@ -533,7 +589,7 @@ func TestStreamClientInterceptorWithFallback(t *testing.T) {
 	desc := &grpc.StreamDesc{}
 	cc := &grpc.ClientConn{}
 	method := "method"
-	testStream(
+	testStreamClient(
 		t,
 		executor,
 		ctx,
@@ -545,7 +601,12 @@ func TestStreamClientInterceptorWithFallback(t *testing.T) {
 		StreamClientInterceptor(executor),
 		3,
 		3,
-		&testutil.MockClientStream{},
+		&StreamClientResponse{
+			Ctx:    ctx,
+			Desc:   desc,
+			Method: method,
+			Stream: nil,
+		},
 		nil,
 		true,
 	)
@@ -553,8 +614,8 @@ func TestStreamClientInterceptorWithFallback(t *testing.T) {
 
 func TestStreamClientInterceptorWithCircuitBreaker(t *testing.T) {
 	// Given
-	cb := circuitbreaker.WithDefaults[grpc.ClientStream]()
-	executor := failsafe.NewExecutor[grpc.ClientStream](
+	cb := circuitbreaker.WithDefaults[*StreamClientResponse]()
+	executor := failsafe.NewExecutor[*StreamClientResponse](
 		cb,
 	)
 	cb.Open()
@@ -565,7 +626,7 @@ func TestStreamClientInterceptorWithCircuitBreaker(t *testing.T) {
 	desc := &grpc.StreamDesc{}
 	cc := &grpc.ClientConn{}
 	method := "method"
-	testStream(
+	testStreamClient(
 		t,
 		executor,
 		ctx,
@@ -585,8 +646,8 @@ func TestStreamClientInterceptorWithCircuitBreaker(t *testing.T) {
 
 func TestStreamClientInterceptorWithContextTimeout(t *testing.T) {
 	// Given
-	executor := failsafe.NewExecutor[grpc.ClientStream](
-		retrypolicy.Builder[grpc.ClientStream]().ReturnLastFailure().Build(),
+	executor := failsafe.NewExecutor[*StreamClientResponse](
+		retrypolicy.Builder[*StreamClientResponse]().ReturnLastFailure().Build(),
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
@@ -600,7 +661,7 @@ func TestStreamClientInterceptorWithContextTimeout(t *testing.T) {
 	desc := &grpc.StreamDesc{}
 	cc := &grpc.ClientConn{}
 	method := "method"
-	testStream(
+	testStreamClient(
 		t,
 		executor,
 		ctx,
@@ -612,7 +673,12 @@ func TestStreamClientInterceptorWithContextTimeout(t *testing.T) {
 		StreamClientInterceptor(executor),
 		1,
 		1,
-		nil,
+		&StreamClientResponse{
+			Ctx:    ctx,
+			Desc:   desc,
+			Method: method,
+			Stream: &testutil.MockClientStream{},
+		},
 		context.DeadlineExceeded,
 		false,
 	)
@@ -620,8 +686,8 @@ func TestStreamClientInterceptorWithContextTimeout(t *testing.T) {
 
 func TestStreamClientInterceptorWithTimeout(t *testing.T) {
 	// Given
-	executor := failsafe.NewExecutor[grpc.ClientStream](
-		timeout.With[grpc.ClientStream](50 * time.Millisecond),
+	executor := failsafe.NewExecutor[*StreamClientResponse](
+		timeout.With[*StreamClientResponse](50 * time.Millisecond),
 	)
 	streamer := &testutil.MockClientStreamer{
 		Sleep: 100 * time.Millisecond,
@@ -634,7 +700,7 @@ func TestStreamClientInterceptorWithTimeout(t *testing.T) {
 	desc := &grpc.StreamDesc{}
 	cc := &grpc.ClientConn{}
 	method := "method"
-	testStream(
+	testStreamClient(
 		t,
 		executor,
 		ctx,
@@ -646,7 +712,12 @@ func TestStreamClientInterceptorWithTimeout(t *testing.T) {
 		StreamClientInterceptor(executor),
 		1,
 		1,
-		nil,
+		&StreamClientResponse{
+			Ctx:    ctx,
+			Desc:   desc,
+			Method: method,
+			Stream: &testutil.MockClientStream{},
+		},
 		timeout.ErrExceeded,
 		false,
 	)
@@ -654,7 +725,7 @@ func TestStreamClientInterceptorWithTimeout(t *testing.T) {
 
 func TestStreamCallRetryPolicyWithRetryableError(t *testing.T) {
 	// Given
-	executor := failsafe.NewExecutor[grpc.ClientStream](
+	executor := failsafe.NewExecutor[*StreamClientResponse](
 		StreamCallRetryPolicyBuilder().
 			ReturnLastFailure().
 			Build(),
@@ -670,7 +741,7 @@ func TestStreamCallRetryPolicyWithRetryableError(t *testing.T) {
 	desc := &grpc.StreamDesc{}
 	cc := &grpc.ClientConn{}
 	method := "method"
-	testStream(
+	testStreamClient(
 		t,
 		executor,
 		ctx,
@@ -682,7 +753,12 @@ func TestStreamCallRetryPolicyWithRetryableError(t *testing.T) {
 		StreamClientInterceptor(executor),
 		3,
 		3,
-		nil,
+		&StreamClientResponse{
+			Ctx:    ctx,
+			Desc:   desc,
+			Method: method,
+			Stream: nil,
+		},
 		mockError,
 		false,
 	)
@@ -690,7 +766,7 @@ func TestStreamCallRetryPolicyWithRetryableError(t *testing.T) {
 
 func TestStreamCallRetryPolicyWithRetryableErrorAndSuccess(t *testing.T) {
 	// Given
-	executor := failsafe.NewExecutor[grpc.ClientStream](
+	executor := failsafe.NewExecutor[*StreamClientResponse](
 		StreamCallRetryPolicyBuilder().
 			Build(),
 	)
@@ -707,7 +783,7 @@ func TestStreamCallRetryPolicyWithRetryableErrorAndSuccess(t *testing.T) {
 	desc := &grpc.StreamDesc{}
 	cc := &grpc.ClientConn{}
 	method := "method"
-	testStream(
+	testStreamClient(
 		t,
 		executor,
 		ctx,
@@ -719,7 +795,12 @@ func TestStreamCallRetryPolicyWithRetryableErrorAndSuccess(t *testing.T) {
 		StreamClientInterceptor(executor),
 		2,
 		2,
-		&testutil.MockClientStream{},
+		&StreamClientResponse{
+			Ctx:    ctx,
+			Desc:   desc,
+			Method: method,
+			Stream: &testutil.MockClientStream{},
+		},
 		nil,
 		true,
 	)
@@ -727,7 +808,7 @@ func TestStreamCallRetryPolicyWithRetryableErrorAndSuccess(t *testing.T) {
 
 func TestStreamCallRetryPolicyWithNonRetryableError(t *testing.T) {
 	// Given
-	executor := failsafe.NewExecutor[grpc.ClientStream](
+	executor := failsafe.NewExecutor[*StreamClientResponse](
 		StreamCallRetryPolicyBuilder().
 			ReturnLastFailure().
 			Build(),
@@ -742,7 +823,7 @@ func TestStreamCallRetryPolicyWithNonRetryableError(t *testing.T) {
 	desc := &grpc.StreamDesc{}
 	cc := &grpc.ClientConn{}
 	method := "method"
-	testStream(
+	testStreamClient(
 		t,
 		executor,
 		ctx,
@@ -760,9 +841,9 @@ func TestStreamCallRetryPolicyWithNonRetryableError(t *testing.T) {
 	)
 }
 
-func testUnary(
+func testUnaryClient(
 	t *testing.T,
-	executor failsafe.Executor[any],
+	executor failsafe.Executor[*UnaryClientResponse],
 	ctx context.Context,
 	req any,
 	reply any,
@@ -770,7 +851,7 @@ func testUnary(
 	interceptor grpc.UnaryClientInterceptor,
 	expectedAttempts int,
 	expectedExecutions int,
-	expectedResult any,
+	expectedResult *UnaryClientResponse,
 	expectedError error,
 	expectedSuccess bool,
 	thens ...func(),
@@ -791,9 +872,9 @@ func testUnary(
 	assertResult(expectedResult, err)
 }
 
-func testStream(
+func testStreamClient(
 	t *testing.T,
-	executor failsafe.Executor[grpc.ClientStream],
+	executor failsafe.Executor[*StreamClientResponse],
 	ctx context.Context,
 	desc *grpc.StreamDesc,
 	cc *grpc.ClientConn,
@@ -803,7 +884,7 @@ func testStream(
 	interceptor grpc.StreamClientInterceptor,
 	expectedAttempts int,
 	expectedExecutions int,
-	expectedResult grpc.ClientStream,
+	expectedResult *StreamClientResponse,
 	expectedError error,
 	expectedSuccess bool,
 	thens ...func(),
