@@ -32,8 +32,8 @@ func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.P
 			if result.CompareAndSwap(nil, timeoutResult) {
 				if e.config.onTimeoutExceeded != nil {
 					e.config.onTimeoutExceeded(failsafe.ExecutionDoneEvent[R]{
-						ExecutionStats: execInternal,
-						Error:          ErrExceeded,
+						ExecutionInfo: execInternal,
+						Error:         ErrExceeded,
 					})
 				}
 

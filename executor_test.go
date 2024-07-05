@@ -58,11 +58,30 @@ func TestGetWithExecution(t *testing.T) {
 
 // Asserts that configuring a context returns a new copy of the Executor.
 func TestWithContext(t *testing.T) {
-	ctx1 := context.Background()
-	ctx2 := context.Background()
-	executor1 := failsafe.NewExecutor[any](retrypolicy.WithDefaults[any]()).WithContext(ctx1)
-	executor2 := executor1.WithContext(ctx2)
-	assert.NotSame(t, executor1, executor2)
+	t.Run("should create new executor", func(t *testing.T) {
+		ctx1 := context.Background()
+		ctx2 := context.Background()
+		executor1 := failsafe.NewExecutor[any](retrypolicy.WithDefaults[any]()).WithContext(ctx1)
+		executor2 := executor1.WithContext(ctx2)
+		assert.NotSame(t, executor1, executor2)
+	})
+
+	t.Run("should provide context to listeners and execution", func(t *testing.T) {
+		ctx := context.WithValue(context.Background(), "foo", "bar")
+		var eventCtx context.Context
+		var executionCtx context.Context
+		failsafe.NewExecutor[any](retrypolicy.WithDefaults[any]()).
+			WithContext(ctx).
+			OnDone(func(e failsafe.ExecutionDoneEvent[any]) {
+				eventCtx = e.Context()
+			}).
+			RunWithExecution(func(e failsafe.Execution[any]) error {
+				executionCtx = e.Context()
+				return nil
+			})
+		assert.Same(t, ctx, eventCtx)
+		assert.Same(t, ctx, executionCtx)
+	})
 }
 
 func TestExecutionWithNoPolicies(t *testing.T) {

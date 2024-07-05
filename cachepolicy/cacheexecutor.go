@@ -23,8 +23,8 @@ func (e *cacheExecutor[R]) PreExecute(exec policy.ExecutionInternal[R]) *common.
 		if cacheResult, found := e.config.cache.Get(cacheKey); found {
 			if e.config.onHit != nil {
 				e.config.onHit(failsafe.ExecutionDoneEvent[R]{
-					ExecutionStats: execInternal,
-					Result:         cacheResult,
+					ExecutionInfo: execInternal,
+					Result:        cacheResult,
 				})
 			}
 			return &common.PolicyResult[R]{
