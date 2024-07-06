@@ -1,11 +1,57 @@
 package util
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/failsafe-go/failsafe-go/internal/testutil"
 )
+
+func TestMergeContexts(t *testing.T) {
+	// Given
+	ctx1 := testutil.SetupWithContextSleep(50 * time.Millisecond)()
+	ctx2 := testutil.SetupWithContextSleep(time.Second)()
+
+	// When
+	mergedCtx, _ := MergeContexts(ctx1, ctx2)
+
+	// Then
+	select {
+	case <-mergedCtx.Done():
+		assert.ErrorIs(t, ctx1.Err(), context.Canceled)
+		assert.Nil(t, ctx2.Err())
+	}
+}
+
+func TestAppliesToAny(t *testing.T) {
+	predicates := []func(int, string) bool{
+		func(a int, b string) bool { return a == len(b) },
+		func(a int, b string) bool { return a > 10 },
+		func(a int, b string) bool { return b == "foo" },
+	}
+
+	testCases := []struct {
+		name     string
+		value1   int
+		value2   string
+		expected bool
+	}{
+		{"predicate 1 applies", 3, "baz", true},
+		{"predicate 2 applies", 12, "baz", true},
+		{"predicate 3 applies", 5, "foo", true},
+		{"no predicates apply", 2, "bar", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := AppliesToAny(predicates, tc.value1, tc.value2)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
 
 func TestRoundDown(t *testing.T) {
 	assert.Equal(t, time.Duration(0), RoundDown(0, 20))

@@ -36,7 +36,7 @@ type Tester[R any] struct {
 	expectedAttempts   int
 	expectedExecutions int
 	expectedResult     R
-	expectedError      *error
+	expectedError      error
 	expectedSuccess    bool
 	expectedFailure    bool
 }
@@ -102,7 +102,7 @@ func (t *Tester[R]) AssertSuccess(expectedAttempts int, expectedExecutions int, 
 }
 
 func (t *Tester[R]) AssertSuccessError(expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
-	t.expectedError = &expectedError
+	t.expectedError = expectedError
 	t.AssertSuccess(expectedAttempts, expectedExecutions, *(new(R)), then...)
 }
 
@@ -110,7 +110,7 @@ func (t *Tester[R]) AssertFailure(expectedAttempts int, expectedExecutions int, 
 	t.expectedFailure = true
 	t.expectedAttempts = expectedAttempts
 	t.expectedExecutions = expectedExecutions
-	t.expectedError = &expectedError
+	t.expectedError = expectedError
 	if len(then) > 0 {
 		t.then = then[0]
 	}
@@ -119,7 +119,7 @@ func (t *Tester[R]) AssertFailure(expectedAttempts int, expectedExecutions int, 
 
 func (t *Tester[R]) do() {
 	test := func(async bool) {
-		executorFn, assertFn := PrepareTest(t.t, t.given, t.executor, t.expectedAttempts, t.expectedExecutions, t.expectedResult, t.expectedError, t.expectedSuccess, t.expectedFailure, t.then)
+		executorFn, assertFn := PrepareTest(t.t, t.given, t.executor)
 
 		// Execute
 		var result R
@@ -139,7 +139,7 @@ func (t *Tester[R]) do() {
 			}
 		}
 
-		assertFn(result, err)
+		assertFn(t.expectedAttempts, t.expectedExecutions, t.expectedResult, result, t.expectedError, err, t.expectedSuccess, t.expectedFailure, t.then)
 	}
 
 	// Run sync
@@ -151,9 +151,9 @@ func (t *Tester[R]) do() {
 	test(true)
 }
 
-func PrepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R], expectedAttempts int, expectedExecutions int, expectedResult R,
-	expectedError *error, expectedSuccess bool, expectedFailure bool, then func()) (executorFn func() failsafe.Executor[R], assertResult func(R, error)) {
+type AssertFunc[R any] func(expectedAttempts int, expectedExecutions int, expectedResult R, result R, expectedErr error, err error, expectedSuccess bool, expectedFailure bool, then func())
 
+func PrepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R]) (executorFn func() failsafe.Executor[R], assertFn AssertFunc[R]) {
 	if given != nil {
 		if ctx := given(); ctx != nil {
 			executor = executor.WithContext(ctx)
@@ -173,7 +173,7 @@ func PrepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R]
 		})
 	}
 
-	assertResult = func(result R, err error) {
+	assertFn = func(expectedAttempts int, expectedExecutions int, expectedResult R, result R, expectedErr error, err error, expectedSuccess bool, expectedFailure bool, then func()) {
 		if then != nil {
 			then()
 		}
@@ -186,10 +186,10 @@ func PrepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R]
 			}
 		}
 		assert.Equal(t, expectedResult, result, "expected result did not match")
-		if expectedError == nil {
+		if expectedErr == nil {
 			assert.Nil(t, err, " error should be nil")
 		} else {
-			assert.ErrorIs(t, err, *expectedError, "expected error did not match")
+			assert.ErrorIs(t, err, expectedErr, "expected error did not match")
 		}
 		if expectedSuccess {
 			assert.True(t, onSuccessCalled.Load(), "onSuccess should have been called")
@@ -200,5 +200,5 @@ func PrepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R]
 		}
 	}
 
-	return executorFn, assertResult
+	return executorFn, assertFn
 }

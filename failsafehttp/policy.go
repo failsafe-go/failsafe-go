@@ -25,10 +25,14 @@ func RetryPolicyBuilder() retrypolicy.RetryPolicyBuilder[*http.Response] {
 	retryHandleFunc := func(resp *http.Response, err error) bool {
 		// Handle errors
 		if err != nil {
+			// Do not retry unsupported protocol scheme error
+			// This will be a url.Error when using an http.Client, and an errorString when using a RoundTripper
+			if unsupportedScheme.MatchString(err.Error()) {
+				return false
+			}
 			if v, ok := err.(*url.Error); ok {
 				// Do not retry when certain error messages are observed
-				if unsupportedScheme.MatchString(v.Error()) ||
-					certNotTrusted.MatchString(v.Error()) ||
+				if certNotTrusted.MatchString(v.Error()) ||
 					stoppedAfterRedirects.MatchString(v.Error()) {
 					return false
 				}

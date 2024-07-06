@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/internal/util"
 )
 
 type roundTripper struct {
@@ -15,18 +16,26 @@ type roundTripper struct {
 // innerRoundTripper. If innerRoundTripper is nil, http.DefaultTransport will be used. The policies are composed around
 // requests and will handle responses in reverse order.
 func NewRoundTripper(innerRoundTripper http.RoundTripper, policies ...failsafe.Policy[*http.Response]) http.RoundTripper {
+	return NewRoundTripperWithExecutor(innerRoundTripper, failsafe.NewExecutor(policies...))
+}
+
+// NewRoundTripperWithExecutor returns a new http.RoundTripper that will perform failsafe round trips via the executor and
+// innerRoundTripper. If innerRoundTripper is nil, http.DefaultTransport will be used.
+func NewRoundTripperWithExecutor(innerRoundTripper http.RoundTripper, executor failsafe.Executor[*http.Response]) http.RoundTripper {
 	if innerRoundTripper == nil {
 		innerRoundTripper = http.DefaultTransport
 	}
 	return &roundTripper{
 		next:     innerRoundTripper,
-		executor: failsafe.NewExecutor(policies...),
+		executor: executor,
 	}
 }
 
 func (f *roundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
 	return f.executor.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
-		return f.next.RoundTrip(request.WithContext(exec.Context()))
+		ctx, cancel := util.MergeContexts(request.Context(), exec.Context())
+		defer cancel()
+		return f.next.RoundTrip(request.WithContext(ctx))
 	})
 }
 
@@ -54,6 +63,8 @@ func NewRequestWithExecutor(request *http.Request, client *http.Client, executor
 
 func (r *Request) Do() (*http.Response, error) {
 	return r.executor.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
-		return r.client.Do(r.request.WithContext(exec.Context()))
+		ctx, cancel := util.MergeContexts(r.request.Context(), exec.Context())
+		defer cancel()
+		return r.client.Do(r.request.WithContext(ctx))
 	})
 }

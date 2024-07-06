@@ -118,19 +118,21 @@ func MockResponse(statusCode int, body string) *httptest.Server {
 	}))
 }
 
-func MockFlakyServer(failTimes int, responseCode int, retryAfterDelay time.Duration, finalResponse string) *httptest.Server {
+func MockFlakyServer(failTimes int, responseCode int, retryAfterDelay time.Duration, finalResponse string) (server *httptest.Server, resetFailures func()) {
 	failures := atomic.Int32{}
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		if failures.Add(1) <= int32(failTimes) {
-			if retryAfterDelay > 0 {
-				w.Header().Add("Retry-After", strconv.Itoa(int(retryAfterDelay.Seconds())))
+			if failures.Add(1) <= int32(failTimes) {
+				if retryAfterDelay > 0 {
+					w.Header().Add("Retry-After", strconv.Itoa(int(retryAfterDelay.Seconds())))
+				}
+				fmt.Println("Replying with", responseCode)
+				w.WriteHeader(responseCode)
+			} else {
+				fmt.Fprintf(w, finalResponse)
 			}
-			fmt.Println("Replying with", responseCode)
-			w.WriteHeader(responseCode)
-		} else {
-			fmt.Fprintf(w, finalResponse)
+		})), func() {
+			failures.Swap(0)
 		}
-	}))
 }
 
 func MockDelayedResponse(statusCode int, body string, delay time.Duration) *httptest.Server {
