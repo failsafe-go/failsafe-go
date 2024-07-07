@@ -34,7 +34,7 @@ func NewRoundTripperWithExecutor(innerRoundTripper http.RoundTripper, executor f
 func (f *roundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
 	return f.executor.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
 		ctx, cancel := util.MergeContexts(request.Context(), exec.Context())
-		defer cancel()
+		defer cancel(nil)
 		return f.next.RoundTrip(request.WithContext(ctx))
 	})
 }
@@ -64,7 +64,7 @@ func NewRequestWithExecutor(request *http.Request, client *http.Client, executor
 func (r *Request) Do() (*http.Response, error) {
 	return r.executor.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
 		ctx, cancel := util.MergeContexts(r.request.Context(), exec.Context())
-		defer cancel()
+		defer cancel(nil)
 		return r.client.Do(r.request.WithContext(ctx))
 	})
 }
