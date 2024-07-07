@@ -133,6 +133,7 @@ func TestCircuitBreaker(t *testing.T) {
 		3, 0, circuitbreaker.ErrOpen)
 }
 
+// Asserts that providing a context to either the executor or a request that is canceled results in the execution being canceled.
 func TestCancelWithContext(t *testing.T) {
 	slowCtxFn := testutil.SetupWithContextSleep(time.Second)
 	fastCtxFn := testutil.SetupWithContextSleep(50 * time.Millisecond)
