@@ -2,7 +2,6 @@ package failsafegrpc
 
 import (
 	"context"
-	"errors"
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/bulkhead"
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
@@ -190,134 +189,6 @@ func TestUnaryServerInterceptorWithRateLimiter(t *testing.T) {
 			Resp: nil,
 		},
 		ratelimiter.ErrExceeded,
-		false,
-	)
-}
-
-func TestStreamServerInterceptorSuccess(t *testing.T) {
-	// Given
-	executor := failsafe.NewExecutor[*StreamServerResponse](
-		bulkhead.Builder[*StreamServerResponse](1).
-			WithMaxWaitTime(1 * time.Millisecond).
-			Build(),
-	)
-	handler := &testutil.MockStreamHandler{}
-	handler.Test(t)
-	handler.On("Handle", mock.Anything, &testutil.MockServerStream{}).
-		Times(1).
-		Return(nil)
-
-	// When / Then
-	interceptor := StreamServerInterceptor(executor)
-	testStreamServer(
-		t,
-		executor,
-		nil,
-		&testutil.MockServerStream{},
-		&grpc.StreamServerInfo{},
-		handler.Handle,
-		interceptor,
-		1,
-		1,
-		nil,
-		nil,
-		true,
-	)
-}
-
-func TestStreamServerInterceptorError(t *testing.T) {
-	// Given
-	executor := failsafe.NewExecutor[*StreamServerResponse](
-		bulkhead.Builder[*StreamServerResponse](0).
-			WithMaxWaitTime(1 * time.Millisecond).
-			Build(),
-	)
-	handler := &testutil.MockStreamHandler{}
-	handler.Test(t)
-
-	// When / Then
-	interceptor := StreamServerInterceptor(executor)
-	testStreamServer(
-		t,
-		executor,
-		nil,
-		&testutil.MockServerStream{},
-		&grpc.StreamServerInfo{},
-		handler.Handle,
-		interceptor,
-		1,
-		0,
-		nil,
-		bulkhead.ErrFull,
-		false,
-	)
-}
-
-func TestStreamServerInterceptorWithCircuitBreaker(t *testing.T) {
-	// Given
-	cb := circuitbreaker.WithDefaults[*StreamServerResponse]()
-	executor := failsafe.NewExecutor[*StreamServerResponse](
-		cb,
-	)
-	cb.Open()
-	handler := &testutil.MockStreamHandler{}
-	handler.Test(t)
-
-	// When / Then
-	interceptor := StreamServerInterceptor(executor)
-	testStreamServer(
-		t,
-		executor,
-		nil,
-		&testutil.MockServerStream{},
-		&grpc.StreamServerInfo{},
-		handler.Handle,
-		interceptor,
-		1,
-		0,
-		nil,
-		circuitbreaker.ErrOpen,
-		false,
-	)
-}
-
-func TestStreamServerInterceptorWithCircuitBreakerOnResult(t *testing.T) {
-	// Given
-	cb := circuitbreaker.Builder[*StreamServerResponse]().
-		HandleIf(func(resp *StreamServerResponse, err error) bool {
-			stream := resp.Stream
-
-			buffer := make([]byte, 1024)
-			err = stream.RecvMsg(buffer)
-			return err != nil
-		}).
-		Build()
-	executor := failsafe.NewExecutor[*StreamServerResponse](
-		cb,
-	)
-	mockError := errors.New("error")
-	handler := &testutil.MockStreamHandler{}
-	handler.Test(t)
-	handler.On("Handle", mock.Anything, &testutil.MockServerStream{ExpectedError: mockError}).
-		Times(1).
-		Return(nil)
-
-	// When / Then
-	interceptor := StreamServerInterceptor(executor)
-	testStreamServer(
-		t,
-		executor,
-		nil,
-		&testutil.MockServerStream{
-			ExpectedError: mockError,
-		},
-		&grpc.StreamServerInfo{},
-		handler.Handle,
-		interceptor,
-		1,
-		1,
-		nil,
-		nil,
 		false,
 	)
 }
@@ -516,64 +387,6 @@ func testUnaryServer(
 		},
 		err,
 	)
-}
-
-func TestStreamServerInterceptorWithRateLimiter(t *testing.T) {
-	// Given
-	limiter := ratelimiter.SmoothBuilderWithMaxRate[*StreamServerResponse](1 * time.Hour).
-		Build()
-	limiter.TryAcquirePermit()
-	executor := failsafe.NewExecutor[*StreamServerResponse](limiter)
-	handler := &testutil.MockStreamHandler{}
-	handler.Test(t)
-
-	// When / Then
-	interceptor := StreamServerInterceptor(executor)
-	testStreamServer(
-		t,
-		executor,
-		nil,
-		&testutil.MockServerStream{},
-		&grpc.StreamServerInfo{},
-		handler.Handle,
-		interceptor,
-		1,
-		0,
-		nil,
-		ratelimiter.ErrExceeded,
-		false,
-	)
-}
-
-func testStreamServer(
-	t *testing.T,
-	executor failsafe.Executor[*StreamServerResponse],
-	srv interface{},
-	stream grpc.ServerStream,
-	info *grpc.StreamServerInfo,
-	handler grpc.StreamHandler,
-	interceptor grpc.StreamServerInterceptor,
-	expectedAttempts int,
-	expectedExecutions int,
-	expectedResult *StreamServerResponse,
-	expectedError error,
-	expectedSuccess bool,
-	thens ...func(),
-) {
-	var then func()
-	if len(thens) > 0 {
-		then = thens[0]
-	}
-	var expectedErrPtr *error
-	expectedErrPtr = &expectedError
-	executorFn, assertResult := testutil.PrepareTest(t, nil, executor, expectedAttempts, expectedExecutions, expectedResult, expectedErrPtr, expectedSuccess, !expectedSuccess, then)
-	executorFn()
-
-	// When
-	err := interceptor(srv, stream, info, handler)
-
-	// Then
-	assertResult(nil, err)
 }
 
 func testServerInHandle(

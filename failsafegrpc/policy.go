@@ -21,14 +21,6 @@ func UnaryCallRetryPolicyBuilder() retrypolicy.RetryPolicyBuilder[*UnaryClientRe
 		HandleIf(isRetryable[*UnaryClientResponse])
 }
 
-// StreamCallRetryPolicyBuilder returns a retrypolicy.RetryPolicyBuilder that will retry on
-// gRPC status codes that are considered retryable(UNAVAILABLE, DEADLINE_EXCEEDED, RESOURCE_EXHAUSTED)
-// up to 2 times by default.
-func StreamCallRetryPolicyBuilder() retrypolicy.RetryPolicyBuilder[*StreamClientResponse] {
-	return retrypolicy.Builder[*StreamClientResponse]().
-		HandleIf(isRetryable[*StreamClientResponse])
-}
-
 func isRetryable[R any](_ R, err error) bool {
 	if err != nil {
 		s, ok := status.FromError(err)

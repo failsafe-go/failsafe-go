@@ -45,41 +45,6 @@ func UnaryServerInterceptor(executor failsafe.Executor[*UnaryServerResponse]) gr
 	}
 }
 
-// StreamServerResponse is a struct that contains the context, stream, and info of a stream gRPC call.
-type StreamServerResponse struct {
-	Info   *grpc.StreamServerInfo
-	Stream grpc.ServerStream
-}
-
-// StreamServerInterceptor returns a gRPC stream server interceptor that wraps the handler with a failsafe executor.
-// `grpc.ServerStream` is the stream of the gRPC call.
-func StreamServerInterceptor(executor failsafe.Executor[*StreamServerResponse]) grpc.StreamServerInterceptor {
-	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		executorWithContext := executor.WithContext(stream.Context())
-
-		operation := func(exec failsafe.Execution[*StreamServerResponse]) (*StreamServerResponse, error) {
-			err := handler(srv, stream)
-
-			resp := &StreamServerResponse{
-				Info:   info,
-				Stream: stream,
-			}
-			if err != nil {
-				return resp, err
-			}
-
-			return resp, nil
-		}
-
-		_, err := executorWithContext.GetWithExecution(operation)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}
-}
-
 // InHandleResult is a struct that contains the context and info of a tap event.
 // It is used to pass the context and info to the after hook.
 type InHandleResult struct {
