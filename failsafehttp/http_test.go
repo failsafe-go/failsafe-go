@@ -218,6 +218,14 @@ func testHttpFailureError(t *testing.T, requestCtxFn func() context.Context, url
 // testHttp tests http behavior using a RoundTripper and a failsafehttp.Request.
 func testHttp(t *testing.T, requestCtxFn func() context.Context, path string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult any, expectedError error, expectedSuccess bool, thens ...func()) {
 	executorFn, assertResult := testutil.PrepareTest(t, nil, executor)
+	var ctxFun func() context.Context
+	if requestCtxFn != nil {
+		ctxFun = requestCtxFn
+	} else {
+		ctxFun = func() context.Context {
+			return context.Background()
+		}
+	}
 	assertHttpResult := func(resp *http.Response, err error) {
 		// Read body
 		var body string
@@ -258,27 +266,22 @@ func testHttp(t *testing.T, requestCtxFn func() context.Context, path string, ex
 		assertResult(expectedAttempts, expectedExecutions, nil, nil, expectedErrCopy, err, expectedSuccess, !expectedSuccess, then)
 	}
 
-	ctx := context.Background()
-	if requestCtxFn != nil {
-		ctx = requestCtxFn()
-	}
-
 	// Test with roundtripper
 	fmt.Println("Testing RoundTripper")
-	assertHttpResult(testRoundTripper(ctx, path, executorFn))
+	assertHttpResult(testRoundTripper(ctxFun(), path, executorFn()))
 
 	// Test with failsafehttp.Request
 	fmt.Println("\nTesting failsafehttp.Request")
-	assertHttpResult(testRequest(ctx, path, executorFn))
+	assertHttpResult(testRequest(ctxFun(), path, executorFn()))
 }
 
-func testRoundTripper(ctx context.Context, path string, executorFn func() failsafe.Executor[*http.Response]) (resp *http.Response, err error) {
-	client := http.Client{Transport: NewRoundTripperWithExecutor(nil, executorFn())}
+func testRoundTripper(ctx context.Context, path string, executor failsafe.Executor[*http.Response]) (resp *http.Response, err error) {
+	client := http.Client{Transport: NewRoundTripperWithExecutor(nil, executor)}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, path, nil)
 	return client.Do(req)
 }
 
-func testRequest(ctx context.Context, path string, executorFn func() failsafe.Executor[*http.Response]) (resp *http.Response, err error) {
+func testRequest(ctx context.Context, path string, executor failsafe.Executor[*http.Response]) (resp *http.Response, err error) {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, path, nil)
-	return NewRequestWithExecutor(req, http.DefaultClient, executorFn()).Do()
+	return NewRequestWithExecutor(req, http.DefaultClient, executor).Do()
 }

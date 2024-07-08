@@ -154,17 +154,18 @@ func (t *Tester[R]) do() {
 type AssertFunc[R any] func(expectedAttempts int, expectedExecutions int, expectedResult R, result R, expectedErr error, err error, expectedSuccess bool, expectedFailure bool, then func())
 
 func PrepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R]) (executorFn func() failsafe.Executor[R], assertFn AssertFunc[R]) {
-	if given != nil {
-		if ctx := given(); ctx != nil {
-			executor = executor.WithContext(ctx)
-		}
-	}
-
 	var doneEvent atomic.Pointer[failsafe.ExecutionDoneEvent[R]]
 	var onSuccessCalled atomic.Bool
 	var onFailureCalled atomic.Bool
+
 	executorFn = func() failsafe.Executor[R] {
-		return executor.OnDone(func(e failsafe.ExecutionDoneEvent[R]) {
+		result := executor
+		if given != nil {
+			if ctx := given(); ctx != nil {
+				result = result.WithContext(ctx)
+			}
+		}
+		return result.OnDone(func(e failsafe.ExecutionDoneEvent[R]) {
 			doneEvent.Store(&e)
 		}).OnSuccess(func(e failsafe.ExecutionDoneEvent[R]) {
 			onSuccessCalled.Store(true)
