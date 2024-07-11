@@ -1,6 +1,7 @@
 package failsafehttp
 
 import (
+	"context"
 	"crypto/x509"
 	"net/http"
 	"net/url"
@@ -62,6 +63,7 @@ func RetryPolicyBuilder() retrypolicy.RetryPolicyBuilder[*http.Response] {
 
 	return retrypolicy.Builder[*http.Response]().
 		HandleIf(retryHandleFunc).
+		AbortOnErrors(context.Canceled).
 		WithDelayFunc(DelayFunc)
 }
 

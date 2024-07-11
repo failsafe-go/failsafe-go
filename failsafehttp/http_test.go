@@ -30,7 +30,7 @@ func TestSuccess(t *testing.T) {
 	executor := failsafe.NewExecutor[*http.Response](RetryPolicyBuilder().Build())
 
 	// When / Then
-	testHttpSuccess(t, server.URL, executor,
+	testHttpSuccess(t, nil, server.URL, executor,
 		1, 1, 200, "foo")
 }
 
@@ -62,7 +62,7 @@ func TestRetryPolicyWith429ThenSuccess(t *testing.T) {
 	executor := failsafe.NewExecutor[*http.Response](RetryPolicyBuilder().Build())
 
 	// When / Then
-	testHttpSuccess(t, server.URL, executor,
+	testHttpSuccess(t, nil, server.URL, executor,
 		3, 3, 200, "foo", reset)
 }
 
@@ -102,23 +102,48 @@ func TestRetryPolicyWithUnsupportedProtocolScheme(t *testing.T) {
 }
 
 func TestRetryPolicyFallback(t *testing.T) {
-	server := testutil.MockResponse(400, "bad")
+	// Given
+	server := testutil.MockResponse(429, "bad")
 	defer server.Close()
-	is400 := func(response *http.Response, err error) bool {
-		return response.StatusCode == 400
-	}
-	rp := retrypolicy.Builder[*http.Response]().HandleIf(is400).ReturnLastFailure().Build()
+	rp := RetryPolicyBuilder().ReturnLastFailure().Build()
 	fb := fallback.BuilderWithFunc[*http.Response](func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
 		response := &http.Response{}
 		response.StatusCode = 200
 		response.Body = io.NopCloser(bytes.NewBufferString("fallback"))
 		return response, nil
-	}).HandleIf(is400).Build()
+	}).HandleIf(func(response *http.Response, err error) bool {
+		return (response != nil && response.StatusCode == 429) || err != nil
+	}).Build()
 	executor := failsafe.NewExecutor[*http.Response](fb, rp)
 
-	// When / Then
-	testHttpSuccess(t, server.URL, executor,
-		3, 3, 200, "fallback")
+	tests := []struct {
+		name             string
+		requestCtxFn     func() context.Context
+		expectedAttempts int
+	}{
+		{
+			"with bad request",
+			nil,
+			3,
+		},
+		{
+			"with canceled request",
+			func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			},
+			1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// When / Then
+			testHttpSuccess(t, tc.requestCtxFn, server.URL, executor,
+				tc.expectedAttempts, tc.expectedAttempts, 200, "fallback")
+		})
+	}
 }
 
 // Asserts that an open circuit breaker prevents executions from occurring, even with outer retries.
@@ -199,8 +224,8 @@ func TestCancelWithTimeout(t *testing.T) {
 	assert.True(t, start.Add(time.Second).After(time.Now()), "timeout should immediately exit execution")
 }
 
-func testHttpSuccess(t *testing.T, url string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult any, then ...func()) {
-	testHttp(t, nil, url, executor, expectedAttempts, expectedExecutions, expectedStatus, expectedResult, nil, true, then...)
+func testHttpSuccess(t *testing.T, requestCtxFn func() context.Context, url string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult any, then ...func()) {
+	testHttp(t, requestCtxFn, url, executor, expectedAttempts, expectedExecutions, expectedStatus, expectedResult, nil, true, then...)
 }
 
 func testHttpFailureResult(t *testing.T, url string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult any, then ...func()) {
