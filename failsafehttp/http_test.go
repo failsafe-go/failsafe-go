@@ -18,6 +18,8 @@ import (
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
 	"github.com/failsafe-go/failsafe-go/fallback"
+	"github.com/failsafe-go/failsafe-go/hedgepolicy"
+	"github.com/failsafe-go/failsafe-go/internal/policytesting"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
 	"github.com/failsafe-go/failsafe-go/timeout"
@@ -148,6 +150,7 @@ func TestRetryPolicyFallback(t *testing.T) {
 
 // Asserts that an open circuit breaker prevents executions from occurring, even with outer retries.
 func TestCircuitBreaker(t *testing.T) {
+	// Given
 	cb := circuitbreaker.WithDefaults[*http.Response]()
 	rp := retrypolicy.WithDefaults[*http.Response]()
 	executor := failsafe.NewExecutor[*http.Response](rp, cb)
@@ -156,6 +159,25 @@ func TestCircuitBreaker(t *testing.T) {
 	// When / Then
 	testHttpFailureError(t, nil, "", executor,
 		3, 0, circuitbreaker.ErrOpen)
+}
+
+func TestHedgePolicy(t *testing.T) {
+	// Given
+	server := testutil.MockDelayedResponse(200, "foo", 100*time.Millisecond)
+	defer server.Close()
+	stats := &policytesting.Stats{}
+	setup := func() context.Context {
+		stats.Reset()
+		return context.Background()
+	}
+	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[*http.Response](80*time.Millisecond), stats).Build()
+	executor := failsafe.NewExecutor[*http.Response](hp)
+
+	// When / Then
+	testHttpSuccess(t, setup, server.URL, executor,
+		2, -1, 200, "foo", func() {
+			assert.Equal(t, 1, stats.Hedges())
+		})
 }
 
 // Asserts that providing a context to either the executor or a request that is canceled results in the execution being canceled.

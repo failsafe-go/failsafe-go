@@ -3,6 +3,7 @@ package failsafegrpc
 import (
 	"context"
 	"errors"
+	"net/http"
 	"testing"
 	"time"
 
@@ -13,6 +14,8 @@ import (
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/fallback"
+	"github.com/failsafe-go/failsafe-go/hedgepolicy"
+	"github.com/failsafe-go/failsafe-go/internal/policytesting"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
 	"github.com/failsafe-go/failsafe-go/internal/testutil/pbfixtures"
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
@@ -100,6 +103,24 @@ func TestClientRetryPolicyFallback(t *testing.T) {
 	// When / Then
 	testClientSuccess(t, nil, server, executor,
 		3, 3, "pong")
+}
+
+func TestHedgePolicy(t *testing.T) {
+	// Given
+	server := testutil.MockDelayedGrpcResponse("foo", 100*time.Millisecond)
+	stats := &policytesting.Stats{}
+	setup := func() context.Context {
+		stats.Reset()
+		return context.Background()
+	}
+	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[*http.Response](80*time.Millisecond), stats).Build()
+	executor := failsafe.NewExecutor[*http.Response](hp)
+
+	// When / Then
+	testClientSuccess(t, setup, server, executor,
+		2, -1, "foo", func() {
+			assert.Equal(t, 1, stats.Hedges())
+		})
 }
 
 // Asserts that providing a context to either the executor or a request that is canceled results in the execution being canceled.
