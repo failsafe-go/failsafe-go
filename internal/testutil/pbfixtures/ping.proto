@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+option go_package = ".pbfixtures";
+
+package testutil;
+
+service PingService {
+  rpc Ping (PingRequest) returns (PingResponse);
+  rpc PingStream (PingRequest) returns (stream PingResponse);
+}
+
+message PingRequest {
+  string msg = 1;
+}
+
+message PingResponse {
+  string msg = 1;
+}

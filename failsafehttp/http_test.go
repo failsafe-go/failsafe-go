@@ -34,7 +34,7 @@ func TestSuccess(t *testing.T) {
 		1, 1, 200, "foo")
 }
 
-func TestError(t *testing.T) {
+func TestRetryPolicyWithError(t *testing.T) {
 	executor := failsafe.NewExecutor[*http.Response](retrypolicy.Builder[*http.Response]().ReturnLastFailure().Build())
 
 	// When / Then
@@ -169,41 +169,41 @@ func TestCancelWithContext(t *testing.T) {
 		executorCtx  context.Context
 	}{
 		{
-			"with executor context",
-			nil,
-			fastCtxFn(),
-		},
-		{
 			"with request context",
 			fastCtxFn,
 			nil,
 		},
 		{
-			"with executor context and canceling request context",
+			"with executor context",
+			nil,
+			fastCtxFn(),
+		},
+		{
+			"with canceling request context and slow executor context",
 			fastCtxFn,
 			slowCtxFn(),
 		},
 		{
-			"with canceling executor context and request context",
+			"with canceling executor context and slow request context",
 			slowCtxFn,
 			fastCtxFn(),
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			// Given
 			server := testutil.MockDelayedResponse(200, "bad", time.Second)
 			defer server.Close()
 			rp := retrypolicy.Builder[*http.Response]().AbortOnErrors(context.Canceled).Build()
 			executor := failsafe.NewExecutor[*http.Response](rp)
-			if tt.executorCtx != nil {
-				executor = executor.WithContext(tt.executorCtx)
+			if tc.executorCtx != nil {
+				executor = executor.WithContext(tc.executorCtx)
 			}
 
 			// When / Then
 			start := time.Now()
-			testHttpFailureError(t, tt.requestCtxFn, server.URL, executor,
+			testHttpFailureError(t, tc.requestCtxFn, server.URL, executor,
 				1, 1, context.Canceled)
 			assert.True(t, start.Add(time.Second).After(time.Now()), "cancellation should immediately exit execution")
 		})

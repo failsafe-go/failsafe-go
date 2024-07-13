@@ -1,9 +1,10 @@
 package failsafegrpc
 
 import (
-	"github.com/failsafe-go/failsafe-go/retrypolicy"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/failsafe-go/failsafe-go/retrypolicy"
 )
 
 var retryableStatusCodes = map[codes.Code]struct{}{
@@ -12,26 +13,22 @@ var retryableStatusCodes = map[codes.Code]struct{}{
 	codes.ResourceExhausted: {},
 }
 
-// UnaryCallRetryPolicyBuilder returns a retrypolicy.RetryPolicyBuilder that will retry on
-// gRPC status codes that are considered retryable(UNAVAILABLE, DEADLINE_EXCEEDED, RESOURCE_EXHAUSTED)
-// up to 2 times by default.
-// Additional handling can be added by chaining the builder with more conditions.
-func UnaryCallRetryPolicyBuilder() retrypolicy.RetryPolicyBuilder[*UnaryClientResponse] {
-	return retrypolicy.Builder[*UnaryClientResponse]().
-		HandleIf(isRetryable[*UnaryClientResponse])
-}
+// RetryPolicyBuilder returns a retrypolicy.RetryPolicyBuilder that will retry on gRPC status codes that are considered
+// retryable (UNAVAILABLE, DEADLINE_EXCEEDED, RESOURCE_EXHAUSTED), up to 2 times by default, with no delay between
+// attempts. Additional handling can be added by chaining the builder with more conditions.
+func RetryPolicyBuilder[R any]() retrypolicy.RetryPolicyBuilder[R] {
+	return retrypolicy.Builder[R]().HandleIf(func(_ R, err error) bool {
+		if err != nil {
+			s, ok := status.FromError(err)
+			if !ok {
+				return false
+			}
 
-func isRetryable[R any](_ R, err error) bool {
-	if err != nil {
-		s, ok := status.FromError(err)
-		if !ok {
-			return false
+			if _, ok := retryableStatusCodes[s.Code()]; ok {
+				return true
+			}
 		}
 
-		if _, ok := retryableStatusCodes[s.Code()]; ok {
-			return true
-		}
-	}
-
-	return false
+		return false
+	})
 }

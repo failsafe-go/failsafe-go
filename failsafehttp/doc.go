@@ -1,2 +1,2 @@
-// Package failsafehttp provides functions that can be used to integrate policies with HTTP.
+// Package failsafehttp provides functions and middleware that can be used to integrate Failsafe-go with HTTP.
 package failsafehttp

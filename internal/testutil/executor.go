@@ -151,7 +151,7 @@ func (t *Tester[R]) do() {
 	test(true)
 }
 
-type AssertFunc[R any] func(expectedAttempts int, expectedExecutions int, expectedResult R, result R, expectedErr error, err error, expectedSuccess bool, expectedFailure bool, then func())
+type AssertFunc[R any] func(expectedAttempts int, expectedExecutions int, expectedResult R, result R, expectedErr error, err error, expectedSuccess bool, expectedFailure bool, thens ...func())
 
 func PrepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R]) (executorFn func() failsafe.Executor[R], assertFn AssertFunc[R]) {
 	var doneEvent atomic.Pointer[failsafe.ExecutionDoneEvent[R]]
@@ -174,9 +174,11 @@ func PrepareTest[R any](t *testing.T, given Given, executor failsafe.Executor[R]
 		})
 	}
 
-	assertFn = func(expectedAttempts int, expectedExecutions int, expectedResult R, result R, expectedErr error, err error, expectedSuccess bool, expectedFailure bool, then func()) {
-		if then != nil {
-			then()
+	assertFn = func(expectedAttempts int, expectedExecutions int, expectedResult R, result R, expectedErr error, err error, expectedSuccess bool, expectedFailure bool, thens ...func()) {
+		for _, then := range thens {
+			if then != nil {
+				then()
+			}
 		}
 		if doneEvent.Load() != nil {
 			if expectedAttempts != -1 {

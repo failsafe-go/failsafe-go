@@ -2,110 +2,89 @@ package testutil
 
 import (
 	"context"
-	"github.com/stretchr/testify/mock"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/tap"
+	"log"
+	"math"
+	"net"
+	"sync/atomic"
 	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/test/bufconn"
+
+	"github.com/failsafe-go/failsafe-go/internal/testutil/pbfixtures"
 )
 
-type MockInvoker struct {
-	mock.Mock
-
-	Sleep time.Duration
+type pingService struct {
+	pbfixtures.UnimplementedPingServiceServer
+	responseFn func(ctx context.Context) (*pbfixtures.PingResponse, error)
 }
 
-type MockInvokeRequest struct{}
-
-type MockInvokeResponse struct {
-	Message string
+func (s *pingService) Ping(ctx context.Context, req *pbfixtures.PingRequest) (*pbfixtures.PingResponse, error) {
+	return s.responseFn(ctx)
 }
 
-func (m *MockInvoker) Invoke(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, opts ...grpc.CallOption) error {
-	args := m.Called(ctx, method, req, reply, cc, opts)
+func MockGrpcResponses(responses ...string) pbfixtures.PingServiceServer {
+	calls := atomic.Int32{}
+	return &pingService{responseFn: func(context.Context) (*pbfixtures.PingResponse, error) {
+		idx := int(calls.Add(1)) - 1
+		idx = int(math.Min(float64(idx), float64(len(responses)-1)))
+		return &pbfixtures.PingResponse{Msg: responses[idx]}, nil
+	}}
+}
 
-	time.Sleep(m.Sleep)
+func MockDelayedGrpcResponse(response string, delay time.Duration) pbfixtures.PingServiceServer {
+	return &pingService{responseFn: func(ctx context.Context) (*pbfixtures.PingResponse, error) {
+		timer := time.NewTimer(delay)
+		select {
+		case <-timer.C:
+			return &pbfixtures.PingResponse{Msg: response}, nil
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		}
+	}}
+}
 
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
+func MockGrpcError(err error) pbfixtures.PingServiceServer {
+	return &pingService{responseFn: func(context.Context) (*pbfixtures.PingResponse, error) {
+		return nil, err
+	}}
+}
+
+func MockFlakyGrpcServer(failTimes int, err error, finalResponse string) pbfixtures.PingServiceServer {
+	failures := atomic.Int32{}
+	return &pingService{responseFn: func(context.Context) (*pbfixtures.PingResponse, error) {
+		if failures.Add(1) <= int32(failTimes) {
+			return nil, err
+		} else {
+			return &pbfixtures.PingResponse{Msg: finalResponse}, nil
+		}
+	}}
+}
+
+type Dialer func(context.Context, string) (net.Conn, error)
+
+func GrpcServer(service pbfixtures.PingServiceServer, options ...grpc.ServerOption) (*grpc.Server, Dialer) {
+	server := grpc.NewServer(options...)
+	pbfixtures.RegisterPingServiceServer(server, service)
+	listen := bufconn.Listen(1024)
+	go func() {
+		if err := server.Serve(listen); err != nil {
+			log.Fatalf("Server exited with error: %v", err)
+		}
+	}()
+	return server, func(context.Context, string) (net.Conn, error) {
+		return listen.Dial()
 	}
+}
 
-	if args.Error(1) != nil {
-		return args.Error(1)
+func GrpcClient(dialer Dialer, options ...grpc.DialOption) *grpc.ClientConn {
+	opts := []grpc.DialOption{grpc.WithContextDialer(dialer), grpc.WithTransportCredentials(insecure.NewCredentials())}
+	opts = append(opts, options...)
+	client, err := grpc.NewClient("passthrough://bufnet", opts...)
+	if err != nil {
+		panic(err)
 	}
-
-	result := args.Get(0).(*MockInvokeResponse)
-	*reply.(*MockInvokeResponse) = *result
-
-	return nil
-}
-
-type MockRetryableInvoker struct {
-	mock.Mock
-
-	AllowedRetries int
-	RetryErrorCode codes.Code
-
-	retryCount int
-}
-
-func (m *MockRetryableInvoker) Invoke(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, opts ...grpc.CallOption) error {
-	args := m.Called(ctx, method, req, reply, cc, opts)
-
-	if m.retryCount < m.AllowedRetries {
-		m.retryCount++
-		return status.Error(m.RetryErrorCode, "retry request")
-	}
-
-	if args.Error(1) != nil {
-		return args.Error(1)
-	}
-
-	result := args.Get(0).(*MockInvokeResponse)
-	*reply.(*MockInvokeResponse) = *result
-
-	return nil
-}
-
-type MockUnaryHandler struct {
-	mock.Mock
-}
-
-func (h *MockUnaryHandler) Handle(ctx context.Context, req any) (any, error) {
-	args := h.Called(ctx, req)
-
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-
-	if args.Error(1) != nil {
-		return nil, args.Error(1)
-	}
-
-	return args.Get(0), nil
-}
-
-type MockUnaryHandleRequest struct{}
-
-type MockUnaryHandleResponse struct {
-	Message string
-}
-
-type MockServerInHandle struct {
-	mock.Mock
-}
-
-func (h *MockServerInHandle) Handle(ctx context.Context, info *tap.Info) (context.Context, error) {
-	args := h.Called(ctx, info)
-
-	if args.Error(1) != nil {
-		return nil, args.Error(1)
-	}
-
-	return args.Get(0).(context.Context), nil
+	return client
 }

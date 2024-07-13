@@ -1,2 +1,2 @@
-// Package failsafegrpc is a middleware that provides a failsafe mechanism for handling failures.
+// Package failsafegrpc provides middleware that can be used to integrate Failsafe-go with gRPC.
 package failsafegrpc
