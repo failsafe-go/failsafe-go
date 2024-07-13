@@ -203,3 +203,21 @@ func TestShouldSupportTimeBasedFailureRateThresholding(t *testing.T) {
 	executor.Get(testutil.GetTrueFn)
 	assert.True(t, cb.IsClosed())
 }
+
+func TestStateChangeListener(t *testing.T) {
+	// Given
+	var called bool
+	cb := circuitbreaker.Builder[bool]().
+		WithFailureThresholdRatio(1, 2).
+		OnOpen(func(e circuitbreaker.StateChangedEvent) {
+			called = true
+			assert.Equal(t, uint(1), e.Metrics().Failures())
+			assert.Equal(t, uint(1), e.Metrics().Successes())
+		}).
+		Build()
+
+	// When / Then
+	cb.RecordSuccess()
+	cb.RecordFailure()
+	assert.True(t, called)
+}

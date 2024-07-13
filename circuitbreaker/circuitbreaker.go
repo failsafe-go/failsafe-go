@@ -144,6 +144,11 @@ type Metrics interface {
 type StateChangedEvent struct {
 	OldState State
 	NewState State
+	metrics  *eventMetrics
+}
+
+func (e *StateChangedEvent) Metrics() Metrics {
+	return e.metrics
 }
 
 type circuitBreaker[R any] struct {
@@ -190,8 +195,6 @@ func (cb *circuitBreaker[R]) RemainingDelay() time.Duration {
 }
 
 func (cb *circuitBreaker[R]) Metrics() Metrics {
-	cb.mtx.Lock()
-	defer cb.mtx.Unlock()
 	return cb
 }
 
@@ -298,6 +301,7 @@ func (cb *circuitBreaker[R]) transitionTo(newState State, exec failsafe.Executio
 		event := StateChangedEvent{
 			OldState: currentState,
 			NewState: newState,
+			metrics:  &eventMetrics{cb.state.getStats()},
 		}
 		if listener != nil {
 			listener(event)
@@ -306,6 +310,30 @@ func (cb *circuitBreaker[R]) transitionTo(newState State, exec failsafe.Executio
 			cb.config.stateChangedListener(event)
 		}
 	}
+}
+
+type eventMetrics struct {
+	stats circuitStats
+}
+
+func (m *eventMetrics) Executions() uint {
+	return m.stats.getExecutionCount()
+}
+
+func (m *eventMetrics) Failures() uint {
+	return m.stats.getFailureCount()
+}
+
+func (m *eventMetrics) FailureRate() uint {
+	return m.stats.getFailureRate()
+}
+
+func (m *eventMetrics) Successes() uint {
+	return m.stats.getSuccessCount()
+}
+
+func (m *eventMetrics) SuccessRate() uint {
+	return m.stats.getSuccessRate()
 }
 
 // Requires external locking.
