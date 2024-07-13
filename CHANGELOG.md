@@ -1,5 +1,14 @@
 ## Upcoming Release
 
+## 0.6.5
+
+### Improvements
+
+- Added gRPC unary client, unary server, and server inHandle support.
+- Expose Context() in event listeners.
+- Improve HTTP context cancellation.
+- Default `failsafehttp.RetryPolicyBuilder()` to abort on `context.Canceled`.
+
 ## 0.6.4
 
 ### Bug Fixes
