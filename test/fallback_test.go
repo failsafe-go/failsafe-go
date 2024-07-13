@@ -1,8 +1,11 @@
 package test
 
 import (
+	"context"
 	"errors"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/fallback"
@@ -83,4 +86,20 @@ func TestShouldVerifyFallbackResult(t *testing.T) {
 		With(fb).
 		Get(testutil.GetFn[any](false, errors.New("test"))).
 		AssertSuccess(1, 1, true)
+}
+
+func TestShouldNotCallFallbackWhenCanceled(t *testing.T) {
+	// Given
+	setup := testutil.SetupWithContextSleep(0)
+	fb := fallback.WithFunc(func(exec failsafe.Execution[any]) (any, error) {
+		assert.Fail(t, "should not call fallback")
+		return nil, nil
+	})
+
+	// When / Then
+	testutil.Test[any](t).
+		With(fb).
+		Context(setup).
+		Get(testutil.GetFn[any](nil, testutil.ErrInvalidArgument)).
+		AssertFailure(1, 1, context.Canceled)
 }

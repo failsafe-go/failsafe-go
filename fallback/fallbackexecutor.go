@@ -21,12 +21,15 @@ func (e *fallbackExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.
 		result := innerFn(exec)
 		result = e.PostExecute(execInternal, result)
 		if !result.Success {
+			if canceled, cancelResult := execInternal.IsCanceledWithResult(); canceled {
+				return cancelResult
+			}
+
 			// Call fallback fn
 			fallbackResult, fallbackError := e.config.fn(execInternal.CopyWithResult(result))
 			if canceled, cancelResult := execInternal.IsCanceledWithResult(); canceled {
 				return cancelResult
 			}
-
 			if e.config.onFallbackExecuted != nil {
 				e.config.onFallbackExecuted(failsafe.ExecutionDoneEvent[R]{
 					ExecutionInfo: execInternal,
