@@ -9,9 +9,9 @@ import (
 	"github.com/failsafe-go/failsafe-go/internal/util"
 )
 
-// UnaryClientInterceptor returns a grpc.UnaryClientInterceptor that wraps the invoker with a failsafe.Executor.
+// NewUnaryClientInterceptor returns a grpc.UnaryClientInterceptor that wraps the invoker with a failsafe.Executor.
 // R is the response type.
-func UnaryClientInterceptor[R any](executor failsafe.Executor[R]) grpc.UnaryClientInterceptor {
+func NewUnaryClientInterceptor[R any](executor failsafe.Executor[R]) grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		_, err := executor.GetWithExecution(func(exec failsafe.Execution[R]) (R, error) {
 			mergedCtx, cancel := util.MergeContexts(ctx, exec.Context())

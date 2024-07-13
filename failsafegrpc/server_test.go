@@ -148,11 +148,11 @@ func testServer[R any](t *testing.T, requestCtxFn func() context.Context, server
 	}
 
 	// Then
-	fmt.Println("Testing UnaryServerInterceptor")
-	testGrpc(grpc.UnaryInterceptor(UnaryServerInterceptor(executorFn())))
+	fmt.Println("Testing NewUnaryServerInterceptor")
+	testGrpc(grpc.UnaryInterceptor(NewUnaryServerInterceptor(executorFn())))
 
 	if testServerInHandle {
-		fmt.Println("Testing ServerInHandle")
-		testGrpc(grpc.InTapHandle(ServerInHandle(executorFn())))
+		fmt.Println("Testing NewServerInHandle")
+		testGrpc(grpc.InTapHandle(NewServerInHandle(executorFn())))
 	}
 }

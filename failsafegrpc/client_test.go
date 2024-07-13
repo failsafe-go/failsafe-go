@@ -175,7 +175,7 @@ func testClient[R any](t *testing.T, requestCtxFn func() context.Context, server
 	executorFn, assertResult := testutil.PrepareTest(t, nil, executor)
 	grpcServer, dialer := testutil.GrpcServer(server)
 	defer grpcServer.Stop()
-	grpcClient := testutil.GrpcClient(dialer, grpc.WithUnaryInterceptor(UnaryClientInterceptor(executorFn())))
+	grpcClient := testutil.GrpcClient(dialer, grpc.WithUnaryInterceptor(NewUnaryClientInterceptor(executorFn())))
 	defer grpcClient.Close()
 	client := pbfixtures.NewPingServiceClient(grpcClient)
 	ctx := context.Background()
