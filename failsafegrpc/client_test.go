@@ -93,7 +93,7 @@ func TestClientRetryPolicyFallback(t *testing.T) {
 	rp := retrypolicy.Builder[*pbfixtures.PingResponse]().ReturnLastFailure().Build()
 	fb := fallback.WithFunc(func(exec failsafe.Execution[*pbfixtures.PingResponse]) (*pbfixtures.PingResponse, error) {
 		exec.LastResult().Msg = "pong"
-		return exec.LastResult(), nil
+		return nil, nil
 	})
 	executor := failsafe.NewExecutor[*pbfixtures.PingResponse](fb, rp)
 
@@ -175,7 +175,7 @@ func testClient[R any](t *testing.T, requestCtxFn func() context.Context, server
 	executorFn, assertResult := testutil.PrepareTest(t, nil, executor)
 	grpcServer, dialer := testutil.GrpcServer(server)
 	defer grpcServer.Stop()
-	grpcClient := testutil.GrpcClient(dialer, grpc.WithUnaryInterceptor(NewUnaryClientInterceptor(executorFn())))
+	grpcClient := testutil.GrpcClient(dialer, grpc.WithUnaryInterceptor(NewUnaryClientInterceptorWithExecutor(executorFn())))
 	defer grpcClient.Close()
 	client := pbfixtures.NewPingServiceClient(grpcClient)
 	ctx := context.Background()

@@ -34,9 +34,7 @@ func TestServerSuccess(t *testing.T) {
 func TestServerFallback(t *testing.T) {
 	// Given
 	server := testutil.MockGrpcError(errors.New("err"))
-	fb := fallback.WithFunc(func(exec failsafe.Execution[*pbfixtures.PingResponse]) (*pbfixtures.PingResponse, error) {
-		return &pbfixtures.PingResponse{Msg: "pong"}, nil
-	})
+	fb := fallback.WithResult(&pbfixtures.PingResponse{Msg: "pong"})
 	executor := failsafe.NewExecutor[*pbfixtures.PingResponse](fb)
 
 	// When / Then
@@ -148,11 +146,11 @@ func testServer[R any](t *testing.T, requestCtxFn func() context.Context, server
 	}
 
 	// Then
-	fmt.Println("Testing NewUnaryServerInterceptor")
-	testGrpc(grpc.UnaryInterceptor(NewUnaryServerInterceptor(executorFn())))
+	fmt.Println("Testing NewUnaryServerInterceptorWithExecutor")
+	testGrpc(grpc.UnaryInterceptor(NewUnaryServerInterceptorWithExecutor(executorFn())))
 
 	if testServerInHandle {
-		fmt.Println("Testing NewServerInHandle")
-		testGrpc(grpc.InTapHandle(NewServerInHandle(executorFn())))
+		fmt.Println("Testing NewServerInHandleWithExecutor")
+		testGrpc(grpc.InTapHandle(NewServerInHandleWithExecutor(executorFn())))
 	}
 }

@@ -120,7 +120,7 @@ func TestCancelWithTimeout(t *testing.T) {
 			"for server",
 			func(t *testing.T, executor failsafe.Executor[any]) {
 				testServerFailure(t, nil, server, executor,
-					1, 1, timeout.ErrExceeded, false)
+					1, 1, timeout.ErrExceeded, true)
 			},
 		},
 	}
