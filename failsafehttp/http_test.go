@@ -31,13 +31,13 @@ func TestSuccess(t *testing.T) {
 	rp := RetryPolicyBuilder().Build()
 
 	// When / Then
-	httpTest(t, server).
+	test(t, server).
 		With(rp).
 		AssertSuccess(1, 1, 200, "foo")
 }
 
 func TestRetryPolicyWithError(t *testing.T) {
-	httpTest(t, nil).
+	test(t, nil).
 		With(RetryPolicyBuilder().ReturnLastFailure().Build()).
 		Url("http://localhost:55555").
 		AssertFailure(3, 3, syscall.ECONNREFUSED)
@@ -49,7 +49,7 @@ func TestRetryPolicyWith429(t *testing.T) {
 	rp := RetryPolicyBuilder().ReturnLastFailure().Build()
 
 	// When / Then
-	httpTest(t, server).
+	test(t, server).
 		With(rp).
 		AssertFailureResult(3, 3, 429, "foo")
 }
@@ -60,7 +60,7 @@ func TestRetryPolicyWith429ThenSuccess(t *testing.T) {
 	rp := RetryPolicyBuilder().Build()
 
 	// When / Then
-	httpTest(t, server).
+	test(t, server).
 		Setup(setup).
 		With(rp).
 		AssertSuccess(3, 3, 200, "foo")
@@ -80,7 +80,7 @@ func TestRetryPolicyWithRedirects(t *testing.T) {
 		URL: "/",
 		Err: errors.New("stopped after 10 redirects"),
 	}
-	httpTest(t, server).
+	test(t, server).
 		With(rp).
 		AssertSuccessError(1, 1, expectedErr)
 }
@@ -96,7 +96,7 @@ func TestRetryPolicyWithUnsupportedProtocolScheme(t *testing.T) {
 		URL: "rstp://localhost",
 		Err: errors.New("unsupported protocol scheme \"rstp\""),
 	}
-	httpTest(t, server).
+	test(t, server).
 		Url("rstp://localhost").
 		With(rp).
 		AssertSuccessError(1, 1, expectedErr)
@@ -135,7 +135,7 @@ func TestRetryPolicyFallback(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// When / Then
-			httpTest(t, server).
+			test(t, server).
 				Context(tc.requestCtxFn).
 				With(fb, rp).
 				AssertSuccess(tc.expectedAttempts, tc.expectedAttempts, 200, "fallback")
@@ -152,7 +152,7 @@ func TestCircuitBreaker(t *testing.T) {
 	cb.Open()
 
 	// When / Then
-	httpTest(t, server).
+	test(t, server).
 		With(rp, cb).
 		AssertFailure(3, 0, circuitbreaker.ErrOpen)
 }
@@ -164,7 +164,7 @@ func TestHedgePolicy(t *testing.T) {
 	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[*http.Response](80*time.Millisecond), stats).Build()
 
 	// When / Then
-	httpTest(t, server).
+	test(t, server).
 		Reset(stats).
 		With(hp).
 		AssertSuccess(2, -1, 200, "foo", func() {
@@ -217,7 +217,7 @@ func TestCancelWithContext(t *testing.T) {
 
 			// When / Then
 			start := time.Now()
-			httpTest(t, server).
+			test(t, server).
 				WithExecutor(executor).
 				Context(tc.requestCtxFn).
 				AssertFailure(1, 1, context.Canceled)
@@ -234,23 +234,21 @@ func TestCancelWithTimeout(t *testing.T) {
 
 	// When / Then
 	start := time.Now()
-	httpTest(t, server).
+	test(t, server).
 		With(to).
 		AssertFailure(1, 1, timeout.ErrExceeded)
 	assert.True(t, start.Add(time.Second).After(time.Now()), "timeout should immediately exit execution")
 }
 
 type tester struct {
-	t        *testing.T
-	executor failsafe.Executor[*http.Response]
-	given    func() context.Context
-	server   *httptest.Server
-	url      string
+	tester *testutil.Tester[*http.Response]
+	server *httptest.Server
+	url    string
 }
 
-func httpTest(t *testing.T, server *httptest.Server) *tester {
+func test(t *testing.T, server *httptest.Server) *tester {
 	return &tester{
-		t:      t,
+		tester: testutil.Test[*http.Response](t),
 		server: server,
 	}
 }
@@ -261,35 +259,27 @@ func (t *tester) Url(url string) *tester {
 }
 
 func (t *tester) Setup(fn func()) *tester {
-	t.given = func() context.Context {
-		fn()
-		return context.Background()
-	}
+	t.tester.Setup(fn)
 	return t
 }
 
 func (t *tester) Context(fn func() context.Context) *tester {
-	t.given = fn
+	t.tester.Context(fn)
 	return t
 }
 
 func (t *tester) Reset(stats ...testutil.Resetable) *tester {
-	t.given = func() context.Context {
-		for _, s := range stats {
-			s.Reset()
-		}
-		return context.Background()
-	}
+	t.tester.Reset(stats...)
 	return t
 }
 
 func (t *tester) With(policies ...failsafe.Policy[*http.Response]) *tester {
-	t.executor = failsafe.NewExecutor[*http.Response](policies...)
+	t.tester.With(policies...)
 	return t
 }
 
 func (t *tester) WithExecutor(executor failsafe.Executor[*http.Response]) *tester {
-	t.executor = executor
+	t.tester.WithExecutor(executor)
 	return t
 }
 
@@ -310,12 +300,7 @@ func (t *tester) AssertFailureResult(expectedAttempts int, expectedExecutions in
 }
 
 func (t *tester) assertResult(expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult string, expectedError error, expectedSuccess bool, then ...func()) {
-	executorFn, assertResult := testutil.PrepareTest(t.t, nil, t.executor)
-	if t.given == nil {
-		t.given = func() context.Context {
-			return context.Background()
-		}
-	}
+	executorFn, assertResult := testutil.PrepareTest(t.tester.T, t.tester.SetupFn, nil, t.tester.Executor)
 	assertHttpResult := func(resp *http.Response, err error) {
 		// Read body
 		var body string
@@ -329,7 +314,7 @@ func (t *tester) assertResult(expectedAttempts int, expectedExecutions int, expe
 
 		// Assert result
 		if expectedResult != "" {
-			assert.Equal(t.t, expectedResult, body)
+			assert.Equal(t.tester.T, expectedResult, body)
 		}
 
 		// Unwrap and assert URL errors
@@ -337,7 +322,7 @@ func (t *tester) assertResult(expectedAttempts int, expectedExecutions int, expe
 		urlErr1, ok1 := err.(*url.Error)
 		urlErr2, ok2 := expectedError.(*url.Error)
 		if ok1 && ok2 {
-			assert.Equal(t.t, urlErr1.Err.Error(), urlErr2.Err.Error(), "expected error did not match")
+			assert.Equal(t.tester.T, urlErr1.Err.Error(), urlErr2.Err.Error(), "expected error did not match")
 			// Clear error vars so that assertResult doesn't assert them again
 			expectedErrCopy = nil
 			err = nil
@@ -345,24 +330,29 @@ func (t *tester) assertResult(expectedAttempts int, expectedExecutions int, expe
 
 		// Assert status
 		if resp != nil && expectedStatus > 0 {
-			assert.Equal(t.t, expectedStatus, resp.StatusCode)
+			assert.Equal(t.tester.T, expectedStatus, resp.StatusCode)
 		}
 
 		// Assert remaining error and events
 		assertResult(expectedAttempts, expectedExecutions, nil, nil, expectedErrCopy, err, expectedSuccess, !expectedSuccess, then...)
 	}
-
+	ctxFn := func() context.Context {
+		if t.tester.ContextFn != nil {
+			return t.tester.ContextFn()
+		}
+		return context.Background()
+	}
 	if t.url == "" {
 		t.url = t.server.URL
 	}
 
 	// Test with roundtripper
 	fmt.Println("Testing RoundTripper")
-	assertHttpResult(testRoundTripper(t.given(), t.url, executorFn()))
+	assertHttpResult(testRoundTripper(ctxFn(), t.url, executorFn()))
 
 	// Test with failsafehttp.Request
 	fmt.Println("\nTesting failsafehttp.Request")
-	assertHttpResult(testRequest(t.given(), t.url, executorFn()))
+	assertHttpResult(testRequest(ctxFn(), t.url, executorFn()))
 
 	if t.server != nil {
 		t.server.Close()
