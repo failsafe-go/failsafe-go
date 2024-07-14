@@ -7,6 +7,7 @@
 - Added gRPC unary client, unary server, and server inHandle support.
 - Expose Context() in event listeners.
 - Improve HTTP context cancellation.
+- Add `Metrics()` to `circuitbreaker.StateChangedEvent`.
 - Default `failsafehttp.RetryPolicyBuilder()` to abort on `context.Canceled`.
 
 ## 0.6.4
