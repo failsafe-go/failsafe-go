@@ -90,7 +90,6 @@ func TestShouldVerifyFallbackResult(t *testing.T) {
 
 func TestShouldNotCallFallbackWhenCanceled(t *testing.T) {
 	// Given
-	setup := testutil.SetupWithContextSleep(0)
 	fb := fallback.WithFunc(func(exec failsafe.Execution[any]) (any, error) {
 		assert.Fail(t, "should not call fallback")
 		return nil, nil
@@ -99,7 +98,7 @@ func TestShouldNotCallFallbackWhenCanceled(t *testing.T) {
 	// When / Then
 	testutil.Test[any](t).
 		With(fb).
-		Context(setup).
+		Context(testutil.CanceledContextFn).
 		Get(testutil.GetFn[any](nil, testutil.ErrInvalidArgument)).
 		AssertFailure(1, 1, context.Canceled)
 }

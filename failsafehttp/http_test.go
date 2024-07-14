@@ -28,44 +28,42 @@ import (
 func TestSuccess(t *testing.T) {
 	// Given
 	server := testutil.MockResponse(200, "foo")
-	defer server.Close()
-	executor := failsafe.NewExecutor[*http.Response](RetryPolicyBuilder().Build())
+	rp := RetryPolicyBuilder().Build()
 
 	// When / Then
-	testHttpSuccess(t, nil, server.URL, executor,
-		1, 1, 200, "foo")
+	httpTest(t, server).
+		With(rp).
+		AssertSuccess(1, 1, 200, "foo")
 }
 
 func TestRetryPolicyWithError(t *testing.T) {
-	executor := failsafe.NewExecutor[*http.Response](retrypolicy.Builder[*http.Response]().ReturnLastFailure().Build())
-
-	// When / Then
-	testHttpFailureError(t, nil, "http://localhost:55555", executor,
-		3, 3, syscall.ECONNREFUSED)
+	httpTest(t, nil).
+		With(RetryPolicyBuilder().ReturnLastFailure().Build()).
+		Url("http://localhost:55555").
+		AssertFailure(3, 3, syscall.ECONNREFUSED)
 }
 
 func TestRetryPolicyWith429(t *testing.T) {
+	// Given
 	server := testutil.MockResponse(429, "foo")
-	defer server.Close()
-	rp := RetryPolicyBuilder().
-		ReturnLastFailure().
-		Build()
-	executor := failsafe.NewExecutor[*http.Response](rp)
+	rp := RetryPolicyBuilder().ReturnLastFailure().Build()
 
 	// When / Then
-	testHttpFailureResult(t, server.URL, executor,
-		3, 3, 429, "foo")
+	httpTest(t, server).
+		With(rp).
+		AssertFailureResult(3, 3, 429, "foo")
 }
 
 func TestRetryPolicyWith429ThenSuccess(t *testing.T) {
 	// Given
-	server, reset := testutil.MockFlakyServer(2, 429, 0, "foo")
-	defer server.Close()
-	executor := failsafe.NewExecutor[*http.Response](RetryPolicyBuilder().Build())
+	server, setup := testutil.MockFlakyServer(2, 429, 0, "foo")
+	rp := RetryPolicyBuilder().Build()
 
 	// When / Then
-	testHttpSuccess(t, nil, server.URL, executor,
-		3, 3, 200, "foo", reset)
+	httpTest(t, server).
+		Setup(setup).
+		With(rp).
+		AssertSuccess(3, 3, 200, "foo")
 }
 
 func TestRetryPolicyWithRedirects(t *testing.T) {
@@ -73,25 +71,24 @@ func TestRetryPolicyWithRedirects(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusFound)
 	}))
-	defer server.Close()
-	executor := failsafe.NewExecutor[*http.Response](RetryPolicyBuilder().Build())
+	rp := RetryPolicyBuilder().Build()
 
 	// When / Then
+	// expected attempts and executions are only 1 since redirects are followed by the HTTP client
 	expectedErr := &url.Error{
 		Op:  "Get",
 		URL: "/",
 		Err: errors.New("stopped after 10 redirects"),
 	}
-	// expected attempts and executions are only 1 since redirects are followed by the HTTP client
-	testHttpSuccessError(t, server.URL, executor,
-		1, 1, expectedErr)
+	httpTest(t, server).
+		With(rp).
+		AssertSuccessError(1, 1, expectedErr)
 }
 
 func TestRetryPolicyWithUnsupportedProtocolScheme(t *testing.T) {
 	// Given
 	server := testutil.MockResponse(200, "foo")
-	defer server.Close()
-	executor := failsafe.NewExecutor[*http.Response](RetryPolicyBuilder().Build())
+	rp := RetryPolicyBuilder().Build()
 
 	// When / Then
 	expectedErr := &url.Error{
@@ -99,14 +96,15 @@ func TestRetryPolicyWithUnsupportedProtocolScheme(t *testing.T) {
 		URL: "rstp://localhost",
 		Err: errors.New("unsupported protocol scheme \"rstp\""),
 	}
-	testHttpSuccessError(t, "rstp://localhost", executor,
-		1, 1, expectedErr)
+	httpTest(t, server).
+		Url("rstp://localhost").
+		With(rp).
+		AssertSuccessError(1, 1, expectedErr)
 }
 
 func TestRetryPolicyFallback(t *testing.T) {
 	// Given
 	server := testutil.MockResponse(429, "bad")
-	defer server.Close()
 	rp := RetryPolicyBuilder().ReturnLastFailure().Build()
 	fb := fallback.BuilderWithFunc[*http.Response](func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
 		response := &http.Response{}
@@ -116,7 +114,6 @@ func TestRetryPolicyFallback(t *testing.T) {
 	}).HandleIf(func(response *http.Response, err error) bool {
 		return (response != nil && response.StatusCode == 429) || err != nil
 	}).Build()
-	executor := failsafe.NewExecutor[*http.Response](fb, rp)
 
 	tests := []struct {
 		name             string
@@ -130,11 +127,7 @@ func TestRetryPolicyFallback(t *testing.T) {
 		},
 		{
 			"with canceled request",
-			func() context.Context {
-				ctx, cancel := context.WithCancel(context.Background())
-				cancel()
-				return ctx
-			},
+			testutil.CanceledContextFn,
 			1,
 		},
 	}
@@ -142,8 +135,10 @@ func TestRetryPolicyFallback(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// When / Then
-			testHttpSuccess(t, tc.requestCtxFn, server.URL, executor,
-				tc.expectedAttempts, tc.expectedAttempts, 200, "fallback")
+			httpTest(t, server).
+				Context(tc.requestCtxFn).
+				With(fb, rp).
+				AssertSuccess(tc.expectedAttempts, tc.expectedAttempts, 200, "fallback")
 		})
 	}
 }
@@ -151,31 +146,28 @@ func TestRetryPolicyFallback(t *testing.T) {
 // Asserts that an open circuit breaker prevents executions from occurring, even with outer retries.
 func TestCircuitBreaker(t *testing.T) {
 	// Given
+	server := testutil.MockResponse(200, "success")
 	cb := circuitbreaker.WithDefaults[*http.Response]()
 	rp := retrypolicy.WithDefaults[*http.Response]()
-	executor := failsafe.NewExecutor[*http.Response](rp, cb)
 	cb.Open()
 
 	// When / Then
-	testHttpFailureError(t, nil, "", executor,
-		3, 0, circuitbreaker.ErrOpen)
+	httpTest(t, server).
+		With(rp, cb).
+		AssertFailure(3, 0, circuitbreaker.ErrOpen)
 }
 
 func TestHedgePolicy(t *testing.T) {
 	// Given
 	server := testutil.MockDelayedResponse(200, "foo", 100*time.Millisecond)
-	defer server.Close()
 	stats := &policytesting.Stats{}
-	setup := func() context.Context {
-		stats.Reset()
-		return context.Background()
-	}
 	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[*http.Response](80*time.Millisecond), stats).Build()
-	executor := failsafe.NewExecutor[*http.Response](hp)
 
 	// When / Then
-	testHttpSuccess(t, setup, server.URL, executor,
-		2, -1, 200, "foo", func() {
+	httpTest(t, server).
+		Reset(stats).
+		With(hp).
+		AssertSuccess(2, -1, 200, "foo", func() {
 			assert.Equal(t, 1, stats.Hedges())
 		})
 }
@@ -225,8 +217,10 @@ func TestCancelWithContext(t *testing.T) {
 
 			// When / Then
 			start := time.Now()
-			testHttpFailureError(t, tc.requestCtxFn, server.URL, executor,
-				1, 1, context.Canceled)
+			httpTest(t, server).
+				WithExecutor(executor).
+				Context(tc.requestCtxFn).
+				AssertFailure(1, 1, context.Canceled)
 			assert.True(t, start.Add(time.Second).After(time.Now()), "cancellation should immediately exit execution")
 		})
 	}
@@ -236,40 +230,89 @@ func TestCancelWithContext(t *testing.T) {
 func TestCancelWithTimeout(t *testing.T) {
 	// Given
 	server := testutil.MockDelayedResponse(200, "bad", time.Second)
-	defer server.Close()
-	executor := failsafe.NewExecutor[*http.Response](timeout.With[*http.Response](100 * time.Millisecond))
+	to := timeout.With[*http.Response](100 * time.Millisecond)
 
 	// When / Then
 	start := time.Now()
-	testHttpFailureError(t, nil, server.URL, executor,
-		1, 1, timeout.ErrExceeded)
+	httpTest(t, server).
+		With(to).
+		AssertFailure(1, 1, timeout.ErrExceeded)
 	assert.True(t, start.Add(time.Second).After(time.Now()), "timeout should immediately exit execution")
 }
 
-func testHttpSuccess(t *testing.T, requestCtxFn func() context.Context, url string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult any, then ...func()) {
-	testHttp(t, requestCtxFn, url, executor, expectedAttempts, expectedExecutions, expectedStatus, expectedResult, nil, true, then...)
+type tester struct {
+	t        *testing.T
+	executor failsafe.Executor[*http.Response]
+	given    func() context.Context
+	server   *httptest.Server
+	url      string
 }
 
-func testHttpFailureResult(t *testing.T, url string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult any, then ...func()) {
-	testHttp(t, nil, url, executor, expectedAttempts, expectedExecutions, expectedStatus, expectedResult, nil, false, then...)
+func httpTest(t *testing.T, server *httptest.Server) *tester {
+	return &tester{
+		t:      t,
+		server: server,
+	}
 }
 
-func testHttpSuccessError(t *testing.T, url string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
-	testHttp(t, nil, url, executor, expectedAttempts, expectedExecutions, -1, nil, expectedError, true, then...)
+func (t *tester) Url(url string) *tester {
+	t.url = url
+	return t
 }
 
-func testHttpFailureError(t *testing.T, requestCtxFn func() context.Context, url string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
-	testHttp(t, requestCtxFn, url, executor, expectedAttempts, expectedExecutions, -1, nil, expectedError, false, then...)
+func (t *tester) Setup(fn func()) *tester {
+	t.given = func() context.Context {
+		fn()
+		return context.Background()
+	}
+	return t
 }
 
-// testHttp tests http behavior using a RoundTripper and a failsafehttp.Request.
-func testHttp(t *testing.T, requestCtxFn func() context.Context, path string, executor failsafe.Executor[*http.Response], expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult any, expectedError error, expectedSuccess bool, thens ...func()) {
-	executorFn, assertResult := testutil.PrepareTest(t, nil, executor)
-	var ctxFun func() context.Context
-	if requestCtxFn != nil {
-		ctxFun = requestCtxFn
-	} else {
-		ctxFun = func() context.Context {
+func (t *tester) Context(fn func() context.Context) *tester {
+	t.given = fn
+	return t
+}
+
+func (t *tester) Reset(stats ...testutil.Resetable) *tester {
+	t.given = func() context.Context {
+		for _, s := range stats {
+			s.Reset()
+		}
+		return context.Background()
+	}
+	return t
+}
+
+func (t *tester) With(policies ...failsafe.Policy[*http.Response]) *tester {
+	t.executor = failsafe.NewExecutor[*http.Response](policies...)
+	return t
+}
+
+func (t *tester) WithExecutor(executor failsafe.Executor[*http.Response]) *tester {
+	t.executor = executor
+	return t
+}
+
+func (t *tester) AssertSuccess(expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult string, then ...func()) {
+	t.assertResult(expectedAttempts, expectedExecutions, expectedStatus, expectedResult, nil, true, then...)
+}
+
+func (t *tester) AssertSuccessError(expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
+	t.assertResult(expectedAttempts, expectedExecutions, 0, "", expectedError, true, then...)
+}
+
+func (t *tester) AssertFailure(expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
+	t.assertResult(expectedAttempts, expectedExecutions, 0, "", expectedError, false, then...)
+}
+
+func (t *tester) AssertFailureResult(expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult string, then ...func()) {
+	t.assertResult(expectedAttempts, expectedExecutions, expectedStatus, expectedResult, nil, false, then...)
+}
+
+func (t *tester) assertResult(expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult string, expectedError error, expectedSuccess bool, then ...func()) {
+	executorFn, assertResult := testutil.PrepareTest(t.t, nil, t.executor)
+	if t.given == nil {
+		t.given = func() context.Context {
 			return context.Background()
 		}
 	}
@@ -285,8 +328,8 @@ func testHttp(t *testing.T, requestCtxFn func() context.Context, path string, ex
 		}
 
 		// Assert result
-		if expectedResult != nil {
-			assert.Equal(t, expectedResult, body)
+		if expectedResult != "" {
+			assert.Equal(t.t, expectedResult, body)
 		}
 
 		// Unwrap and assert URL errors
@@ -294,32 +337,36 @@ func testHttp(t *testing.T, requestCtxFn func() context.Context, path string, ex
 		urlErr1, ok1 := err.(*url.Error)
 		urlErr2, ok2 := expectedError.(*url.Error)
 		if ok1 && ok2 {
-			assert.Equal(t, urlErr1.Err.Error(), urlErr2.Err.Error(), "expected error did not match")
+			assert.Equal(t.t, urlErr1.Err.Error(), urlErr2.Err.Error(), "expected error did not match")
 			// Clear error vars so that assertResult doesn't assert them again
 			expectedErrCopy = nil
 			err = nil
 		}
 
 		// Assert status
-		if resp != nil && expectedStatus != -1 {
-			assert.Equal(t, expectedStatus, resp.StatusCode)
+		if resp != nil && expectedStatus > 0 {
+			assert.Equal(t.t, expectedStatus, resp.StatusCode)
 		}
 
 		// Assert remaining error and events
-		var then func()
-		if len(thens) > 0 {
-			then = thens[0]
-		}
-		assertResult(expectedAttempts, expectedExecutions, nil, nil, expectedErrCopy, err, expectedSuccess, !expectedSuccess, then)
+		assertResult(expectedAttempts, expectedExecutions, nil, nil, expectedErrCopy, err, expectedSuccess, !expectedSuccess, then...)
+	}
+
+	if t.url == "" {
+		t.url = t.server.URL
 	}
 
 	// Test with roundtripper
 	fmt.Println("Testing RoundTripper")
-	assertHttpResult(testRoundTripper(ctxFun(), path, executorFn()))
+	assertHttpResult(testRoundTripper(t.given(), t.url, executorFn()))
 
 	// Test with failsafehttp.Request
 	fmt.Println("\nTesting failsafehttp.Request")
-	assertHttpResult(testRequest(ctxFun(), path, executorFn()))
+	assertHttpResult(testRequest(t.given(), t.url, executorFn()))
+
+	if t.server != nil {
+		t.server.Close()
+	}
 }
 
 func testRoundTripper(ctx context.Context, path string, executor failsafe.Executor[*http.Response]) (resp *http.Response, err error) {
