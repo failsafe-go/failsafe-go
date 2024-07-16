@@ -71,7 +71,7 @@ func TestHttpWithCustomRetryPolicy(t *testing.T) {
 	// Create a RetryPolicy that only handles 500 responses, with backoff delays between retries
 	retryPolicy := retrypolicy.Builder[*http.Response]().
 		HandleIf(func(response *http.Response, _ error) bool {
-			return response.StatusCode == 500
+			return response != nil && response.StatusCode == 500
 		}).
 		WithBackoff(time.Second, 10*time.Second).
 		OnRetryScheduled(func(e failsafe.ExecutionScheduledEvent[*http.Response]) {
@@ -97,7 +97,7 @@ func TestHttpWithCircuitBreaker(t *testing.T) {
 	// Create a CircuitBreaker that handles 429 responses and uses a half-open delay based on the Retry-After header
 	circuitBreaker := circuitbreaker.Builder[*http.Response]().
 		HandleIf(func(response *http.Response, err error) bool {
-			return response.StatusCode == 429
+			return response != nil && response.StatusCode == 429
 		}).
 		WithDelayFunc(failsafehttp.DelayFunc).
 		OnStateChanged(func(event circuitbreaker.StateChangedEvent) {
