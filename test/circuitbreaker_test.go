@@ -221,3 +221,28 @@ func TestStateChangeListener(t *testing.T) {
 	cb.RecordFailure()
 	assert.True(t, called)
 }
+
+func TestStateChangeListenerOnClose(t *testing.T) {
+	// Given
+	var called bool
+	cb := circuitbreaker.Builder[bool]().
+		WithSuccessThresholdRatio(3, 5).
+		OnClose(func(e circuitbreaker.StateChangedEvent) {
+			called = true
+			assert.Equal(t, uint(2), e.Metrics().Failures())
+			assert.Equal(t, uint(3), e.Metrics().Successes())
+		}).
+		Build()
+
+	// When
+	cb.HalfOpen()
+
+	cb.RecordFailure()
+	cb.RecordFailure()
+	cb.RecordSuccess()
+	cb.RecordSuccess()
+	cb.RecordSuccess()
+
+	// Then
+	assert.True(t, called)
+}
