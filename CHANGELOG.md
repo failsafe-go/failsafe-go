@@ -1,5 +1,11 @@
 ## Upcoming Release
 
+## 0.6.6
+
+### Bug Fixes
+
+- Always expose metrics from old state in `StateChangedEvent`.
+
 ## 0.6.5
 
 ### Improvements

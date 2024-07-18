@@ -147,7 +147,7 @@ type StateChangedEvent struct {
 	metrics  *eventMetrics
 }
 
-// Metrics returns metrics for the CircuitBreaker when the state changed.
+// Metrics returns metrics from the CircuitBreaker old state.
 func (e *StateChangedEvent) Metrics() Metrics {
 	return e.metrics
 }
