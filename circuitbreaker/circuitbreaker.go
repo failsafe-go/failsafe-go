@@ -147,6 +147,7 @@ type StateChangedEvent struct {
 	metrics  *eventMetrics
 }
 
+// Metrics returns metrics for the CircuitBreaker when the state changed.
 func (e *StateChangedEvent) Metrics() Metrics {
 	return e.metrics
 }
@@ -281,6 +282,7 @@ func (cb *circuitBreaker[R]) ToExecutor(_ R) any {
 func (cb *circuitBreaker[R]) transitionTo(newState State, exec failsafe.Execution[R], listener func(StateChangedEvent)) {
 	transitioned := false
 	currentState := cb.state.getState()
+	currentStats := cb.state.getStats()
 	if currentState != newState {
 		switch newState {
 		case ClosedState:
@@ -301,7 +303,7 @@ func (cb *circuitBreaker[R]) transitionTo(newState State, exec failsafe.Executio
 		event := StateChangedEvent{
 			OldState: currentState,
 			NewState: newState,
-			metrics:  &eventMetrics{cb.state.getStats()},
+			metrics:  &eventMetrics{currentStats},
 		}
 		if listener != nil {
 			listener(event)
