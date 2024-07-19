@@ -67,13 +67,13 @@ func ErrorNTimesThenReturn[R any](err error, errorTimes int, results ...R) (fn f
 	return func(exec failsafe.Execution[R]) (R, error) {
 			if errorCounter < errorTimes {
 				errorCounter++
-				return *(new(R)), err
+				return *new(R), err
 			} else if resultIndex < len(results) {
 				result := results[resultIndex]
 				resultIndex++
 				return result, nil
 			}
-			return *(new(R)), nil
+			return *new(R), nil
 		}, func() {
 			errorCounter = 0
 			resultIndex = 0
@@ -87,7 +87,7 @@ func ErrorNTimesThenPanic[R any](err error, errorTimes int, panicValue any) func
 	return func(exec failsafe.Execution[R]) (R, error) {
 		if errorCounter < errorTimes {
 			errorCounter++
-			return *(new(R)), err
+			return *new(R), err
 		}
 		panic(panicValue)
 	}
@@ -100,9 +100,9 @@ func ErrorNTimesThenError[R any](err error, errorTimes int, finalError error) fu
 	return func(exec failsafe.Execution[R]) (R, error) {
 		if errorCounter < errorTimes {
 			errorCounter++
-			return *(new(R)), err
+			return *new(R), err
 		}
-		return *(new(R)), finalError
+		return *new(R), finalError
 	}
 }
 

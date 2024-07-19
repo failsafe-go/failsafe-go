@@ -73,7 +73,7 @@ func BuilderWithResult[R any](result R) FallbackBuilder[R] {
 // when an execution fails.
 func BuilderWithError[R any](err error) FallbackBuilder[R] {
 	return BuilderWithFunc(func(exec failsafe.Execution[R]) (R, error) {
-		return *(new(R)), err
+		return *new(R), err
 	})
 }
 

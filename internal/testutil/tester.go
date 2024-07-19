@@ -78,11 +78,11 @@ func (t *Tester[R]) AssertSuccess(expectedAttempts int, expectedExecutions int, 
 }
 
 func (t *Tester[R]) AssertSuccessError(expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
-	t.assertResult(expectedAttempts, expectedExecutions, *(new(R)), expectedError, true, then...)
+	t.assertResult(expectedAttempts, expectedExecutions, *new(R), expectedError, true, then...)
 }
 
 func (t *Tester[R]) AssertFailure(expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
-	t.assertResult(expectedAttempts, expectedExecutions, *(new(R)), expectedError, false, then...)
+	t.assertResult(expectedAttempts, expectedExecutions, *new(R), expectedError, false, then...)
 }
 
 func (t *Tester[R]) assertResult(expectedAttempts int, expectedExecutions int, expectedResult R, expectedError error, expectedSuccess bool, then ...func()) {

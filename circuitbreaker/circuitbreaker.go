@@ -250,7 +250,7 @@ func (cb *circuitBreaker[R]) RecordFailure() {
 func (cb *circuitBreaker[R]) RecordError(err error) {
 	cb.mtx.Lock()
 	defer cb.mtx.Unlock()
-	cb.recordResult(*(new(R)), err)
+	cb.recordResult(*new(R), err)
 }
 
 func (cb *circuitBreaker[R]) RecordResult(result R) {
