@@ -11,7 +11,7 @@ import (
 
 // hedgeExecutor is a policy.Executor that handles failures according to a HedgePolicy.
 type hedgeExecutor[R any] struct {
-	*policy.BaseExecutor[R]
+	*policy.BaseExecutor[HedgePolicyBuilder[R], R]
 	*hedgePolicy[R]
 }
 

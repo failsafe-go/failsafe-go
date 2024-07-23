@@ -13,7 +13,7 @@ import (
 
 // timeoutExecutor is a policy.Executor that handles failures according to a Timeout.
 type timeoutExecutor[R any] struct {
-	*policy.BaseExecutor[R]
+	*policy.BaseExecutor[TimeoutBuilder[R], R]
 	*timeout[R]
 }
 

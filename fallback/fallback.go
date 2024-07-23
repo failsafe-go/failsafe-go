@@ -35,7 +35,7 @@ type FallbackBuilder[R any] interface {
 }
 
 type fallbackConfig[R any] struct {
-	*policy.BaseFailurePolicy[R]
+	*policy.BaseFailurePolicy[FallbackBuilder[R], R]
 	fn                 func(failsafe.Execution[R]) (R, error)
 	onFallbackExecuted func(failsafe.ExecutionDoneEvent[R])
 }
@@ -80,35 +80,12 @@ func BuilderWithError[R any](err error) FallbackBuilder[R] {
 // BuilderWithFunc returns a FallbackBuilder for execution result type R which builds Fallbacks that use the fallbackFn to
 // handle failed executions.
 func BuilderWithFunc[R any](fallbackFunc func(exec failsafe.Execution[R]) (R, error)) FallbackBuilder[R] {
-	return &fallbackConfig[R]{
-		BaseFailurePolicy: &policy.BaseFailurePolicy[R]{},
+	b := &fallbackConfig[R]{
+		BaseFailurePolicy: &policy.BaseFailurePolicy[FallbackBuilder[R], R]{},
 		fn:                fallbackFunc,
 	}
-}
-
-func (c *fallbackConfig[R]) HandleErrors(errs ...error) FallbackBuilder[R] {
-	c.BaseFailurePolicy.HandleErrors(errs...)
-	return c
-}
-
-func (c *fallbackConfig[R]) HandleResult(result R) FallbackBuilder[R] {
-	c.BaseFailurePolicy.HandleResult(result)
-	return c
-}
-
-func (c *fallbackConfig[R]) HandleIf(predicate func(R, error) bool) FallbackBuilder[R] {
-	c.BaseFailurePolicy.HandleIf(predicate)
-	return c
-}
-
-func (c *fallbackConfig[R]) OnSuccess(listener func(event failsafe.ExecutionEvent[R])) FallbackBuilder[R] {
-	c.BaseFailurePolicy.OnSuccess(listener)
-	return c
-}
-
-func (c *fallbackConfig[R]) OnFailure(listener func(event failsafe.ExecutionEvent[R])) FallbackBuilder[R] {
-	c.BaseFailurePolicy.OnFailure(listener)
-	return c
+	b.BaseFailurePolicy.Self = b
+	return b
 }
 
 func (c *fallbackConfig[R]) OnFallbackExecuted(listener func(event failsafe.ExecutionDoneEvent[R])) FallbackBuilder[R] {
@@ -125,7 +102,7 @@ func (c *fallbackConfig[R]) Build() Fallback[R] {
 
 func (fb *fallback[R]) ToExecutor(_ R) any {
 	fbe := &fallbackExecutor[R]{
-		BaseExecutor: &policy.BaseExecutor[R]{
+		BaseExecutor: &policy.BaseExecutor[FallbackBuilder[R], R]{
 			BaseFailurePolicy: fb.config.BaseFailurePolicy,
 		},
 		fallback: fb,

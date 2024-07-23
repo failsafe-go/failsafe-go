@@ -49,7 +49,7 @@ type HedgePolicyBuilder[R any] interface {
 }
 
 type hedgePolicyConfig[R any] struct {
-	*policy.BaseAbortablePolicy[R]
+	*policy.BaseAbortablePolicy[HedgePolicyBuilder[R], R]
 
 	delayFunc failsafe.DelayFunc[R]
 	maxHedges int
@@ -97,11 +97,13 @@ func BuilderWithDelay[R any](delay time.Duration) HedgePolicyBuilder[R] {
 // If the execution is configured with a Context, a child context will be created for the execution and canceled when the
 // HedgePolicy is exceeded.
 func BuilderWithDelayFunc[R any](delayFunc failsafe.DelayFunc[R]) HedgePolicyBuilder[R] {
-	return &hedgePolicyConfig[R]{
-		BaseAbortablePolicy: &policy.BaseAbortablePolicy[R]{},
+	b := &hedgePolicyConfig[R]{
+		BaseAbortablePolicy: &policy.BaseAbortablePolicy[HedgePolicyBuilder[R], R]{},
 		delayFunc:           delayFunc,
 		maxHedges:           1,
 	}
+	b.BaseAbortablePolicy.Self = b
+	return b
 }
 
 type hedgePolicy[R any] struct {
@@ -111,18 +113,15 @@ type hedgePolicy[R any] struct {
 var _ HedgePolicy[any] = &hedgePolicy[any]{}
 
 func (c *hedgePolicyConfig[R]) CancelOnResult(result R) HedgePolicyBuilder[R] {
-	c.BaseAbortablePolicy.AbortOnResult(result)
-	return c
+	return c.BaseAbortablePolicy.AbortOnResult(result)
 }
 
 func (c *hedgePolicyConfig[R]) CancelOnErrors(errs ...error) HedgePolicyBuilder[R] {
-	c.BaseAbortablePolicy.AbortOnErrors(errs...)
-	return c
+	return c.BaseAbortablePolicy.AbortOnErrors(errs...)
 }
 
 func (c *hedgePolicyConfig[R]) CancelIf(predicate func(R, error) bool) HedgePolicyBuilder[R] {
-	c.BaseAbortablePolicy.AbortIf(predicate)
-	return c
+	return c.BaseAbortablePolicy.AbortIf(predicate)
 }
 
 func (c *hedgePolicyConfig[R]) OnHedge(listener func(failsafe.ExecutionEvent[R])) HedgePolicyBuilder[R] {
@@ -150,7 +149,7 @@ func (c *hedgePolicyConfig[R]) Build() HedgePolicy[R] {
 
 func (h *hedgePolicy[R]) ToExecutor(_ R) any {
 	he := &hedgeExecutor[R]{
-		BaseExecutor: &policy.BaseExecutor[R]{},
+		BaseExecutor: &policy.BaseExecutor[HedgePolicyBuilder[R], R]{},
 		hedgePolicy:  h,
 	}
 	he.Executor = he

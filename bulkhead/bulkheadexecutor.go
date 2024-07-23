@@ -11,7 +11,7 @@ import (
 
 // bulkheadExecutor is a policy.Executor that handles failures according to a Bulkhead.
 type bulkheadExecutor[R any] struct {
-	*policy.BaseExecutor[R]
+	*policy.BaseExecutor[BulkheadBuilder[R], R]
 	*bulkhead[R]
 }
 

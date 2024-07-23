@@ -267,7 +267,7 @@ func (cb *circuitBreaker[R]) RecordSuccess() {
 
 func (cb *circuitBreaker[R]) ToExecutor(_ R) any {
 	cbe := &circuitBreakerExecutor[R]{
-		BaseExecutor: &policy.BaseExecutor[R]{
+		BaseExecutor: &policy.BaseExecutor[CircuitBreakerBuilder[R], R]{
 			BaseFailurePolicy: cb.config.BaseFailurePolicy,
 		},
 		circuitBreaker: cb,

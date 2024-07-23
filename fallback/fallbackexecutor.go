@@ -8,7 +8,7 @@ import (
 
 // fallbackExecutor is a policy.Executor that handles failures according to a Fallback.
 type fallbackExecutor[R any] struct {
-	*policy.BaseExecutor[R]
+	*policy.BaseExecutor[FallbackBuilder[R], R]
 	*fallback[R]
 }
 

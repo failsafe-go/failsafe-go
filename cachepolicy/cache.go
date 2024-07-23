@@ -115,7 +115,7 @@ func (c *cachePolicyConfig[R]) Build() CachePolicy[R] {
 
 func (c *cachePolicy[R]) ToExecutor(_ R) any {
 	ce := &cacheExecutor[R]{
-		BaseExecutor: &policy.BaseExecutor[R]{},
+		BaseExecutor: &policy.BaseExecutor[CachePolicyBuilder[R], R]{},
 		cachePolicy:  c,
 	}
 	ce.Executor = ce

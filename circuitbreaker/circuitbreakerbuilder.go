@@ -87,8 +87,8 @@ type CircuitBreakerBuilder[R any] interface {
 }
 
 type circuitBreakerConfig[R any] struct {
-	*policy.BaseFailurePolicy[R]
-	*policy.BaseDelayablePolicy[R]
+	*policy.BaseFailurePolicy[CircuitBreakerBuilder[R], R]
+	*policy.BaseDelayablePolicy[CircuitBreakerBuilder[R], R]
 	clock                util.Clock
 	stateChangedListener func(StateChangedEvent)
 	openListener         func(StateChangedEvent)
@@ -120,15 +120,18 @@ func WithDefaults[R any]() CircuitBreaker[R] {
 // breaker that opens after a single failure, closes after a single success, and has a 1 minute delay, unless configured
 // otherwise.
 func Builder[R any]() CircuitBreakerBuilder[R] {
-	return &circuitBreakerConfig[R]{
-		BaseFailurePolicy: &policy.BaseFailurePolicy[R]{},
-		BaseDelayablePolicy: &policy.BaseDelayablePolicy[R]{
+	b := &circuitBreakerConfig[R]{
+		BaseFailurePolicy: &policy.BaseFailurePolicy[CircuitBreakerBuilder[R], R]{},
+		BaseDelayablePolicy: &policy.BaseDelayablePolicy[CircuitBreakerBuilder[R], R]{
 			Delay: time.Minute,
 		},
 		clock:                       util.NewClock(),
 		failureThreshold:            1,
 		failureThresholdingCapacity: 1,
 	}
+	b.BaseFailurePolicy.Self = b
+	b.BaseDelayablePolicy.Self = b
+	return b
 }
 
 func (c *circuitBreakerConfig[R]) Build() CircuitBreaker[R] {
@@ -137,21 +140,6 @@ func (c *circuitBreakerConfig[R]) Build() CircuitBreaker[R] {
 	}
 	breaker.state = newClosedState[R](breaker)
 	return breaker
-}
-
-func (c *circuitBreakerConfig[R]) HandleErrors(errs ...error) CircuitBreakerBuilder[R] {
-	c.BaseFailurePolicy.HandleErrors(errs...)
-	return c
-}
-
-func (c *circuitBreakerConfig[R]) HandleResult(result R) CircuitBreakerBuilder[R] {
-	c.BaseFailurePolicy.HandleResult(result)
-	return c
-}
-
-func (c *circuitBreakerConfig[R]) HandleIf(predicate func(R, error) bool) CircuitBreakerBuilder[R] {
-	c.BaseFailurePolicy.HandleIf(predicate)
-	return c
 }
 
 func (c *circuitBreakerConfig[R]) WithFailureThreshold(failureThreshold uint) CircuitBreakerBuilder[R] {
@@ -189,16 +177,6 @@ func (c *circuitBreakerConfig[R]) WithSuccessThresholdRatio(successThreshold uin
 	return c
 }
 
-func (c *circuitBreakerConfig[R]) WithDelay(delay time.Duration) CircuitBreakerBuilder[R] {
-	c.BaseDelayablePolicy.WithDelay(delay)
-	return c
-}
-
-func (c *circuitBreakerConfig[R]) WithDelayFunc(delayFunc failsafe.DelayFunc[R]) CircuitBreakerBuilder[R] {
-	c.BaseDelayablePolicy.WithDelayFunc(delayFunc)
-	return c
-}
-
 func (c *circuitBreakerConfig[R]) OnStateChanged(listener func(event StateChangedEvent)) CircuitBreakerBuilder[R] {
 	c.stateChangedListener = listener
 	return c
@@ -216,15 +194,5 @@ func (c *circuitBreakerConfig[R]) OnOpen(listener func(event StateChangedEvent))
 
 func (c *circuitBreakerConfig[R]) OnHalfOpen(listener func(event StateChangedEvent)) CircuitBreakerBuilder[R] {
 	c.halfOpenListener = listener
-	return c
-}
-
-func (c *circuitBreakerConfig[R]) OnSuccess(listener func(event failsafe.ExecutionEvent[R])) CircuitBreakerBuilder[R] {
-	c.BaseFailurePolicy.OnSuccess(listener)
-	return c
-}
-
-func (c *circuitBreakerConfig[R]) OnFailure(listener func(event failsafe.ExecutionEvent[R])) CircuitBreakerBuilder[R] {
-	c.BaseFailurePolicy.OnFailure(listener)
 	return c
 }

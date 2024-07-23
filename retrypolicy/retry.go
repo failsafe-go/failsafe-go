@@ -151,9 +151,9 @@ type RetryPolicyBuilder[R any] interface {
 }
 
 type retryPolicyConfig[R any] struct {
-	*policy.BaseFailurePolicy[R]
-	*policy.BaseDelayablePolicy[R]
-	*policy.BaseAbortablePolicy[R]
+	*policy.BaseFailurePolicy[RetryPolicyBuilder[R], R]
+	*policy.BaseDelayablePolicy[RetryPolicyBuilder[R], R]
+	*policy.BaseAbortablePolicy[RetryPolicyBuilder[R], R]
 
 	returnLastFailure bool
 	delayMin          time.Duration
@@ -186,12 +186,16 @@ func WithDefaults[R any]() RetryPolicy[R] {
 // Builder creates a RetryPolicyBuilder for execution result type R, which by default will build a RetryPolicy that
 // allows 3 execution attempts max with no delay, unless configured otherwise.
 func Builder[R any]() RetryPolicyBuilder[R] {
-	return &retryPolicyConfig[R]{
-		BaseFailurePolicy:   &policy.BaseFailurePolicy[R]{},
-		BaseDelayablePolicy: &policy.BaseDelayablePolicy[R]{},
-		BaseAbortablePolicy: &policy.BaseAbortablePolicy[R]{},
+	b := &retryPolicyConfig[R]{
+		BaseFailurePolicy:   &policy.BaseFailurePolicy[RetryPolicyBuilder[R], R]{},
+		BaseDelayablePolicy: &policy.BaseDelayablePolicy[RetryPolicyBuilder[R], R]{},
+		BaseAbortablePolicy: &policy.BaseAbortablePolicy[RetryPolicyBuilder[R], R]{},
 		maxRetries:          defaultMaxRetries,
 	}
+	b.BaseFailurePolicy.Self = b
+	b.BaseDelayablePolicy.Self = b
+	b.BaseAbortablePolicy.Self = b
+	return b
 }
 
 func (c *retryPolicyConfig[R]) Build() RetryPolicy[R] {
@@ -199,36 +203,6 @@ func (c *retryPolicyConfig[R]) Build() RetryPolicy[R] {
 	return &retryPolicy[R]{
 		config: &rpCopy, // TODO copy base fields
 	}
-}
-
-func (c *retryPolicyConfig[R]) AbortOnResult(result R) RetryPolicyBuilder[R] {
-	c.BaseAbortablePolicy.AbortOnResult(result)
-	return c
-}
-
-func (c *retryPolicyConfig[R]) AbortOnErrors(errs ...error) RetryPolicyBuilder[R] {
-	c.BaseAbortablePolicy.AbortOnErrors(errs...)
-	return c
-}
-
-func (c *retryPolicyConfig[R]) AbortIf(predicate func(R, error) bool) RetryPolicyBuilder[R] {
-	c.BaseAbortablePolicy.AbortIf(predicate)
-	return c
-}
-
-func (c *retryPolicyConfig[R]) HandleErrors(errs ...error) RetryPolicyBuilder[R] {
-	c.BaseFailurePolicy.HandleErrors(errs...)
-	return c
-}
-
-func (c *retryPolicyConfig[R]) HandleResult(result R) RetryPolicyBuilder[R] {
-	c.BaseFailurePolicy.HandleResult(result)
-	return c
-}
-
-func (c *retryPolicyConfig[R]) HandleIf(predicate func(R, error) bool) RetryPolicyBuilder[R] {
-	c.BaseFailurePolicy.HandleIf(predicate)
-	return c
 }
 
 func (c *retryPolicyConfig[R]) ReturnLastFailure() RetryPolicyBuilder[R] {
@@ -252,16 +226,6 @@ func (c *retryPolicyConfig[R]) WithMaxRetries(maxRetries int) RetryPolicyBuilder
 
 func (c *retryPolicyConfig[R]) WithMaxDuration(maxDuration time.Duration) RetryPolicyBuilder[R] {
 	c.maxDuration = maxDuration
-	return c
-}
-
-func (c *retryPolicyConfig[R]) WithDelay(delay time.Duration) RetryPolicyBuilder[R] {
-	c.BaseDelayablePolicy.WithDelay(delay)
-	return c
-}
-
-func (c *retryPolicyConfig[R]) WithDelayFunc(delayFunc failsafe.DelayFunc[R]) RetryPolicyBuilder[R] {
-	c.BaseDelayablePolicy.WithDelayFunc(delayFunc)
 	return c
 }
 
@@ -300,16 +264,6 @@ func (c *retryPolicyConfig[R]) WithJitterFactor(jitterFactor float32) RetryPolic
 	return c
 }
 
-func (c *retryPolicyConfig[R]) OnSuccess(listener func(event failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R] {
-	c.BaseFailurePolicy.OnSuccess(listener)
-	return c
-}
-
-func (c *retryPolicyConfig[R]) OnFailure(listener func(event failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R] {
-	c.BaseFailurePolicy.OnFailure(listener)
-	return c
-}
-
 func (c *retryPolicyConfig[R]) OnAbort(listener func(failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R] {
 	c.onAbort = listener
 	return c
@@ -336,7 +290,7 @@ func (c *retryPolicyConfig[R]) allowsRetries() bool {
 
 func (rp *retryPolicy[R]) ToExecutor(_ R) any {
 	rpe := &retryPolicyExecutor[R]{
-		BaseExecutor: &policy.BaseExecutor[R]{
+		BaseExecutor: &policy.BaseExecutor[RetryPolicyBuilder[R], R]{
 			BaseFailurePolicy: rp.config.BaseFailurePolicy,
 		},
 		retryPolicy: rp,

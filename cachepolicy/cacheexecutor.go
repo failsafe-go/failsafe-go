@@ -11,7 +11,7 @@ import (
 
 // cacheExecutor is a policy.Executor that handles failures according to a CachePolicy.
 type cacheExecutor[R any] struct {
-	*policy.BaseExecutor[R]
+	*policy.BaseExecutor[CachePolicyBuilder[R], R]
 	*cachePolicy[R]
 }
 

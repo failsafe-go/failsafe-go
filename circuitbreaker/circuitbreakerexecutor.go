@@ -8,7 +8,7 @@ import (
 
 // circuitBreakerExecutor is a policy.Executor that handles failures according to a CircuitBreaker.
 type circuitBreakerExecutor[R any] struct {
-	*policy.BaseExecutor[R]
+	*policy.BaseExecutor[CircuitBreakerBuilder[R], R]
 	*circuitBreaker[R]
 }
 

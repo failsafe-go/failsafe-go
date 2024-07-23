@@ -12,13 +12,13 @@ import (
 )
 
 func TestIsFailureForNil(t *testing.T) {
-	policy := BaseFailurePolicy[any]{}
+	policy := BaseFailurePolicy[any, any]{}
 
 	assert.False(t, policy.IsFailure(nil, nil))
 }
 
 func TestIsFailureForError(t *testing.T) {
-	policy := BaseFailurePolicy[any]{}
+	policy := BaseFailurePolicy[any, any]{}
 	assert.True(t, policy.IsFailure(nil, errors.New("test")))
 	assert.True(t, policy.IsFailure(nil, testutil.ErrInvalidState))
 
@@ -28,7 +28,7 @@ func TestIsFailureForError(t *testing.T) {
 }
 
 func TestIsFailureForResult(t *testing.T) {
-	policy := BaseFailurePolicy[any]{}
+	policy := BaseFailurePolicy[any, any]{}
 	policy.HandleResult(10)
 
 	assert.True(t, policy.IsFailure(10, nil))
@@ -36,7 +36,7 @@ func TestIsFailureForResult(t *testing.T) {
 }
 
 func TestIsFailureForPredicate(t *testing.T) {
-	policy := BaseFailurePolicy[any]{}
+	policy := BaseFailurePolicy[any, any]{}
 	policy.HandleIf(func(result any, err error) bool {
 		return result == "test" || errors.Is(err, testutil.ErrInvalidArgument)
 	})
@@ -49,7 +49,7 @@ func TestIsFailureForPredicate(t *testing.T) {
 
 func TestShouldComputeDelay(t *testing.T) {
 	expected := 5 * time.Millisecond
-	policy := BaseDelayablePolicy[any]{
+	policy := BaseDelayablePolicy[any, any]{
 		DelayFunc: func(exec failsafe.ExecutionAttempt[any]) time.Duration {
 			return expected
 		},
@@ -62,13 +62,13 @@ func TestShouldComputeDelay(t *testing.T) {
 }
 
 func TestIsAbortableNil(t *testing.T) {
-	policy := BaseAbortablePolicy[any]{}
+	policy := BaseAbortablePolicy[any, any]{}
 
 	assert.False(t, policy.IsAbortable(nil, nil))
 }
 
 func TestIsAbortableForError(t *testing.T) {
-	policy := BaseAbortablePolicy[any]{}
+	policy := BaseAbortablePolicy[any, any]{}
 	policy.AbortOnErrors(testutil.ErrInvalidArgument)
 
 	assert.True(t, policy.IsAbortable(nil, testutil.ErrInvalidArgument))
@@ -77,7 +77,7 @@ func TestIsAbortableForError(t *testing.T) {
 }
 
 func TestIsAbortableForResult(t *testing.T) {
-	policy := BaseAbortablePolicy[any]{}
+	policy := BaseAbortablePolicy[any, any]{}
 	policy.AbortOnResult(10)
 
 	assert.True(t, policy.IsAbortable(10, nil))
@@ -86,7 +86,7 @@ func TestIsAbortableForResult(t *testing.T) {
 }
 
 func TestIsAbortableForPredicate(t *testing.T) {
-	policy := BaseAbortablePolicy[any]{}
+	policy := BaseAbortablePolicy[any, any]{}
 	policy.AbortIf(func(s any, err error) bool {
 		return s == "test" || errors.Is(err, testutil.ErrInvalidArgument)
 	})

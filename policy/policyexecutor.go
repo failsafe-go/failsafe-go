@@ -34,18 +34,18 @@ type Executor[R any] interface {
 }
 
 // BaseExecutor provides base implementation of Executor.
-type BaseExecutor[R any] struct {
+type BaseExecutor[P any, R any] struct {
 	Executor[R]
-	*BaseFailurePolicy[R]
+	*BaseFailurePolicy[P, R]
 }
 
-var _ Executor[any] = &BaseExecutor[any]{}
+var _ Executor[any] = &BaseExecutor[any, any]{}
 
-func (e *BaseExecutor[R]) PreExecute(_ ExecutionInternal[R]) *common.PolicyResult[R] {
+func (e *BaseExecutor[P, R]) PreExecute(_ ExecutionInternal[R]) *common.PolicyResult[R] {
 	return nil
 }
 
-func (e *BaseExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
+func (e *BaseExecutor[P, R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(ExecutionInternal[R])
 		result := e.Executor.PreExecute(execInternal)
@@ -58,7 +58,7 @@ func (e *BaseExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.Poli
 	}
 }
 
-func (e *BaseExecutor[R]) PostExecute(exec ExecutionInternal[R], er *common.PolicyResult[R]) *common.PolicyResult[R] {
+func (e *BaseExecutor[P, R]) PostExecute(exec ExecutionInternal[R], er *common.PolicyResult[R]) *common.PolicyResult[R] {
 	if e.Executor.IsFailure(er.Result, er.Error) {
 		er = e.Executor.OnFailure(exec, er.WithFailure())
 	} else {
@@ -68,14 +68,14 @@ func (e *BaseExecutor[R]) PostExecute(exec ExecutionInternal[R], er *common.Poli
 	return er
 }
 
-func (e *BaseExecutor[R]) IsFailure(result R, err error) bool {
+func (e *BaseExecutor[P, R]) IsFailure(result R, err error) bool {
 	if e.BaseFailurePolicy != nil {
 		return e.BaseFailurePolicy.IsFailure(result, err)
 	}
 	return err != nil
 }
 
-func (e *BaseExecutor[R]) OnSuccess(exec ExecutionInternal[R], result *common.PolicyResult[R]) {
+func (e *BaseExecutor[P, R]) OnSuccess(exec ExecutionInternal[R], result *common.PolicyResult[R]) {
 	if e.BaseFailurePolicy != nil && e.onSuccess != nil {
 		e.onSuccess(failsafe.ExecutionEvent[R]{
 			ExecutionAttempt: exec.CopyWithResult(result),
@@ -83,7 +83,7 @@ func (e *BaseExecutor[R]) OnSuccess(exec ExecutionInternal[R], result *common.Po
 	}
 }
 
-func (e *BaseExecutor[R]) OnFailure(exec ExecutionInternal[R], result *common.PolicyResult[R]) *common.PolicyResult[R] {
+func (e *BaseExecutor[P, R]) OnFailure(exec ExecutionInternal[R], result *common.PolicyResult[R]) *common.PolicyResult[R] {
 	if e.BaseFailurePolicy != nil && e.onFailure != nil {
 		e.onFailure(failsafe.ExecutionEvent[R]{
 			ExecutionAttempt: exec.CopyWithResult(result),

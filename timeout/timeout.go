@@ -71,7 +71,7 @@ func (c *timeoutConfig[R]) Build() Timeout[R] {
 
 func (t *timeout[R]) ToExecutor(_ R) any {
 	te := &timeoutExecutor[R]{
-		BaseExecutor: &policy.BaseExecutor[R]{},
+		BaseExecutor: &policy.BaseExecutor[TimeoutBuilder[R], R]{},
 		timeout:      t,
 	}
 	te.Executor = te

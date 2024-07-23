@@ -11,7 +11,7 @@ import (
 
 // rateLimiterExecutor is a policy.Executor that handles failures according to a RateLimiter.
 type rateLimiterExecutor[R any] struct {
-	*policy.BaseExecutor[R]
+	*policy.BaseExecutor[RateLimiterBuilder[R], R]
 	*rateLimiter[R]
 }
 
