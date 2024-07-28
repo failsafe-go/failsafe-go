@@ -1,6 +1,7 @@
 package retrypolicy
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,40 +11,34 @@ import (
 
 const defaultMaxRetries = 2
 
-// ErrExceeded is an empty ExceededError instance, useful for building policies that want to handle this error.
-var ErrExceeded = &ExceededError{}
+// ErrExceeded is a convenience error sentinel that can be used to build policies that handle ExceededError, such as via
+// HandleErrors(retrypolicy.ErrExceeded). It can also be used with Errors.Is to determine whether an error is a
+// retrypolicy.ExceededError.
+var ErrExceeded = errors.New("retries exceeded")
 
-// ExceededError is returned when a RetryPolicy's max attempts or max duration are exceeded.
+// ExceededError is returned when a RetryPolicy's max attempts or max duration are exceeded. This type can be used with
+// HandleErrorTypes(retrypolicy.ExceededError{}).
 type ExceededError struct {
-	lastResult any
-	lastError  error
+	LastResult any
+	LastError  error
 }
 
-// LastResult returns the last result that caused the ExceededError.
-func (e *ExceededError) LastResult() any {
-	return e.lastResult
+func (e ExceededError) Error() string {
+	return fmt.Sprintf("retries exceeded. last result: %v, last error: %v", e.LastResult, e.LastError)
 }
 
-// LastError returns the last error that caused the ExceededError.
-func (e *ExceededError) LastError() error {
-	return e.lastError
-}
-
-func (e *ExceededError) Error() string {
-	return fmt.Sprintf("retries exceeded. last result: %v, last error: %v", e.lastResult, e.lastError)
-}
-
-func (e *ExceededError) Unwrap() error {
-	if e.lastError != nil {
-		return e.lastError
+func (e ExceededError) Is(err error) bool {
+	if err == ErrExceeded {
+		return true
 	}
-	return fmt.Errorf("failure: %v", e.lastResult)
+	return err == e
 }
 
-// Is returns whether err is of the type ExceededError.
-func (e *ExceededError) Is(err error) bool {
-	_, ok := err.(*ExceededError)
-	return ok
+func (e ExceededError) Unwrap() error {
+	if e.LastError != nil {
+		return e.LastError
+	}
+	return fmt.Errorf("failure: %v", e.LastResult)
 }
 
 // RetryPolicy is a policy that defines when retries should be performed. See RetryPolicyBuilder for configuration
@@ -83,6 +78,11 @@ type RetryPolicyBuilder[R any] interface {
 
 	// AbortOnErrors specifies that retries should be aborted if the execution error matches any of the errs using errors.Is.
 	AbortOnErrors(errs ...error) RetryPolicyBuilder[R]
+
+	// AbortOnErrorTypes specifies the errors whose types should cause retries to be aborted. Any execution errors or their
+	// Unwrapped parents whose type matches any of the errs' types will cause to be aborted. This is similar to the check
+	// that errors.As performs.
+	AbortOnErrorTypes(errs ...any) RetryPolicyBuilder[R]
 
 	// AbortIf specifies that retries should be aborted if the predicate matches the result or error.
 	AbortIf(predicate func(R, error) bool) RetryPolicyBuilder[R]
@@ -211,6 +211,11 @@ func (c *retryPolicyConfig[R]) AbortOnErrors(errs ...error) RetryPolicyBuilder[R
 	return c
 }
 
+func (c *retryPolicyConfig[R]) AbortOnErrorTypes(errs ...any) RetryPolicyBuilder[R] {
+	c.BaseAbortablePolicy.AbortOnErrorTypes(errs...)
+	return c
+}
+
 func (c *retryPolicyConfig[R]) AbortIf(predicate func(R, error) bool) RetryPolicyBuilder[R] {
 	c.BaseAbortablePolicy.AbortIf(predicate)
 	return c
@@ -218,6 +223,11 @@ func (c *retryPolicyConfig[R]) AbortIf(predicate func(R, error) bool) RetryPolic
 
 func (c *retryPolicyConfig[R]) HandleErrors(errs ...error) RetryPolicyBuilder[R] {
 	c.BaseFailurePolicy.HandleErrors(errs...)
+	return c
+}
+
+func (c *retryPolicyConfig[R]) HandleErrorTypes(errs ...any) RetryPolicyBuilder[R] {
+	c.BaseFailurePolicy.HandleErrorTypes(errs...)
 	return c
 }
 

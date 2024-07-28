@@ -35,7 +35,7 @@ func TestShouldReturnRetriesExceededError(t *testing.T) {
 		With(rp).
 		Reset(stats).
 		Get(testutil.GetFn(false, testutil.ErrConnecting)).
-		AssertFailure(3, 3, &retrypolicy.ExceededError{}, func() {
+		AssertFailureAs(3, 3, &retrypolicy.ExceededError{}, func() {
 			assert.Equal(t, 2, stats.Retries())
 			assert.Equal(t, 1, stats.RetriesExceeded())
 		})
@@ -50,10 +50,10 @@ func TestShouldReturnExceededErrorWrappingResults(t *testing.T) {
 	err := failsafe.Run(func() error {
 		return underlyingErr
 	}, rp1)
-	var reErr *retrypolicy.ExceededError
+	var reErr retrypolicy.ExceededError
 	assert.True(t, errors.As(err, &reErr))
-	assert.Equal(t, underlyingErr, reErr.LastError())
-	assert.Nil(t, reErr.LastResult())
+	assert.Equal(t, underlyingErr, reErr.LastError)
+	assert.Nil(t, reErr.LastResult)
 
 	// Given
 	rp2 := retrypolicy.Builder[bool]().HandleResult(false).Build()
@@ -63,8 +63,8 @@ func TestShouldReturnExceededErrorWrappingResults(t *testing.T) {
 		return false, nil
 	}, rp2)
 	assert.True(t, errors.As(err, &reErr))
-	assert.Nil(t, reErr.LastError())
-	assert.Equal(t, false, reErr.LastResult())
+	assert.Nil(t, reErr.LastError)
+	assert.Equal(t, false, reErr.LastResult)
 }
 
 // Tests a simple execution that does not retry.
@@ -117,7 +117,7 @@ func TestShouldFailWhenMaxDurationExceeded(t *testing.T) {
 			}
 			return false, errors.New("test")
 		}).
-		AssertFailure(2, 2, &retrypolicy.ExceededError{})
+		AssertFailureAs(2, 2, &retrypolicy.ExceededError{})
 }
 
 // Asserts that the last failure is returned

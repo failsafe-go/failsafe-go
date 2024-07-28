@@ -214,5 +214,5 @@ func testClient[R any](t *testing.T, requestCtxFn func() context.Context, server
 
 	// Then
 	var nilR R
-	assertResult(expectedAttempts, expectedExecutions, nilR, nilR, expectedError, err, expectedSuccess, !expectedSuccess, thens...)
+	assertResult(expectedAttempts, expectedExecutions, nilR, nilR, expectedError, err, expectedSuccess, !expectedSuccess, false, thens...)
 }

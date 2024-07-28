@@ -96,9 +96,9 @@ func (e *retryPolicyExecutor[R]) OnFailure(exec policy.ExecutionInternal[R], res
 			e.config.onRetriesExceeded(failsafe.ExecutionEvent[R]{ExecutionAttempt: exec.CopyWithResult(result)})
 		}
 		if !e.config.returnLastFailure {
-			return internal.FailureResult[R](&ExceededError{
-				lastResult: result.Result,
-				lastError:  result.Error,
+			return internal.FailureResult[R](ExceededError{
+				LastResult: result.Result,
+				LastError:  result.Error,
 			})
 		}
 	}

@@ -142,7 +142,7 @@ func testServer[R any](t *testing.T, requestCtxFn func() context.Context, server
 		}
 
 		var nilR R
-		assertResult(expectedAttempts, expectedExecutions, nilR, nilR, nil, nil, expectedSuccess, !expectedSuccess, thens...)
+		assertResult(expectedAttempts, expectedExecutions, nilR, nilR, nil, nil, expectedSuccess, !expectedSuccess, false, thens...)
 	}
 
 	// Then

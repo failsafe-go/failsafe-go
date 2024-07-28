@@ -144,6 +144,11 @@ func (c *circuitBreakerConfig[R]) HandleErrors(errs ...error) CircuitBreakerBuil
 	return c
 }
 
+func (c *circuitBreakerConfig[R]) HandleErrorTypes(errs ...any) CircuitBreakerBuilder[R] {
+	c.BaseFailurePolicy.HandleErrorTypes(errs...)
+	return c
+}
+
 func (c *circuitBreakerConfig[R]) HandleResult(result R) CircuitBreakerBuilder[R] {
 	c.BaseFailurePolicy.HandleResult(result)
 	return c

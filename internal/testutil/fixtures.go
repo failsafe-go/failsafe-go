@@ -8,44 +8,35 @@ import (
 	"github.com/failsafe-go/failsafe-go"
 )
 
+var (
+	ErrInvalidArgument = errors.New("invalid argument")
+	ErrInvalidState    = errors.New("invalid state")
+	ErrConnecting      = errors.New("connection error")
+
+	NoopFn = func() error { return nil }
+
+	GetFalseFn = func() (bool, error) { return false, nil }
+
+	GetTrueFn = func() (bool, error) { return true, nil }
+)
+
+type CustomError struct{ Msg string }
+
+func (e CustomError) Error() string { return e.Msg }
+
 type CompositeError struct {
 	Cause error
 }
 
-func (ce *CompositeError) Error() string {
-	return "CompositeError"
-}
+func (e CompositeError) Error() string { return "CompositeError" }
 
-func (ce *CompositeError) Unwrap() error {
-	return ce.Cause
-}
+func (e CompositeError) Unwrap() error { return e.Cause }
 
-func (ce *CompositeError) Is(err error) bool {
-	_, ok := err.(*CompositeError)
-	return ok
-}
+type MultiError []error
 
-func NewCompositeError(cause error) *CompositeError {
-	return &CompositeError{
-		Cause: cause,
-	}
-}
+func (e MultiError) Error() string { return "MultiError" }
 
-var ErrInvalidArgument = errors.New("invalid argument")
-var ErrInvalidState = errors.New("invalid state")
-var ErrConnecting = errors.New("connection error")
-
-var NoopFn = func() error {
-	return nil
-}
-
-var GetFalseFn = func() (bool, error) {
-	return false, nil
-}
-
-var GetTrueFn = func() (bool, error) {
-	return true, nil
-}
+func (e MultiError) Unwrap() []error { return e }
 
 func RunFn(err error) func(failsafe.Execution[any]) error {
 	return func(exec failsafe.Execution[any]) error {

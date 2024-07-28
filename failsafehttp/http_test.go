@@ -334,7 +334,7 @@ func (t *tester) assertResult(expectedAttempts int, expectedExecutions int, expe
 		}
 
 		// Assert remaining error and events
-		assertResult(expectedAttempts, expectedExecutions, nil, nil, expectedErrCopy, err, expectedSuccess, !expectedSuccess, then...)
+		assertResult(expectedAttempts, expectedExecutions, nil, nil, expectedErrCopy, err, expectedSuccess, !expectedSuccess, false, then...)
 	}
 	ctxFn := func() context.Context {
 		if t.tester.ContextFn != nil {

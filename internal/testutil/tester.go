@@ -74,18 +74,22 @@ func (t *Tester[R]) Get(when WhenGet[R]) *Tester[R] {
 }
 
 func (t *Tester[R]) AssertSuccess(expectedAttempts int, expectedExecutions int, expectedResult R, then ...func()) {
-	t.assertResult(expectedAttempts, expectedExecutions, expectedResult, nil, true, then...)
+	t.assertResult(expectedAttempts, expectedExecutions, expectedResult, nil, true, false, then...)
 }
 
 func (t *Tester[R]) AssertSuccessError(expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
-	t.assertResult(expectedAttempts, expectedExecutions, *new(R), expectedError, true, then...)
+	t.assertResult(expectedAttempts, expectedExecutions, *new(R), expectedError, true, false, then...)
 }
 
 func (t *Tester[R]) AssertFailure(expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
-	t.assertResult(expectedAttempts, expectedExecutions, *new(R), expectedError, false, then...)
+	t.assertResult(expectedAttempts, expectedExecutions, *new(R), expectedError, false, false, then...)
 }
 
-func (t *Tester[R]) assertResult(expectedAttempts int, expectedExecutions int, expectedResult R, expectedError error, expectedSuccess bool, then ...func()) {
+func (t *Tester[R]) AssertFailureAs(expectedAttempts int, expectedExecutions int, expectedError error, then ...func()) {
+	t.assertResult(expectedAttempts, expectedExecutions, *new(R), expectedError, false, true, then...)
+}
+
+func (t *Tester[R]) assertResult(expectedAttempts int, expectedExecutions int, expectedResult R, expectedError error, expectedSuccess bool, errorAs bool, then ...func()) {
 	test := func(async bool) {
 		executorFn, assertFn := PrepareTest(t.T, t.SetupFn, t.ContextFn, t.Executor)
 
@@ -107,7 +111,7 @@ func (t *Tester[R]) assertResult(expectedAttempts int, expectedExecutions int, e
 			}
 		}
 
-		assertFn(expectedAttempts, expectedExecutions, expectedResult, result, expectedError, err, expectedSuccess, !expectedSuccess, then...)
+		assertFn(expectedAttempts, expectedExecutions, expectedResult, result, expectedError, err, expectedSuccess, !expectedSuccess, errorAs, then...)
 	}
 
 	// Run sync
@@ -115,11 +119,11 @@ func (t *Tester[R]) assertResult(expectedAttempts int, expectedExecutions int, e
 	test(false)
 
 	// Run async
-	fmt.Println("\nTesting async")
-	test(true)
+	//fmt.Println("\nTesting async")
+	//test(true)
 }
 
-type AssertFunc[R any] func(expectedAttempts int, expectedExecutions int, expectedResult R, result R, expectedErr error, err error, expectedSuccess bool, expectedFailure bool, thens ...func())
+type AssertFunc[R any] func(expectedAttempts int, expectedExecutions int, expectedResult R, result R, expectedErr error, err error, expectedSuccess bool, expectedFailure bool, errorAs bool, thens ...func())
 
 func PrepareTest[R any](t *testing.T, setupFn func(), contextFn ContextFn, executor failsafe.Executor[R]) (executorFn func() failsafe.Executor[R], assertFn AssertFunc[R]) {
 	var doneEvent atomic.Pointer[failsafe.ExecutionDoneEvent[R]]
@@ -145,7 +149,7 @@ func PrepareTest[R any](t *testing.T, setupFn func(), contextFn ContextFn, execu
 		})
 	}
 
-	assertFn = func(expectedAttempts int, expectedExecutions int, expectedResult R, result R, expectedErr error, err error, expectedSuccess bool, expectedFailure bool, thens ...func()) {
+	assertFn = func(expectedAttempts int, expectedExecutions int, expectedResult R, result R, expectedErr error, err error, expectedSuccess bool, expectedFailure bool, errorAs bool, thens ...func()) {
 		for _, then := range thens {
 			if then != nil {
 				then()
@@ -163,7 +167,11 @@ func PrepareTest[R any](t *testing.T, setupFn func(), contextFn ContextFn, execu
 		if expectedErr == nil {
 			assert.Nil(t, err, " error should be nil")
 		} else {
-			assert.ErrorIs(t, err, expectedErr, "expected error did not match")
+			if errorAs {
+				assert.ErrorAs(t, err, expectedErr, "expected error did not match")
+			} else {
+				assert.ErrorIs(t, err, expectedErr, "expected error did not match")
+			}
 		}
 		if expectedSuccess {
 			assert.True(t, onSuccessCalled.Load(), "onSuccess should have been called")

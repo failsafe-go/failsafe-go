@@ -13,7 +13,7 @@ import (
 )
 
 // Tests Fallback.WithResult
-func TestFallbackOfResult(t *testing.T) {
+func TestFallbackWithResult(t *testing.T) {
 	fb := fallback.WithResult(true)
 
 	testutil.Test[bool](t).
@@ -23,7 +23,7 @@ func TestFallbackOfResult(t *testing.T) {
 }
 
 // Tests Fallback.WithError
-func TestShouldFallbackOfError(t *testing.T) {
+func TestShouldFallbackWithError(t *testing.T) {
 	fb := fallback.WithError[bool](testutil.ErrInvalidArgument)
 
 	testutil.Test[bool](t).
@@ -33,15 +33,15 @@ func TestShouldFallbackOfError(t *testing.T) {
 }
 
 // Tests Fallback.WithFunc
-func TestShouldFallbackOfFn(t *testing.T) {
+func TestShouldFallbackWithFunc(t *testing.T) {
 	fb := fallback.WithFunc(func(exec failsafe.Execution[bool]) (bool, error) {
-		return false, testutil.NewCompositeError(exec.LastError())
+		return false, testutil.CompositeError{Cause: exec.LastError()}
 	})
 
 	testutil.Test[bool](t).
 		With(fb).
 		Get(testutil.GetFn(false, testutil.ErrConnecting)).
-		AssertFailure(1, 1, testutil.NewCompositeError(testutil.ErrConnecting))
+		AssertFailureAs(1, 1, &testutil.CompositeError{Cause: testutil.ErrConnecting})
 }
 
 // Tests a successful execution that does not fallback

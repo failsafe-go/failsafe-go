@@ -72,7 +72,7 @@ func TestIsAbortableForError(t *testing.T) {
 	policy.AbortOnErrors(testutil.ErrInvalidArgument)
 
 	assert.True(t, policy.IsAbortable(nil, testutil.ErrInvalidArgument))
-	assert.True(t, policy.IsAbortable(nil, testutil.NewCompositeError(testutil.ErrInvalidArgument)))
+	assert.True(t, policy.IsAbortable(nil, testutil.CompositeError{Cause: testutil.ErrInvalidArgument}))
 	assert.False(t, policy.IsAbortable(nil, testutil.ErrConnecting))
 }
 

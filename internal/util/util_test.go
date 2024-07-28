@@ -2,18 +2,121 @@ package util
 
 import (
 	"context"
+	"errors"
+	"net"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
-	"github.com/failsafe-go/failsafe-go/internal/testutil"
+	. "github.com/failsafe-go/failsafe-go/internal/testutil"
 )
+
+func TestErrorAs(t *testing.T) {
+	var timeoutType interface{ Timeout() bool }
+	_, pathErr := os.Open("foobar")
+	_, netError := net.DialTimeout("tcp", "foobar.com:888", time.Nanosecond)
+
+	testCases := []struct {
+		name     string
+		err      error
+		target   any
+		expected bool
+	}{{
+		"should not match nil error",
+		nil,
+		os.PathError{},
+		false,
+	}, {
+		"should match error to struct of same type",
+		pathErr,
+		os.PathError{},
+		true,
+	}, {
+		"should match error to pointer of same type",
+		pathErr,
+		&os.PathError{},
+		true,
+	}, {
+		"should match error to net.Error",
+		netError,
+		new(net.Error),
+		true,
+	}, {
+		"should match error to net.OpError",
+		netError,
+		net.OpError{},
+		true,
+	}, {
+		"should match interface of some type",
+		pathErr,
+		&timeoutType,
+		true,
+	}, {
+		"should not match composite error with different type",
+		CompositeError{},
+		os.PathError{},
+		false,
+	}, {
+		"should not match composite errors with different type",
+		CompositeError{nil},
+		CustomError{},
+		false,
+	}, {
+		"should match composite errors with same type",
+		CompositeError{CustomError{"test"}},
+		CustomError{},
+		true,
+	}, {
+		"should match composite types with some interface",
+		CompositeError{pathErr},
+		&timeoutType,
+		true,
+	}, {
+		"should not match error to different interface",
+		errors.New("test"),
+		&timeoutType,
+		false,
+	}, {
+		"should not match multi error to different type",
+		MultiError{},
+		CustomError{},
+		false,
+	}, {
+		"should not match multi errors to different type",
+		MultiError{nil},
+		CustomError{},
+		false,
+	}, {
+		"should match multi error with some interface",
+		MultiError{CompositeError{pathErr}},
+		&timeoutType,
+		true,
+	}, {
+		"should match multi error with matching type",
+		MultiError{errors.New("a"), CustomError{"b"}},
+		CustomError{},
+		true,
+	}, {
+		"should match nested multi error with matching type",
+		MultiError{MultiError{errors.New("a"), CustomError{"a"}}},
+		CustomError{},
+		true,
+	}}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := ErrorTypesMatch(tc.err, tc.target)
+			require.Equal(t, tc.expected, result, "ErrorTypesMatch: got %v, want %v", result, tc.expected)
+		})
+	}
+}
 
 func TestMergeContexts(t *testing.T) {
 	// Given
-	ctx1 := testutil.SetupWithContextSleep(50 * time.Millisecond)()
-	ctx2 := testutil.SetupWithContextSleep(time.Second)()
+	ctx1 := SetupWithContextSleep(50 * time.Millisecond)()
+	ctx2 := SetupWithContextSleep(time.Second)()
 
 	// When
 	mergedCtx, _ := MergeContexts(ctx1, ctx2)

@@ -91,6 +91,11 @@ func (c *fallbackConfig[R]) HandleErrors(errs ...error) FallbackBuilder[R] {
 	return c
 }
 
+func (c *fallbackConfig[R]) HandleErrorTypes(errs ...any) FallbackBuilder[R] {
+	c.BaseFailurePolicy.HandleErrorTypes(errs...)
+	return c
+}
+
 func (c *fallbackConfig[R]) HandleResult(result R) FallbackBuilder[R] {
 	c.BaseFailurePolicy.HandleResult(result)
 	return c

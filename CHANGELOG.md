@@ -1,5 +1,17 @@
 ## Upcoming Release
 
+## 0.6.7
+
+### Improvements
+
+- Added `HandleErrorTypes` to match errors by type in retry policies, circuit breakers, and fallbacks. This is similar to the matching that `errors.As` does.
+- Added `RetryPolicyBuilder.AbortOnErrorTypes`.
+- Added `HedgePolicyBuilder.CancelOnErrorTypes`.
+
+### API Changes
+
+- Renamed the `retrypolicy.ExceededError` `LastResult()` to `LastResult` and `LastError()` to `LastError`.
+
 ## 0.6.6
 
 ### Bug Fixes

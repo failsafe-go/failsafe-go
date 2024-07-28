@@ -30,9 +30,14 @@ type HedgePolicyBuilder[R any] interface {
 	// reflect.DeepEqual.
 	CancelOnResult(result R) HedgePolicyBuilder[R]
 
-	// CancelOnErrors specifies that any outstanding hedges should be canceled if the execution error matches any of the errs
+	// CancelOnErrors specifies that any outstanding hedges should be canceled if the execution error matches any of the errors
 	// using errors.Is.
 	CancelOnErrors(errs ...error) HedgePolicyBuilder[R]
+
+	// CancelOnErrorTypes specifies the errors whose types should cause any outstanding hedges to be canceled. Any execution
+	// errors or their Unwrapped parents whose type matches any of the errs' types will cause outstanding hedges to be
+	// canceled. This is similar to the check that errors.As performs.
+	CancelOnErrorTypes(errs ...any) HedgePolicyBuilder[R]
 
 	// CancelIf specifies that any outstanding hedges should be canceled if the predicate matches the result or error.
 	CancelIf(predicate func(R, error) bool) HedgePolicyBuilder[R]
@@ -117,6 +122,11 @@ func (c *hedgePolicyConfig[R]) CancelOnResult(result R) HedgePolicyBuilder[R] {
 
 func (c *hedgePolicyConfig[R]) CancelOnErrors(errs ...error) HedgePolicyBuilder[R] {
 	c.BaseAbortablePolicy.AbortOnErrors(errs...)
+	return c
+}
+
+func (c *hedgePolicyConfig[R]) CancelOnErrorTypes(errs ...any) HedgePolicyBuilder[R] {
+	c.BaseAbortablePolicy.AbortOnErrorTypes(errs...)
 	return c
 }
 

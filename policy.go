@@ -21,9 +21,14 @@ FailurePolicyBuilder builds a Policy that allows configurable conditions to dete
     policy handling.
 */
 type FailurePolicyBuilder[S any, R any] interface {
-	// HandleErrors specifies the errors to handle as failures. Any errors that evaluate to true for errors.Is and the
+	// HandleErrors specifies the errors to handle as failures. Any errs that evaluate to true for errors.Is and the
 	// execution error will be handled.
-	HandleErrors(errors ...error) S
+	HandleErrors(errs ...error) S
+
+	// HandleErrorTypes specifies the errors whose types should be handled as failures. Any execution errors or their
+	// Unwrapped parents whose type matches any of the errs' types will be handled. This is similar to the check that
+	// errors.As performs.
+	HandleErrorTypes(errs ...any) S
 
 	// HandleResult specifies the results to handle as failures. Any result that evaluates to true for reflect.DeepEqual and
 	// the execution result will be handled. This method is only considered when a result is returned from an execution, not
