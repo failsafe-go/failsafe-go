@@ -21,7 +21,7 @@ func (e *rateLimiterExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *comm
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
 		if err := e.acquirePermitsWithMaxWait(execInternal.Context(), exec, 1, e.config.maxWaitTime); err != nil {
-			if errors.Is(err, ErrExceeded) && e.config.onRateLimitExceeded != nil {
+			if e.config.onRateLimitExceeded != nil && errors.Is(err, ErrExceeded) {
 				e.config.onRateLimitExceeded(failsafe.ExecutionEvent[R]{
 					ExecutionAttempt: execInternal,
 				})

@@ -20,7 +20,7 @@ var _ policy.Executor[any] = &bulkheadExecutor[any]{}
 func (e *bulkheadExecutor[R]) PreExecute(exec policy.ExecutionInternal[R]) *common.PolicyResult[R] {
 	execInternal := exec.(policy.ExecutionInternal[R])
 	if err := e.AcquirePermitWithMaxWait(execInternal.Context(), e.config.maxWaitTime); err != nil {
-		if errors.Is(err, ErrFull) && e.config.onFull != nil {
+		if e.config.onFull != nil && errors.Is(err, ErrFull) {
 			e.config.onFull(failsafe.ExecutionEvent[R]{
 				ExecutionAttempt: execInternal,
 			})
