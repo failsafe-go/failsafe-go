@@ -208,7 +208,7 @@ func TestCancelWithContext(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Given
 			server := testutil.MockDelayedResponse(200, "bad", time.Second)
-			defer server.Close()
+			t.Cleanup(server.Close)
 			rp := retrypolicy.Builder[*http.Response]().AbortOnErrors(context.Canceled).Build()
 			executor := failsafe.NewExecutor[*http.Response](rp)
 			if tc.executorCtx != nil {
@@ -300,12 +300,16 @@ func (t *tester) AssertFailureResult(expectedAttempts int, expectedExecutions in
 }
 
 func (t *tester) assertResult(expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult string, expectedError error, expectedSuccess bool, then ...func()) {
+	t.tester.T.Helper()
+
 	executorFn, assertResult := testutil.PrepareTest(t.tester.T, t.tester.SetupFn, nil, t.tester.Executor)
 	assertHttpResult := func(resp *http.Response, err error) {
 		// Read body
 		var body string
 		if resp != nil {
-			defer resp.Body.Close()
+			t.tester.T.Cleanup(func() {
+				resp.Body.Close()
+			})
 			bodyBytes, err := io.ReadAll(resp.Body)
 			if err == nil {
 				body = string(bodyBytes)
@@ -319,9 +323,9 @@ func (t *tester) assertResult(expectedAttempts int, expectedExecutions int, expe
 
 		// Unwrap and assert URL errors
 		expectedErrCopy := expectedError
-		urlErr1, ok1 := err.(*url.Error)
-		urlErr2, ok2 := expectedError.(*url.Error)
-		if ok1 && ok2 {
+		var urlErr1 *url.Error
+		var urlErr2 *url.Error
+		if errors.As(err, &urlErr1) && errors.As(expectedError, &urlErr2) {
 			assert.Equal(t.tester.T, urlErr1.Err.Error(), urlErr2.Err.Error(), "expected error did not match")
 			// Clear error vars so that assertResult doesn't assert them again
 			expectedErrCopy = nil

@@ -90,6 +90,7 @@ func (t *Tester[R]) AssertFailureAs(expectedAttempts int, expectedExecutions int
 }
 
 func (t *Tester[R]) assertResult(expectedAttempts int, expectedExecutions int, expectedResult R, expectedError error, expectedSuccess bool, errorAs bool, then ...func()) {
+	t.T.Helper()
 	test := func(async bool) {
 		executorFn, assertFn := PrepareTest(t.T, t.SetupFn, t.ContextFn, t.Executor)
 
@@ -119,8 +120,8 @@ func (t *Tester[R]) assertResult(expectedAttempts int, expectedExecutions int, e
 	test(false)
 
 	// Run async
-	//fmt.Println("\nTesting async")
-	//test(true)
+	fmt.Println("\nTesting async")
+	test(true)
 }
 
 type AssertFunc[R any] func(expectedAttempts int, expectedExecutions int, expectedResult R, result R, expectedErr error, err error, expectedSuccess bool, expectedFailure bool, errorAs bool, thens ...func())

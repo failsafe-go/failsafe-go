@@ -111,13 +111,17 @@ func testServerFailureResult[R any](t *testing.T, requestCtxFn func() context.Co
 }
 
 func testServer[R any](t *testing.T, requestCtxFn func() context.Context, server pbfixtures.PingServiceServer, executor failsafe.Executor[R], expectedAttempts int, expectedExecutions int, expectedResult any, expectedError error, expectedSuccess bool, testServerInHandle bool, thens ...func()) {
+	t.Helper()
+
 	// Given
 	executorFn, assertResult := testutil.PrepareTest(t, nil, nil, executor)
 	testGrpc := func(option grpc.ServerOption) {
 		grpcServer, dialer := testutil.GrpcServer(server, option)
-		defer grpcServer.Stop()
 		grpcClient := testutil.GrpcClient(dialer)
-		defer grpcClient.Close()
+		t.Cleanup(func() {
+			grpcServer.Stop()
+			grpcClient.Close()
+		})
 		client := pbfixtures.NewPingServiceClient(grpcClient)
 		ctx := context.Background()
 		if requestCtxFn != nil {
