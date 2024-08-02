@@ -13,7 +13,7 @@ import (
 )
 
 func TestRunWithSuccess(t *testing.T) {
-	rp := retrypolicy.WithDefaults[any]()
+	rp := retrypolicy.NewWithDefaults[any]()
 	err := failsafe.Run(func() error {
 		return nil
 	}, rp)
@@ -21,7 +21,7 @@ func TestRunWithSuccess(t *testing.T) {
 }
 
 func TestGetWithSuccess(t *testing.T) {
-	rp := retrypolicy.WithDefaults[string]()
+	rp := retrypolicy.NewWithDefaults[string]()
 	result, err := failsafe.Get(func() (string, error) {
 		return "test", nil
 	}, rp)
@@ -30,7 +30,7 @@ func TestGetWithSuccess(t *testing.T) {
 }
 
 func TestGetWithFailure(t *testing.T) {
-	rp := retrypolicy.WithDefaults[string]()
+	rp := retrypolicy.NewWithDefaults[string]()
 	result, err := failsafe.Get(func() (string, error) {
 		return "", testutil.ErrInvalidArgument
 	}, rp)
@@ -40,8 +40,8 @@ func TestGetWithFailure(t *testing.T) {
 }
 
 func TestGetWithExecution(t *testing.T) {
-	rp := retrypolicy.WithDefaults[string]()
-	fb := fallback.WithResult("fallback")
+	rp := retrypolicy.NewWithDefaults[string]()
+	fb := fallback.NewWithResult("fallback")
 	var lasteExec failsafe.Execution[string]
 	result, err := failsafe.GetWithExecution(func(exec failsafe.Execution[string]) (string, error) {
 		lasteExec = exec
@@ -61,7 +61,7 @@ func TestWithContext(t *testing.T) {
 	t.Run("should create new executor", func(t *testing.T) {
 		ctx1 := context.Background()
 		ctx2 := context.Background()
-		executor1 := failsafe.NewExecutor[any](retrypolicy.WithDefaults[any]()).WithContext(ctx1)
+		executor1 := failsafe.NewExecutor[any](retrypolicy.NewWithDefaults[any]()).WithContext(ctx1)
 		executor2 := executor1.WithContext(ctx2)
 		assert.NotSame(t, executor1, executor2)
 	})
@@ -70,7 +70,7 @@ func TestWithContext(t *testing.T) {
 		ctx := context.WithValue(context.Background(), "foo", "bar")
 		var eventCtx context.Context
 		var executionCtx context.Context
-		failsafe.NewExecutor[any](retrypolicy.WithDefaults[any]()).
+		failsafe.NewExecutor[any](retrypolicy.NewWithDefaults[any]()).
 			WithContext(ctx).
 			OnDone(func(e failsafe.ExecutionDoneEvent[any]) {
 				eventCtx = e.Context()

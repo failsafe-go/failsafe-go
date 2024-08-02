@@ -11,7 +11,7 @@ import (
 
 func TestAdjustForBackoff(t *testing.T) {
 	// Given
-	rpc := Builder[any]().WithBackoff(time.Second, 10*time.Second).(*config[any])
+	rpc := NewBuilder[any]().WithBackoff(time.Second, 10*time.Second).(*config[any])
 	rpe := &executor[any]{
 		retryPolicy: &retryPolicy[any]{
 			config: rpc,

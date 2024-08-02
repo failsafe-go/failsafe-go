@@ -46,40 +46,40 @@ type fallback[R any] struct {
 	*config[R]
 }
 
-// WithResult returns a Fallback for execution result type R that returns the result when an execution fails.
-func WithResult[R any](result R) Fallback[R] {
-	return BuilderWithResult[R](result).Build()
+// NewWithResult returns a Fallback for execution result type R that returns the result when an execution fails.
+func NewWithResult[R any](result R) Fallback[R] {
+	return NewBuilderWithResult[R](result).Build()
 }
 
-// WithError returns a Fallback for execution result type R that returns the err when an execution fails.
-func WithError[R any](err error) Fallback[R] {
-	return BuilderWithError[R](err).Build()
+// NewWithError returns a Fallback for execution result type R that returns the err when an execution fails.
+func NewWithError[R any](err error) Fallback[R] {
+	return NewBuilderWithError[R](err).Build()
 }
 
-// WithFunc returns a Fallback for execution result type R that uses fallbackFunc to handle a failed execution.
-func WithFunc[R any](fallbackFunc func(exec failsafe.Execution[R]) (R, error)) Fallback[R] {
-	return BuilderWithFunc(fallbackFunc).Build()
+// NewWithFunc returns a Fallback for execution result type R that uses fallbackFunc to handle a failed execution.
+func NewWithFunc[R any](fallbackFunc func(exec failsafe.Execution[R]) (R, error)) Fallback[R] {
+	return NewBuilderWithFunc(fallbackFunc).Build()
 }
 
-// BuilderWithResult returns a FallbackBuilder for execution result type R which builds Fallbacks that return the result
+// NewBuilderWithResult returns a FallbackBuilder for execution result type R which builds Fallbacks that return the result
 // when an execution fails.
-func BuilderWithResult[R any](result R) FallbackBuilder[R] {
-	return BuilderWithFunc(func(exec failsafe.Execution[R]) (R, error) {
+func NewBuilderWithResult[R any](result R) FallbackBuilder[R] {
+	return NewBuilderWithFunc(func(exec failsafe.Execution[R]) (R, error) {
 		return result, nil
 	})
 }
 
-// BuilderWithError returns a FallbackBuilder for execution result type R which builds Fallbacks that return the error
+// NewBuilderWithError returns a FallbackBuilder for execution result type R which builds Fallbacks that return the error
 // when an execution fails.
-func BuilderWithError[R any](err error) FallbackBuilder[R] {
-	return BuilderWithFunc(func(exec failsafe.Execution[R]) (R, error) {
+func NewBuilderWithError[R any](err error) FallbackBuilder[R] {
+	return NewBuilderWithFunc(func(exec failsafe.Execution[R]) (R, error) {
 		return *new(R), err
 	})
 }
 
-// BuilderWithFunc returns a FallbackBuilder for execution result type R which builds Fallbacks that use the fallbackFn to
+// NewBuilderWithFunc returns a FallbackBuilder for execution result type R which builds Fallbacks that use the fallbackFn to
 // handle failed executions.
-func BuilderWithFunc[R any](fallbackFunc func(exec failsafe.Execution[R]) (R, error)) FallbackBuilder[R] {
+func NewBuilderWithFunc[R any](fallbackFunc func(exec failsafe.Execution[R]) (R, error)) FallbackBuilder[R] {
 	return &config[R]{
 		BaseFailurePolicy: &policy.BaseFailurePolicy[R]{},
 		fn:                fallbackFunc,

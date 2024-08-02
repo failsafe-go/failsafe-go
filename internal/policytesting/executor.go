@@ -31,19 +31,19 @@ func ResetCircuitBreaker[R any](cb circuitbreaker.CircuitBreaker[R]) {
 	resetMethod.Call([]reflect.Value{})
 }
 
-func WithRetryStats[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *Stats) retrypolicy.RetryPolicyBuilder[R] {
+func WithRetryStats[R any](rp retrypolicy.Builder[R], stats *Stats) retrypolicy.Builder[R] {
 	return withRetryStatsAndLogs(rp, stats, false)
 }
 
-func WithRetryLogs[R any](rp retrypolicy.RetryPolicyBuilder[R]) retrypolicy.RetryPolicyBuilder[R] {
+func WithRetryLogs[R any](rp retrypolicy.Builder[R]) retrypolicy.Builder[R] {
 	return withRetryStatsAndLogs(rp, &Stats{}, true)
 }
 
-func WithRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *Stats) retrypolicy.RetryPolicyBuilder[R] {
+func WithRetryStatsAndLogs[R any](rp retrypolicy.Builder[R], stats *Stats) retrypolicy.Builder[R] {
 	return withRetryStatsAndLogs(rp, stats, true)
 }
 
-func withRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *Stats, withLogging bool) retrypolicy.RetryPolicyBuilder[R] {
+func withRetryStatsAndLogs[R any](rp retrypolicy.Builder[R], stats *Stats, withLogging bool) retrypolicy.Builder[R] {
 	rp.OnRetry(func(e failsafe.ExecutionEvent[R]) {
 		stats.retries.Add(1)
 		if withLogging {
@@ -60,21 +60,21 @@ func withRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *S
 			fmt.Printf("%s %p abort\n", testutil.GetType(rp), rp)
 		}
 	})
-	withStatsAndLogs[retrypolicy.RetryPolicyBuilder[R], R](rp, stats, withLogging)
+	withStatsAndLogs[retrypolicy.Builder[R], R](rp, stats, withLogging)
 	return rp
 }
 
-func WithBreakerStats[R any](cb circuitbreaker.CircuitBreakerBuilder[R], stats *Stats) circuitbreaker.CircuitBreakerBuilder[R] {
+func WithBreakerStats[R any](cb circuitbreaker.Builder[R], stats *Stats) circuitbreaker.Builder[R] {
 	withBreakerStatsAndLogs(cb, stats, false)
 	return cb
 }
 
-func WithBreakerLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R]) circuitbreaker.CircuitBreakerBuilder[R] {
+func WithBreakerLogs[R any](cb circuitbreaker.Builder[R]) circuitbreaker.Builder[R] {
 	withBreakerStatsAndLogs(cb, &Stats{}, true)
 	return cb
 }
 
-func withBreakerStatsAndLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R], stats *Stats, withLogging bool) circuitbreaker.CircuitBreakerBuilder[R] {
+func withBreakerStatsAndLogs[R any](cb circuitbreaker.Builder[R], stats *Stats, withLogging bool) circuitbreaker.Builder[R] {
 	cb.OnOpen(func(event circuitbreaker.StateChangedEvent) {
 		if withLogging {
 			fmt.Printf("%s %p opened\n", testutil.GetType(cb), cb)
@@ -90,11 +90,11 @@ func withBreakerStatsAndLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R], 
 			fmt.Printf("%s %p closed\n", testutil.GetType(cb), cb)
 		}
 	})
-	withStatsAndLogs[circuitbreaker.CircuitBreakerBuilder[R], R](cb, stats, withLogging)
+	withStatsAndLogs[circuitbreaker.Builder[R], R](cb, stats, withLogging)
 	return cb
 }
 
-func WithTimeoutStatsAndLogs[R any](to timeout.TimeoutBuilder[R], stats *Stats) timeout.TimeoutBuilder[R] {
+func WithTimeoutStatsAndLogs[R any](to timeout.Builder[R], stats *Stats) timeout.Builder[R] {
 	to.OnTimeoutExceeded(func(e failsafe.ExecutionDoneEvent[R]) {
 		stats.executions.Add(1)
 		fmt.Printf("%s %p exceeded [attempts: %d, executions: %d]\n", testutil.GetType(to), to, e.Attempts(), e.Executions())
@@ -111,7 +111,7 @@ func WithFallbackStatsAndLogs[R any](fb fallback.FallbackBuilder[R], stats *Stat
 	return fb
 }
 
-func WithHedgeStatsAndLogs[R any](hp hedgepolicy.HedgePolicyBuilder[R], stats *Stats) hedgepolicy.HedgePolicyBuilder[R] {
+func WithHedgeStatsAndLogs[R any](hp hedgepolicy.Builder[R], stats *Stats) hedgepolicy.Builder[R] {
 	hp.OnHedge(func(e failsafe.ExecutionEvent[R]) {
 		stats.hedges.Add(1)
 		fmt.Printf("%s %p hedging [attempts: %v]\n", testutil.GetType(hp), hp, e.Attempts())
@@ -119,7 +119,7 @@ func WithHedgeStatsAndLogs[R any](hp hedgepolicy.HedgePolicyBuilder[R], stats *S
 	return hp
 }
 
-func WithBulkheadStatsAndLogs[R any](bh bulkhead.BulkheadBuilder[R], stats *Stats, withLogging bool) bulkhead.BulkheadBuilder[R] {
+func WithBulkheadStatsAndLogs[R any](bh bulkhead.Builder[R], stats *Stats, withLogging bool) bulkhead.Builder[R] {
 	bh.OnFull(func(event failsafe.ExecutionEvent[R]) {
 		if withLogging {
 			stats.fulls.Add(1)
@@ -129,7 +129,7 @@ func WithBulkheadStatsAndLogs[R any](bh bulkhead.BulkheadBuilder[R], stats *Stat
 	return bh
 }
 
-func WithCacheStats[R any](cp cachepolicy.CachePolicyBuilder[R], stats *Stats) cachepolicy.CachePolicyBuilder[R] {
+func WithCacheStats[R any](cp cachepolicy.Builder[R], stats *Stats) cachepolicy.Builder[R] {
 	cp.OnCacheHit(func(e failsafe.ExecutionDoneEvent[R]) {
 		stats.cacheHits.Add(1)
 	}).OnCacheMiss(func(e failsafe.ExecutionEvent[R]) {

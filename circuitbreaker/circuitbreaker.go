@@ -156,7 +156,7 @@ type circuitBreaker[R any] struct {
 	*config[R]
 	mtx sync.Mutex
 	// Guarded by mtx
-	state circuitState[R]
+	state state[R]
 }
 
 func (cb *circuitBreaker[R]) TryAcquirePermit() bool {
