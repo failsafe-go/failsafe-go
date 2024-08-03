@@ -153,8 +153,8 @@ func (e *StateChangedEvent) Metrics() Metrics {
 }
 
 type circuitBreaker[R any] struct {
-	config *circuitBreakerConfig[R]
-	mtx    sync.Mutex
+	*config[R]
+	mtx sync.Mutex
 	// Guarded by mtx
 	state circuitState[R]
 }
@@ -266,9 +266,9 @@ func (cb *circuitBreaker[R]) RecordSuccess() {
 }
 
 func (cb *circuitBreaker[R]) ToExecutor(_ R) any {
-	cbe := &circuitBreakerExecutor[R]{
+	cbe := &executor[R]{
 		BaseExecutor: &policy.BaseExecutor[R]{
-			BaseFailurePolicy: cb.config.BaseFailurePolicy,
+			BaseFailurePolicy: cb.BaseFailurePolicy,
 		},
 		circuitBreaker: cb,
 	}
@@ -288,9 +288,9 @@ func (cb *circuitBreaker[R]) transitionTo(newState State, exec failsafe.Executio
 		case ClosedState:
 			cb.state = newClosedState(cb)
 		case OpenState:
-			delay := cb.config.ComputeDelay(exec)
+			delay := cb.ComputeDelay(exec)
 			if delay == -1 {
-				delay = cb.config.Delay
+				delay = cb.Delay
 			}
 			cb.state = newOpenState(cb, cb.state, delay)
 		case HalfOpenState:
@@ -299,7 +299,7 @@ func (cb *circuitBreaker[R]) transitionTo(newState State, exec failsafe.Executio
 		transitioned = true
 	}
 
-	if transitioned && (listener != nil || cb.config.stateChangedListener != nil) {
+	if transitioned && (listener != nil || cb.stateChangedListener != nil) {
 		event := StateChangedEvent{
 			OldState: currentState,
 			NewState: newState,
@@ -308,8 +308,8 @@ func (cb *circuitBreaker[R]) transitionTo(newState State, exec failsafe.Executio
 		if listener != nil {
 			listener(event)
 		}
-		if cb.config.stateChangedListener != nil {
-			cb.config.stateChangedListener(event)
+		if cb.stateChangedListener != nil {
+			cb.stateChangedListener(event)
 		}
 	}
 }
@@ -348,22 +348,22 @@ func (cb *circuitBreaker[R]) tryAcquirePermit() bool {
 //
 // Requires external locking.
 func (cb *circuitBreaker[R]) open(execution failsafe.Execution[R]) {
-	cb.transitionTo(OpenState, execution, cb.config.openListener)
+	cb.transitionTo(OpenState, execution, cb.openListener)
 }
 
 // Requires external locking.
 func (cb *circuitBreaker[R]) close() {
-	cb.transitionTo(ClosedState, nil, cb.config.closeListener)
+	cb.transitionTo(ClosedState, nil, cb.closeListener)
 }
 
 // Requires external locking.
 func (cb *circuitBreaker[R]) halfOpen() {
-	cb.transitionTo(HalfOpenState, nil, cb.config.halfOpenListener)
+	cb.transitionTo(HalfOpenState, nil, cb.halfOpenListener)
 }
 
 // Requires external locking.
 func (cb *circuitBreaker[R]) recordResult(result R, err error) {
-	if cb.config.IsFailure(result, err) {
+	if cb.IsFailure(result, err) {
 		cb.recordFailure(nil)
 	} else {
 		cb.recordSuccess()

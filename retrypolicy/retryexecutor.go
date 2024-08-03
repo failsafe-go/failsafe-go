@@ -11,8 +11,8 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// retryPolicyExecutor is a policy.Executor that handles failures according to a RetryPolicy.
-type retryPolicyExecutor[R any] struct {
+// executor is a policy.Executor that handles failures according to a RetryPolicy.
+type executor[R any] struct {
 	*policy.BaseExecutor[R]
 	*retryPolicy[R]
 
@@ -22,9 +22,9 @@ type retryPolicyExecutor[R any] struct {
 	lastDelay       time.Duration // The last fixed, backoff, random, or computed delay time
 }
 
-var _ policy.Executor[any] = &retryPolicyExecutor[any]{}
+var _ policy.Executor[any] = &executor[any]{}
 
-func (e *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
+func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
 
@@ -49,8 +49,8 @@ func (e *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *comm
 
 			// Delay
 			delay := e.getDelay(exec)
-			if e.config.onRetryScheduled != nil {
-				e.config.onRetryScheduled(failsafe.ExecutionScheduledEvent[R]{
+			if e.onRetryScheduled != nil {
+				e.onRetryScheduled(failsafe.ExecutionScheduledEvent[R]{
 					ExecutionAttempt: execInternal.CopyWithResult(result),
 					Delay:            delay,
 				})
@@ -68,34 +68,34 @@ func (e *retryPolicyExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *comm
 			}
 
 			// Call retry listener
-			if e.config.onRetry != nil {
-				e.config.onRetry(failsafe.ExecutionEvent[R]{ExecutionAttempt: execInternal.CopyWithResult(result)})
+			if e.onRetry != nil {
+				e.onRetry(failsafe.ExecutionEvent[R]{ExecutionAttempt: execInternal.CopyWithResult(result)})
 			}
 		}
 	}
 }
 
 // OnFailure updates failedAttempts and retriesExceeded, and calls event listeners
-func (e *retryPolicyExecutor[R]) OnFailure(exec policy.ExecutionInternal[R], result *common.PolicyResult[R]) *common.PolicyResult[R] {
+func (e *executor[R]) OnFailure(exec policy.ExecutionInternal[R], result *common.PolicyResult[R]) *common.PolicyResult[R] {
 	e.BaseExecutor.OnFailure(exec, result)
 
 	e.failedAttempts++
-	maxRetriesExceeded := e.config.maxRetries != -1 && e.failedAttempts > e.config.maxRetries
-	maxDurationExceeded := e.config.maxDuration != 0 && exec.ElapsedTime() > e.config.maxDuration
+	maxRetriesExceeded := e.maxRetries != -1 && e.failedAttempts > e.maxRetries
+	maxDurationExceeded := e.maxDuration != 0 && exec.ElapsedTime() > e.maxDuration
 	e.retriesExceeded = maxRetriesExceeded || maxDurationExceeded
-	isAbortable := e.config.IsAbortable(result.Result, result.Error)
-	shouldRetry := !isAbortable && !e.retriesExceeded && e.config.allowsRetries()
+	isAbortable := e.IsAbortable(result.Result, result.Error)
+	shouldRetry := !isAbortable && !e.retriesExceeded && e.allowsRetries()
 	done := isAbortable || !shouldRetry
 
 	// Call listeners
-	if isAbortable && e.config.onAbort != nil {
-		e.config.onAbort(failsafe.ExecutionEvent[R]{ExecutionAttempt: exec.CopyWithResult(result)})
+	if isAbortable && e.onAbort != nil {
+		e.onAbort(failsafe.ExecutionEvent[R]{ExecutionAttempt: exec.CopyWithResult(result)})
 	}
 	if e.retriesExceeded {
-		if !isAbortable && e.config.onRetriesExceeded != nil {
-			e.config.onRetriesExceeded(failsafe.ExecutionEvent[R]{ExecutionAttempt: exec.CopyWithResult(result)})
+		if !isAbortable && e.onRetriesExceeded != nil {
+			e.onRetriesExceeded(failsafe.ExecutionEvent[R]{ExecutionAttempt: exec.CopyWithResult(result)})
 		}
-		if !e.config.returnLastFailure {
+		if !e.returnLastFailure {
 			return internal.FailureResult[R](ExceededError{
 				LastResult: result.Result,
 				LastError:  result.Error,
@@ -106,53 +106,53 @@ func (e *retryPolicyExecutor[R]) OnFailure(exec policy.ExecutionInternal[R], res
 }
 
 // getDelay updates lastDelay and returns the new delay
-func (e *retryPolicyExecutor[R]) getDelay(exec failsafe.ExecutionAttempt[R]) time.Duration {
+func (e *executor[R]) getDelay(exec failsafe.ExecutionAttempt[R]) time.Duration {
 	delay := e.lastDelay
-	computedDelay := e.config.ComputeDelay(exec)
+	computedDelay := e.ComputeDelay(exec)
 	if computedDelay != -1 {
 		delay = computedDelay
 	} else {
-		delay = getFixedOrRandomDelay(e.config, delay)
-		delay = adjustForBackoff(e.config, exec, delay)
+		delay = e.getFixedOrRandomDelay(delay)
+		delay = e.adjustForBackoff(exec, delay)
 		e.lastDelay = delay
 	}
 	if delay != 0 {
-		delay = adjustForJitter(e.config, delay)
+		delay = e.adjustForJitter(delay)
 	}
-	delay = adjustForMaxDuration(e.config, delay, exec.ElapsedTime())
+	delay = e.adjustForMaxDuration(delay, exec.ElapsedTime())
 	return delay
 }
 
-func getFixedOrRandomDelay[R any](config *retryPolicyConfig[R], delay time.Duration) time.Duration {
-	if delay == 0 && config.Delay != 0 {
-		return config.Delay
+func (e *executor[R]) getFixedOrRandomDelay(delay time.Duration) time.Duration {
+	if delay == 0 && e.Delay != 0 {
+		return e.Delay
 	}
-	if config.delayMin != 0 && config.delayMax != 0 {
-		return time.Duration(util.RandomDelayInRange(config.delayMin.Nanoseconds(), config.delayMax.Nanoseconds(), rand.Float64()))
-	}
-	return delay
-}
-
-func adjustForBackoff[R any](config *retryPolicyConfig[R], exec failsafe.ExecutionAttempt[R], delay time.Duration) time.Duration {
-	if exec.Attempts() != 1 && config.maxDelay != 0 {
-		backoffDelay := time.Duration(float32(delay) * config.delayFactor)
-		delay = min(backoffDelay, config.maxDelay)
+	if e.delayMin != 0 && e.delayMax != 0 {
+		return time.Duration(util.RandomDelayInRange(e.delayMin.Nanoseconds(), e.delayMax.Nanoseconds(), rand.Float64()))
 	}
 	return delay
 }
 
-func adjustForJitter[R any](config *retryPolicyConfig[R], delay time.Duration) time.Duration {
-	if config.jitter != 0 {
-		delay = util.RandomDelay(delay, config.jitter, rand.Float64())
-	} else if config.jitterFactor != 0 {
-		delay = util.RandomDelayFactor(delay, config.jitterFactor, rand.Float32())
+func (e *executor[R]) adjustForBackoff(exec failsafe.ExecutionAttempt[R], delay time.Duration) time.Duration {
+	if exec.Attempts() != 1 && e.maxDelay != 0 {
+		backoffDelay := time.Duration(float32(delay) * e.delayFactor)
+		delay = min(backoffDelay, e.maxDelay)
 	}
 	return delay
 }
 
-func adjustForMaxDuration[R any](config *retryPolicyConfig[R], delay time.Duration, elapsed time.Duration) time.Duration {
-	if config.maxDuration != 0 {
-		delay = min(delay, config.maxDuration-elapsed)
+func (e *executor[R]) adjustForJitter(delay time.Duration) time.Duration {
+	if e.jitter != 0 {
+		delay = util.RandomDelay(delay, e.jitter, rand.Float64())
+	} else if e.jitterFactor != 0 {
+		delay = util.RandomDelayFactor(delay, e.jitterFactor, rand.Float32())
+	}
+	return delay
+}
+
+func (e *executor[R]) adjustForMaxDuration(delay time.Duration, elapsed time.Duration) time.Duration {
+	if e.maxDuration != 0 {
+		delay = min(delay, e.maxDuration-elapsed)
 	}
 	return max(0, delay)
 }

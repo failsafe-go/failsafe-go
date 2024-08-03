@@ -9,20 +9,20 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// cacheExecutor is a policy.Executor that handles failures according to a CachePolicy.
-type cacheExecutor[R any] struct {
+// executor is a policy.Executor that handles failures according to a CachePolicy.
+type executor[R any] struct {
 	*policy.BaseExecutor[R]
 	*cachePolicy[R]
 }
 
-var _ policy.Executor[any] = &cacheExecutor[any]{}
+var _ policy.Executor[any] = &executor[any]{}
 
-func (e *cacheExecutor[R]) PreExecute(exec policy.ExecutionInternal[R]) *common.PolicyResult[R] {
+func (e *executor[R]) PreExecute(exec policy.ExecutionInternal[R]) *common.PolicyResult[R] {
 	execInternal := exec.(policy.ExecutionInternal[R])
 	if cacheKey := e.getCacheKey(exec.Context()); cacheKey != "" {
-		if cacheResult, found := e.config.cache.Get(cacheKey); found {
-			if e.config.onHit != nil {
-				e.config.onHit(failsafe.ExecutionDoneEvent[R]{
+		if cacheResult, found := e.cache.Get(cacheKey); found {
+			if e.onHit != nil {
+				e.onHit(failsafe.ExecutionDoneEvent[R]{
 					ExecutionInfo: execInternal,
 					Result:        cacheResult,
 				})
@@ -35,23 +35,23 @@ func (e *cacheExecutor[R]) PreExecute(exec policy.ExecutionInternal[R]) *common.
 			}
 		}
 	}
-	if e.config.onMiss != nil {
-		e.config.onMiss(failsafe.ExecutionEvent[R]{
+	if e.onMiss != nil {
+		e.onMiss(failsafe.ExecutionEvent[R]{
 			ExecutionAttempt: execInternal,
 		})
 	}
 	return nil
 }
 
-func (e *cacheExecutor[R]) PostExecute(exec policy.ExecutionInternal[R], er *common.PolicyResult[R]) *common.PolicyResult[R] {
-	shouldCache := (len(e.config.cacheConditions) == 0 && er.Error == nil) ||
-		util.AppliesToAny(e.config.cacheConditions, er.Result, er.Error)
+func (e *executor[R]) PostExecute(exec policy.ExecutionInternal[R], er *common.PolicyResult[R]) *common.PolicyResult[R] {
+	shouldCache := (len(e.cacheConditions) == 0 && er.Error == nil) ||
+		util.AppliesToAny(e.cacheConditions, er.Result, er.Error)
 
 	if shouldCache {
 		if cacheKey := e.getCacheKey(exec.Context()); cacheKey != "" {
-			e.config.cache.Set(cacheKey, er.Result)
-			if e.config.onCache != nil {
-				e.config.onCache(failsafe.ExecutionEvent[R]{
+			e.cache.Set(cacheKey, er.Result)
+			if e.onCache != nil {
+				e.onCache(failsafe.ExecutionEvent[R]{
 					ExecutionAttempt: exec.CopyWithResult(er),
 				})
 			}
@@ -60,11 +60,11 @@ func (e *cacheExecutor[R]) PostExecute(exec policy.ExecutionInternal[R], er *com
 	return er
 }
 
-func (e *cacheExecutor[R]) getCacheKey(ctx context.Context) string {
+func (e *executor[R]) getCacheKey(ctx context.Context) string {
 	if untypedKey := ctx.Value(CacheKey); untypedKey != nil {
 		if typedKey, ok := untypedKey.(string); ok {
 			return typedKey
 		}
 	}
-	return e.config.key
+	return e.key
 }

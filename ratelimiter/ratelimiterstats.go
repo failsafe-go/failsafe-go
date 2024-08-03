@@ -18,7 +18,7 @@ type rateLimiterStats interface {
 // A rate limiter implementation that evenly distributes permits over time, based on the max permits per period. This
 // implementation focuses on the interval between permits, and tracks the next interval in which a permit is free.
 type smoothRateLimiterStats[R any] struct {
-	config    *rateLimiterConfig[R]
+	*config[R]
 	stopwatch util.Stopwatch
 	mtx       sync.Mutex
 
@@ -33,20 +33,20 @@ func (s *smoothRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWait
 	defer s.mtx.Unlock()
 
 	currentTime := s.stopwatch.ElapsedTime()
-	requestedPermitTime := s.config.interval * time.Duration(requestedPermits)
+	requestedPermitTime := s.interval * time.Duration(requestedPermits)
 	var waitTime time.Duration
 	var newNextFreePermitTime time.Duration
 
 	// If a permit is currently available
 	if currentTime >= s.nextFreePermitTime {
 		// Time at the start of the current interval
-		currentIntervalTime := util.RoundDown(currentTime, s.config.interval)
+		currentIntervalTime := util.RoundDown(currentTime, s.interval)
 		newNextFreePermitTime = currentIntervalTime + requestedPermitTime
 	} else {
 		newNextFreePermitTime = s.nextFreePermitTime + requestedPermitTime
 	}
 
-	waitTime = max(newNextFreePermitTime-currentTime-s.config.interval, time.Duration(0))
+	waitTime = max(newNextFreePermitTime-currentTime-s.interval, time.Duration(0))
 	if exceedsMaxWaitTime(waitTime, maxWaitTime) {
 		return -1
 	}
@@ -67,7 +67,7 @@ func (s *smoothRateLimiterStats[R]) reset() {
 // cause wait times for callers that can be several periods long, depending on the size of the deficit and the number of
 // requested permits.
 type burstyRateLimiterStats[R any] struct {
-	config    *rateLimiterConfig[R]
+	*config[R]
 	stopwatch util.Stopwatch
 	mtx       sync.Mutex
 
@@ -82,27 +82,27 @@ func (s *burstyRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWait
 	defer s.mtx.Unlock()
 
 	currentTime := s.stopwatch.ElapsedTime()
-	newCurrentPeriod := int(currentTime / s.config.period)
+	newCurrentPeriod := int(currentTime / s.period)
 
 	// Update current period and available permits
 	if s.currentPeriod < newCurrentPeriod {
 		elapsedPeriods := newCurrentPeriod - s.currentPeriod
-		elapsedPermits := elapsedPeriods * s.config.periodPermits
+		elapsedPermits := elapsedPeriods * s.periodPermits
 		s.currentPeriod = newCurrentPeriod
 		if s.availablePermits < 0 {
 			s.availablePermits += elapsedPermits
 		} else {
-			s.availablePermits = s.config.periodPermits
+			s.availablePermits = s.periodPermits
 		}
 	}
 
 	waitTime := 0 * time.Second
 	if requestedPermits > s.availablePermits {
-		nextPeriodTime := time.Duration(s.currentPeriod+1) * s.config.period
+		nextPeriodTime := time.Duration(s.currentPeriod+1) * s.period
 		timeToNextPeriod := nextPeriodTime - currentTime
 		permitDeficit := requestedPermits - s.availablePermits
-		additionalPeriods := permitDeficit / s.config.periodPermits
-		additionalUnits := permitDeficit % s.config.periodPermits
+		additionalPeriods := permitDeficit / s.periodPermits
+		additionalUnits := permitDeficit % s.periodPermits
 
 		// Do not wait for an additional period if we're not using any permits from it
 		if additionalUnits == 0 {
@@ -110,7 +110,7 @@ func (s *burstyRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWait
 		}
 
 		// The time to wait until the beginning of the next period that will have free permits
-		waitTime = timeToNextPeriod + (time.Duration(additionalPeriods) * s.config.period)
+		waitTime = timeToNextPeriod + (time.Duration(additionalPeriods) * s.period)
 		if exceedsMaxWaitTime(waitTime, maxWaitTime) {
 			return -1
 		}
@@ -124,7 +124,7 @@ func (s *burstyRateLimiterStats[R]) reset() {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	s.stopwatch.Reset()
-	s.availablePermits = s.config.periodPermits
+	s.availablePermits = s.periodPermits
 	s.currentPeriod = 0
 }
 

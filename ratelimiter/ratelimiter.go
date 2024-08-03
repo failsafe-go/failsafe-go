@@ -133,7 +133,7 @@ type RateLimiterBuilder[R any] interface {
 	Build() RateLimiter[R]
 }
 
-type rateLimiterConfig[R any] struct {
+type config[R any] struct {
 	// Common
 	maxWaitTime         time.Duration
 	onRateLimitExceeded func(failsafe.ExecutionEvent[R])
@@ -181,7 +181,7 @@ Executions are performed with no delay until they exceed the max rate, after whi
 will block and wait until the max wait time is exceeded.
 */
 func SmoothBuilder[R any](maxExecutions uint, period time.Duration) RateLimiterBuilder[R] {
-	return &rateLimiterConfig[R]{
+	return &config[R]{
 		interval: period / time.Duration(maxExecutions),
 	}
 }
@@ -197,7 +197,7 @@ Executions are performed with no delay until they exceed the maxRate, after whic
 and wait until the max wait time is exceeded.
 */
 func SmoothBuilderWithMaxRate[R any](maxRate time.Duration) RateLimiterBuilder[R] {
-	return &rateLimiterConfig[R]{
+	return &config[R]{
 		interval: maxRate,
 	}
 }
@@ -223,23 +223,23 @@ Executions are performed with no delay up until the maxExecutions are reached fo
 executions are either rejected or will block and wait until the max wait time is exceeded.
 */
 func BurstyBuilder[R any](maxExecutions uint, period time.Duration) RateLimiterBuilder[R] {
-	return &rateLimiterConfig[R]{
+	return &config[R]{
 		periodPermits: int(maxExecutions),
 		period:        period,
 	}
 }
 
-func (c *rateLimiterConfig[R]) WithMaxWaitTime(maxWaitTime time.Duration) RateLimiterBuilder[R] {
+func (c *config[R]) WithMaxWaitTime(maxWaitTime time.Duration) RateLimiterBuilder[R] {
 	c.maxWaitTime = maxWaitTime
 	return c
 }
 
-func (c *rateLimiterConfig[R]) OnRateLimitExceeded(listener func(event failsafe.ExecutionEvent[R])) RateLimiterBuilder[R] {
+func (c *config[R]) OnRateLimitExceeded(listener func(event failsafe.ExecutionEvent[R])) RateLimiterBuilder[R] {
 	c.onRateLimitExceeded = listener
 	return c
 }
 
-func (c *rateLimiterConfig[R]) Build() RateLimiter[R] {
+func (c *config[R]) Build() RateLimiter[R] {
 	if c.interval != 0 {
 		return &rateLimiter[R]{
 			config: c,
@@ -260,8 +260,8 @@ func (c *rateLimiterConfig[R]) Build() RateLimiter[R] {
 }
 
 type rateLimiter[R any] struct {
-	config *rateLimiterConfig[R]
-	stats  rateLimiterStats
+	*config[R]
+	stats rateLimiterStats
 }
 
 func (r *rateLimiter[R]) AcquirePermit(ctx context.Context) error {
@@ -344,7 +344,7 @@ func (r *rateLimiter[R]) TryReservePermits(requestedPermits uint, maxWaitTime ti
 }
 
 func (r *rateLimiter[R]) ToExecutor(_ R) any {
-	rle := &rateLimiterExecutor[R]{
+	rle := &executor[R]{
 		BaseExecutor: &policy.BaseExecutor[R]{},
 		rateLimiter:  r,
 	}

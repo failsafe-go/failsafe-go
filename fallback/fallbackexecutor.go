@@ -6,16 +6,16 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// fallbackExecutor is a policy.Executor that handles failures according to a Fallback.
-type fallbackExecutor[R any] struct {
+// executor is a policy.Executor that handles failures according to a Fallback.
+type executor[R any] struct {
 	*policy.BaseExecutor[R]
 	*fallback[R]
 }
 
-var _ policy.Executor[any] = &fallbackExecutor[any]{}
+var _ policy.Executor[any] = &executor[any]{}
 
 // Apply performs an execution by calling the innerFn, applying a fallback if it fails, and calling post-execute.
-func (e *fallbackExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
+func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
 		result := innerFn(exec)
@@ -26,12 +26,12 @@ func (e *fallbackExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.
 			}
 
 			// Call fallback fn
-			fallbackResult, fallbackError := e.config.fn(execInternal.CopyWithResult(result))
+			fallbackResult, fallbackError := e.fn(execInternal.CopyWithResult(result))
 			if canceled, cancelResult := execInternal.IsCanceledWithResult(); canceled {
 				return cancelResult
 			}
-			if e.config.onFallbackExecuted != nil {
-				e.config.onFallbackExecuted(failsafe.ExecutionDoneEvent[R]{
+			if e.onFallbackExecuted != nil {
+				e.onFallbackExecuted(failsafe.ExecutionDoneEvent[R]{
 					ExecutionInfo: execInternal,
 					Result:        fallbackResult,
 					Error:         fallbackError,

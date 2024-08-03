@@ -54,7 +54,7 @@ type CachePolicyBuilder[R any] interface {
 	Build() CachePolicy[R]
 }
 
-type cachePolicyConfig[R any] struct {
+type config[R any] struct {
 	cache           Cache[R]
 	key             string
 	cacheConditions []func(result R, err error) bool
@@ -63,10 +63,10 @@ type cachePolicyConfig[R any] struct {
 	onCache         func(failsafe.ExecutionEvent[R])
 }
 
-var _ CachePolicyBuilder[any] = &cachePolicyConfig[any]{}
+var _ CachePolicyBuilder[any] = &config[any]{}
 
 type cachePolicy[R any] struct {
-	config *cachePolicyConfig[R]
+	*config[R]
 }
 
 // With returns a new CachePolicy. The resulting CachePolicy will only be used with executions that provide a Context
@@ -77,44 +77,44 @@ func With[R any](cache Cache[R]) CachePolicy[R] {
 
 // Builder returns a CachePolicyBuilder.
 func Builder[R any](cache Cache[R]) CachePolicyBuilder[R] {
-	return &cachePolicyConfig[R]{
+	return &config[R]{
 		cache: cache,
 	}
 }
 
-func (c *cachePolicyConfig[R]) CacheIf(predicate func(R, error) bool) CachePolicyBuilder[R] {
+func (c *config[R]) CacheIf(predicate func(R, error) bool) CachePolicyBuilder[R] {
 	c.cacheConditions = append(c.cacheConditions, predicate)
 	return c
 }
 
-func (c *cachePolicyConfig[R]) WithKey(key string) CachePolicyBuilder[R] {
+func (c *config[R]) WithKey(key string) CachePolicyBuilder[R] {
 	c.key = key
 	return c
 }
 
-func (c *cachePolicyConfig[R]) OnCacheHit(listener func(event failsafe.ExecutionDoneEvent[R])) CachePolicyBuilder[R] {
+func (c *config[R]) OnCacheHit(listener func(event failsafe.ExecutionDoneEvent[R])) CachePolicyBuilder[R] {
 	c.onHit = listener
 	return c
 }
 
-func (c *cachePolicyConfig[R]) OnCacheMiss(listener func(event failsafe.ExecutionEvent[R])) CachePolicyBuilder[R] {
+func (c *config[R]) OnCacheMiss(listener func(event failsafe.ExecutionEvent[R])) CachePolicyBuilder[R] {
 	c.onMiss = listener
 	return c
 }
 
-func (c *cachePolicyConfig[R]) OnResultCached(listener func(event failsafe.ExecutionEvent[R])) CachePolicyBuilder[R] {
+func (c *config[R]) OnResultCached(listener func(event failsafe.ExecutionEvent[R])) CachePolicyBuilder[R] {
 	c.onCache = listener
 	return c
 }
 
-func (c *cachePolicyConfig[R]) Build() CachePolicy[R] {
+func (c *config[R]) Build() CachePolicy[R] {
 	return &cachePolicy[R]{
 		config: c, // TODO copy base fields
 	}
 }
 
 func (c *cachePolicy[R]) ToExecutor(_ R) any {
-	ce := &cacheExecutor[R]{
+	ce := &executor[R]{
 		BaseExecutor: &policy.BaseExecutor[R]{},
 		cachePolicy:  c,
 	}

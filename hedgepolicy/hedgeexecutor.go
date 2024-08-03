@@ -9,15 +9,15 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// hedgeExecutor is a policy.Executor that handles failures according to a HedgePolicy.
-type hedgeExecutor[R any] struct {
+// executor is a policy.Executor that handles failures according to a HedgePolicy.
+type executor[R any] struct {
 	*policy.BaseExecutor[R]
 	*hedgePolicy[R]
 }
 
-var _ policy.Executor[any] = &hedgeExecutor[any]{}
+var _ policy.Executor[any] = &executor[any]{}
 
-func (e *hedgeExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
+func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
 
@@ -33,8 +33,8 @@ func (e *hedgeExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.Pol
 		for attempts := 1; ; attempts++ {
 			go func(hedgeExec policy.ExecutionInternal[R]) {
 				result := innerFn(hedgeExec)
-				isFinalResult := int(resultCount.Add(1)) == e.config.maxHedges+1
-				isCancellable := e.config.IsAbortable(result.Result, result.Error)
+				isFinalResult := int(resultCount.Add(1)) == e.maxHedges+1
+				isCancellable := e.IsAbortable(result.Result, result.Error)
 
 				if (isFinalResult || isCancellable) && done.CompareAndSwap(false, true) {
 					// Cancel any outstanding attempts without recording a result
@@ -45,9 +45,9 @@ func (e *hedgeExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.Pol
 				}
 			}(execInternal)
 
-			if attempts-1 < e.config.maxHedges {
+			if attempts-1 < e.maxHedges {
 				// Wait for hedge delay or result
-				timer := time.NewTimer(e.config.delayFunc(exec))
+				timer := time.NewTimer(e.delayFunc(exec))
 				select {
 				case <-timer.C:
 				case result := <-resultChan:
@@ -70,8 +70,8 @@ func (e *hedgeExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.Pol
 			execInternal = parentExecution.CopyForHedge().(policy.ExecutionInternal[R])
 
 			// Call hedge listener
-			if e.config.onHedge != nil {
-				e.config.onHedge(failsafe.ExecutionEvent[R]{ExecutionAttempt: execInternal.CopyWithResult(nil)})
+			if e.onHedge != nil {
+				e.onHedge(failsafe.ExecutionEvent[R]{ExecutionAttempt: execInternal.CopyWithResult(nil)})
 			}
 		}
 	}

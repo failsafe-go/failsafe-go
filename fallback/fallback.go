@@ -34,16 +34,16 @@ type FallbackBuilder[R any] interface {
 	Build() Fallback[R]
 }
 
-type fallbackConfig[R any] struct {
+type config[R any] struct {
 	*policy.BaseFailurePolicy[R]
 	fn                 func(failsafe.Execution[R]) (R, error)
 	onFallbackExecuted func(failsafe.ExecutionDoneEvent[R])
 }
 
-var _ FallbackBuilder[any] = &fallbackConfig[any]{}
+var _ FallbackBuilder[any] = &config[any]{}
 
 type fallback[R any] struct {
-	config *fallbackConfig[R]
+	*config[R]
 }
 
 // WithResult returns a Fallback for execution result type R that returns the result when an execution fails.
@@ -80,48 +80,48 @@ func BuilderWithError[R any](err error) FallbackBuilder[R] {
 // BuilderWithFunc returns a FallbackBuilder for execution result type R which builds Fallbacks that use the fallbackFn to
 // handle failed executions.
 func BuilderWithFunc[R any](fallbackFunc func(exec failsafe.Execution[R]) (R, error)) FallbackBuilder[R] {
-	return &fallbackConfig[R]{
+	return &config[R]{
 		BaseFailurePolicy: &policy.BaseFailurePolicy[R]{},
 		fn:                fallbackFunc,
 	}
 }
 
-func (c *fallbackConfig[R]) HandleErrors(errs ...error) FallbackBuilder[R] {
+func (c *config[R]) HandleErrors(errs ...error) FallbackBuilder[R] {
 	c.BaseFailurePolicy.HandleErrors(errs...)
 	return c
 }
 
-func (c *fallbackConfig[R]) HandleErrorTypes(errs ...any) FallbackBuilder[R] {
+func (c *config[R]) HandleErrorTypes(errs ...any) FallbackBuilder[R] {
 	c.BaseFailurePolicy.HandleErrorTypes(errs...)
 	return c
 }
 
-func (c *fallbackConfig[R]) HandleResult(result R) FallbackBuilder[R] {
+func (c *config[R]) HandleResult(result R) FallbackBuilder[R] {
 	c.BaseFailurePolicy.HandleResult(result)
 	return c
 }
 
-func (c *fallbackConfig[R]) HandleIf(predicate func(R, error) bool) FallbackBuilder[R] {
+func (c *config[R]) HandleIf(predicate func(R, error) bool) FallbackBuilder[R] {
 	c.BaseFailurePolicy.HandleIf(predicate)
 	return c
 }
 
-func (c *fallbackConfig[R]) OnSuccess(listener func(event failsafe.ExecutionEvent[R])) FallbackBuilder[R] {
+func (c *config[R]) OnSuccess(listener func(event failsafe.ExecutionEvent[R])) FallbackBuilder[R] {
 	c.BaseFailurePolicy.OnSuccess(listener)
 	return c
 }
 
-func (c *fallbackConfig[R]) OnFailure(listener func(event failsafe.ExecutionEvent[R])) FallbackBuilder[R] {
+func (c *config[R]) OnFailure(listener func(event failsafe.ExecutionEvent[R])) FallbackBuilder[R] {
 	c.BaseFailurePolicy.OnFailure(listener)
 	return c
 }
 
-func (c *fallbackConfig[R]) OnFallbackExecuted(listener func(event failsafe.ExecutionDoneEvent[R])) FallbackBuilder[R] {
+func (c *config[R]) OnFallbackExecuted(listener func(event failsafe.ExecutionDoneEvent[R])) FallbackBuilder[R] {
 	c.onFallbackExecuted = listener
 	return c
 }
 
-func (c *fallbackConfig[R]) Build() Fallback[R] {
+func (c *config[R]) Build() Fallback[R] {
 	fbCopy := *c
 	return &fallback[R]{
 		config: &fbCopy, // TODO copy base fields
@@ -129,9 +129,9 @@ func (c *fallbackConfig[R]) Build() Fallback[R] {
 }
 
 func (fb *fallback[R]) ToExecutor(_ R) any {
-	fbe := &fallbackExecutor[R]{
+	fbe := &executor[R]{
 		BaseExecutor: &policy.BaseExecutor[R]{
-			BaseFailurePolicy: fb.config.BaseFailurePolicy,
+			BaseFailurePolicy: fb.BaseFailurePolicy,
 		},
 		fallback: fb,
 	}

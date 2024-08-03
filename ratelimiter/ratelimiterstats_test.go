@@ -209,6 +209,6 @@ func assertSmoothRateLimiterStats(t *testing.T, stats *smoothRateLimiterStats[an
 	assert.Equal(t, expectedNextFreePermitTime, int(stats.nextFreePermitTime.Milliseconds()))
 
 	// Asserts that the nextFreePermitNanos makes sense relative to the elapsedTime and waitTime
-	computedNextFreePermitTime := int(stats.stopwatch.ElapsedTime().Milliseconds()) + waitTime + int(stats.config.interval.Milliseconds())
+	computedNextFreePermitTime := int(stats.stopwatch.ElapsedTime().Milliseconds()) + waitTime + int(stats.interval.Milliseconds())
 	assert.Equal(t, computedNextFreePermitTime, int(stats.nextFreePermitTime.Milliseconds()))
 }

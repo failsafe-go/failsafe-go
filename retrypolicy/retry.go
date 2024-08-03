@@ -150,7 +150,7 @@ type RetryPolicyBuilder[R any] interface {
 	Build() RetryPolicy[R]
 }
 
-type retryPolicyConfig[R any] struct {
+type config[R any] struct {
 	*policy.BaseFailurePolicy[R]
 	*policy.BaseDelayablePolicy[R]
 	*policy.BaseAbortablePolicy[R]
@@ -171,10 +171,10 @@ type retryPolicyConfig[R any] struct {
 	onRetriesExceeded func(failsafe.ExecutionEvent[R])
 }
 
-var _ RetryPolicyBuilder[any] = &retryPolicyConfig[any]{}
+var _ RetryPolicyBuilder[any] = &config[any]{}
 
 type retryPolicy[R any] struct {
-	config *retryPolicyConfig[R]
+	*config[R]
 }
 
 // WithDefaults creates a RetryPolicy for execution result type R that allows 3 execution attempts max with no delay. To
@@ -186,7 +186,7 @@ func WithDefaults[R any]() RetryPolicy[R] {
 // Builder creates a RetryPolicyBuilder for execution result type R, which by default will build a RetryPolicy that
 // allows 3 execution attempts max with no delay, unless configured otherwise.
 func Builder[R any]() RetryPolicyBuilder[R] {
-	return &retryPolicyConfig[R]{
+	return &config[R]{
 		BaseFailurePolicy:   &policy.BaseFailurePolicy[R]{},
 		BaseDelayablePolicy: &policy.BaseDelayablePolicy[R]{},
 		BaseAbortablePolicy: &policy.BaseAbortablePolicy[R]{},
@@ -194,59 +194,59 @@ func Builder[R any]() RetryPolicyBuilder[R] {
 	}
 }
 
-func (c *retryPolicyConfig[R]) Build() RetryPolicy[R] {
+func (c *config[R]) Build() RetryPolicy[R] {
 	rpCopy := *c
 	return &retryPolicy[R]{
 		config: &rpCopy, // TODO copy base fields
 	}
 }
 
-func (c *retryPolicyConfig[R]) AbortOnResult(result R) RetryPolicyBuilder[R] {
+func (c *config[R]) AbortOnResult(result R) RetryPolicyBuilder[R] {
 	c.BaseAbortablePolicy.AbortOnResult(result)
 	return c
 }
 
-func (c *retryPolicyConfig[R]) AbortOnErrors(errs ...error) RetryPolicyBuilder[R] {
+func (c *config[R]) AbortOnErrors(errs ...error) RetryPolicyBuilder[R] {
 	c.BaseAbortablePolicy.AbortOnErrors(errs...)
 	return c
 }
 
-func (c *retryPolicyConfig[R]) AbortOnErrorTypes(errs ...any) RetryPolicyBuilder[R] {
+func (c *config[R]) AbortOnErrorTypes(errs ...any) RetryPolicyBuilder[R] {
 	c.BaseAbortablePolicy.AbortOnErrorTypes(errs...)
 	return c
 }
 
-func (c *retryPolicyConfig[R]) AbortIf(predicate func(R, error) bool) RetryPolicyBuilder[R] {
+func (c *config[R]) AbortIf(predicate func(R, error) bool) RetryPolicyBuilder[R] {
 	c.BaseAbortablePolicy.AbortIf(predicate)
 	return c
 }
 
-func (c *retryPolicyConfig[R]) HandleErrors(errs ...error) RetryPolicyBuilder[R] {
+func (c *config[R]) HandleErrors(errs ...error) RetryPolicyBuilder[R] {
 	c.BaseFailurePolicy.HandleErrors(errs...)
 	return c
 }
 
-func (c *retryPolicyConfig[R]) HandleErrorTypes(errs ...any) RetryPolicyBuilder[R] {
+func (c *config[R]) HandleErrorTypes(errs ...any) RetryPolicyBuilder[R] {
 	c.BaseFailurePolicy.HandleErrorTypes(errs...)
 	return c
 }
 
-func (c *retryPolicyConfig[R]) HandleResult(result R) RetryPolicyBuilder[R] {
+func (c *config[R]) HandleResult(result R) RetryPolicyBuilder[R] {
 	c.BaseFailurePolicy.HandleResult(result)
 	return c
 }
 
-func (c *retryPolicyConfig[R]) HandleIf(predicate func(R, error) bool) RetryPolicyBuilder[R] {
+func (c *config[R]) HandleIf(predicate func(R, error) bool) RetryPolicyBuilder[R] {
 	c.BaseFailurePolicy.HandleIf(predicate)
 	return c
 }
 
-func (c *retryPolicyConfig[R]) ReturnLastFailure() RetryPolicyBuilder[R] {
+func (c *config[R]) ReturnLastFailure() RetryPolicyBuilder[R] {
 	c.returnLastFailure = true
 	return c
 }
 
-func (c *retryPolicyConfig[R]) WithMaxAttempts(maxAttempts int) RetryPolicyBuilder[R] {
+func (c *config[R]) WithMaxAttempts(maxAttempts int) RetryPolicyBuilder[R] {
 	if maxAttempts == -1 {
 		c.maxRetries = -1
 	} else {
@@ -255,31 +255,31 @@ func (c *retryPolicyConfig[R]) WithMaxAttempts(maxAttempts int) RetryPolicyBuild
 	return c
 }
 
-func (c *retryPolicyConfig[R]) WithMaxRetries(maxRetries int) RetryPolicyBuilder[R] {
+func (c *config[R]) WithMaxRetries(maxRetries int) RetryPolicyBuilder[R] {
 	c.maxRetries = maxRetries
 	return c
 }
 
-func (c *retryPolicyConfig[R]) WithMaxDuration(maxDuration time.Duration) RetryPolicyBuilder[R] {
+func (c *config[R]) WithMaxDuration(maxDuration time.Duration) RetryPolicyBuilder[R] {
 	c.maxDuration = maxDuration
 	return c
 }
 
-func (c *retryPolicyConfig[R]) WithDelay(delay time.Duration) RetryPolicyBuilder[R] {
+func (c *config[R]) WithDelay(delay time.Duration) RetryPolicyBuilder[R] {
 	c.BaseDelayablePolicy.WithDelay(delay)
 	return c
 }
 
-func (c *retryPolicyConfig[R]) WithDelayFunc(delayFunc failsafe.DelayFunc[R]) RetryPolicyBuilder[R] {
+func (c *config[R]) WithDelayFunc(delayFunc failsafe.DelayFunc[R]) RetryPolicyBuilder[R] {
 	c.BaseDelayablePolicy.WithDelayFunc(delayFunc)
 	return c
 }
 
-func (c *retryPolicyConfig[R]) WithBackoff(delay time.Duration, maxDelay time.Duration) RetryPolicyBuilder[R] {
+func (c *config[R]) WithBackoff(delay time.Duration, maxDelay time.Duration) RetryPolicyBuilder[R] {
 	return c.WithBackoffFactor(delay, maxDelay, 2)
 }
 
-func (c *retryPolicyConfig[R]) WithBackoffFactor(delay time.Duration, maxDelay time.Duration, delayFactor float32) RetryPolicyBuilder[R] {
+func (c *config[R]) WithBackoffFactor(delay time.Duration, maxDelay time.Duration, delayFactor float32) RetryPolicyBuilder[R] {
 	c.BaseDelayablePolicy.WithDelay(delay)
 	c.maxDelay = maxDelay
 	c.delayFactor = delayFactor
@@ -290,7 +290,7 @@ func (c *retryPolicyConfig[R]) WithBackoffFactor(delay time.Duration, maxDelay t
 	return c
 }
 
-func (c *retryPolicyConfig[R]) WithRandomDelay(delayMin time.Duration, delayMax time.Duration) RetryPolicyBuilder[R] {
+func (c *config[R]) WithRandomDelay(delayMin time.Duration, delayMax time.Duration) RetryPolicyBuilder[R] {
 	c.delayMin = delayMin
 	c.delayMax = delayMax
 
@@ -300,54 +300,54 @@ func (c *retryPolicyConfig[R]) WithRandomDelay(delayMin time.Duration, delayMax 
 	return c
 }
 
-func (c *retryPolicyConfig[R]) WithJitter(jitter time.Duration) RetryPolicyBuilder[R] {
+func (c *config[R]) WithJitter(jitter time.Duration) RetryPolicyBuilder[R] {
 	c.jitter = jitter
 	return c
 }
 
-func (c *retryPolicyConfig[R]) WithJitterFactor(jitterFactor float32) RetryPolicyBuilder[R] {
+func (c *config[R]) WithJitterFactor(jitterFactor float32) RetryPolicyBuilder[R] {
 	c.jitterFactor = jitterFactor
 	return c
 }
 
-func (c *retryPolicyConfig[R]) OnSuccess(listener func(event failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R] {
+func (c *config[R]) OnSuccess(listener func(event failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R] {
 	c.BaseFailurePolicy.OnSuccess(listener)
 	return c
 }
 
-func (c *retryPolicyConfig[R]) OnFailure(listener func(event failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R] {
+func (c *config[R]) OnFailure(listener func(event failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R] {
 	c.BaseFailurePolicy.OnFailure(listener)
 	return c
 }
 
-func (c *retryPolicyConfig[R]) OnAbort(listener func(failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R] {
+func (c *config[R]) OnAbort(listener func(failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R] {
 	c.onAbort = listener
 	return c
 }
 
-func (c *retryPolicyConfig[R]) OnRetry(listener func(failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R] {
+func (c *config[R]) OnRetry(listener func(failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R] {
 	c.onRetry = listener
 	return c
 }
 
-func (c *retryPolicyConfig[R]) OnRetryScheduled(listener func(failsafe.ExecutionScheduledEvent[R])) RetryPolicyBuilder[R] {
+func (c *config[R]) OnRetryScheduled(listener func(failsafe.ExecutionScheduledEvent[R])) RetryPolicyBuilder[R] {
 	c.onRetryScheduled = listener
 	return c
 }
 
-func (c *retryPolicyConfig[R]) OnRetriesExceeded(listener func(failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R] {
+func (c *config[R]) OnRetriesExceeded(listener func(failsafe.ExecutionEvent[R])) RetryPolicyBuilder[R] {
 	c.onRetriesExceeded = listener
 	return c
 }
 
-func (c *retryPolicyConfig[R]) allowsRetries() bool {
+func (c *config[R]) allowsRetries() bool {
 	return c.maxRetries == -1 || c.maxRetries > 0
 }
 
 func (rp *retryPolicy[R]) ToExecutor(_ R) any {
-	rpe := &retryPolicyExecutor[R]{
+	rpe := &executor[R]{
 		BaseExecutor: &policy.BaseExecutor[R]{
-			BaseFailurePolicy: rp.config.BaseFailurePolicy,
+			BaseFailurePolicy: rp.BaseFailurePolicy,
 		},
 		retryPolicy: rp,
 	}

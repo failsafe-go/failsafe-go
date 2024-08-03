@@ -9,19 +9,19 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// bulkheadExecutor is a policy.Executor that handles failures according to a Bulkhead.
-type bulkheadExecutor[R any] struct {
+// executor is a policy.Executor that handles failures according to a Bulkhead.
+type executor[R any] struct {
 	*policy.BaseExecutor[R]
 	*bulkhead[R]
 }
 
-var _ policy.Executor[any] = &bulkheadExecutor[any]{}
+var _ policy.Executor[any] = &executor[any]{}
 
-func (e *bulkheadExecutor[R]) PreExecute(exec policy.ExecutionInternal[R]) *common.PolicyResult[R] {
+func (e *executor[R]) PreExecute(exec policy.ExecutionInternal[R]) *common.PolicyResult[R] {
 	execInternal := exec.(policy.ExecutionInternal[R])
-	if err := e.AcquirePermitWithMaxWait(execInternal.Context(), e.config.maxWaitTime); err != nil {
-		if e.config.onFull != nil && errors.Is(err, ErrFull) {
-			e.config.onFull(failsafe.ExecutionEvent[R]{
+	if err := e.AcquirePermitWithMaxWait(execInternal.Context(), e.maxWaitTime); err != nil {
+		if e.onFull != nil && errors.Is(err, ErrFull) {
+			e.onFull(failsafe.ExecutionEvent[R]{
 				ExecutionAttempt: execInternal,
 			})
 		}
@@ -30,7 +30,7 @@ func (e *bulkheadExecutor[R]) PreExecute(exec policy.ExecutionInternal[R]) *comm
 	return nil
 }
 
-func (e *bulkheadExecutor[R]) PostExecute(_ policy.ExecutionInternal[R], result *common.PolicyResult[R]) *common.PolicyResult[R] {
+func (e *executor[R]) PostExecute(_ policy.ExecutionInternal[R], result *common.PolicyResult[R]) *common.PolicyResult[R] {
 	e.bulkhead.ReleasePermit()
 	return result
 }

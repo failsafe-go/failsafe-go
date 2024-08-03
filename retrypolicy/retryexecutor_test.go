@@ -11,13 +11,18 @@ import (
 
 func TestAdjustForBackoff(t *testing.T) {
 	// Given
-	rpc := Builder[any]().WithBackoff(time.Second, 10*time.Second).(*retryPolicyConfig[any])
+	rpc := Builder[any]().WithBackoff(time.Second, 10*time.Second).(*config[any])
+	rpe := &executor[any]{
+		retryPolicy: &retryPolicy[any]{
+			config: rpc,
+		},
+	}
 	exec := &testutil.TestExecution[any]{
 		TheAttempts: 1,
 	}
 	delay := rpc.Delay
 	f := func() time.Duration {
-		delay = adjustForBackoff(rpc, exec, delay)
+		delay = rpe.adjustForBackoff(exec, delay)
 		exec.TheAttempts++
 		return delay
 	}

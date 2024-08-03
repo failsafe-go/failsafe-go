@@ -56,30 +56,30 @@ type BulkheadBuilder[R any] interface {
 	Build() Bulkhead[R]
 }
 
-type bulkheadConfig[R any] struct {
+type config[R any] struct {
 	maxConcurrency uint
 	maxWaitTime    time.Duration
 	onFull         func(failsafe.ExecutionEvent[R])
 }
 
-func (c *bulkheadConfig[R]) WithMaxWaitTime(maxWaitTime time.Duration) BulkheadBuilder[R] {
+func (c *config[R]) WithMaxWaitTime(maxWaitTime time.Duration) BulkheadBuilder[R] {
 	c.maxWaitTime = maxWaitTime
 	return c
 }
 
-func (c *bulkheadConfig[R]) OnFull(listener func(event failsafe.ExecutionEvent[R])) BulkheadBuilder[R] {
+func (c *config[R]) OnFull(listener func(event failsafe.ExecutionEvent[R])) BulkheadBuilder[R] {
 	c.onFull = listener
 	return c
 }
 
-func (c *bulkheadConfig[R]) Build() Bulkhead[R] {
+func (c *config[R]) Build() Bulkhead[R] {
 	return &bulkhead[R]{
 		config:    c, // TODO copy base fields
 		semaphore: make(chan struct{}, c.maxConcurrency),
 	}
 }
 
-var _ BulkheadBuilder[any] = &bulkheadConfig[any]{}
+var _ BulkheadBuilder[any] = &config[any]{}
 
 // With returns a new Bulkhead for execution result type R and the maxConcurrency.
 func With[R any](maxConcurrency uint) Bulkhead[R] {
@@ -88,13 +88,13 @@ func With[R any](maxConcurrency uint) Bulkhead[R] {
 
 // Builder returns a BulkheadBuilder for execution result type R which builds Timeouts for the timeoutDelay.
 func Builder[R any](maxConcurrency uint) BulkheadBuilder[R] {
-	return &bulkheadConfig[R]{
+	return &config[R]{
 		maxConcurrency: maxConcurrency,
 	}
 }
 
 type bulkhead[R any] struct {
-	config    *bulkheadConfig[R]
+	*config[R]
 	semaphore chan struct{}
 }
 
@@ -154,7 +154,7 @@ func (b *bulkhead[R]) ReleasePermit() {
 }
 
 func (b *bulkhead[R]) ToExecutor(_ R) any {
-	be := &bulkheadExecutor[R]{
+	be := &executor[R]{
 		BaseExecutor: &policy.BaseExecutor[R]{},
 		bulkhead:     b,
 	}

@@ -28,15 +28,15 @@ type TimeoutBuilder[R any] interface {
 	Build() Timeout[R]
 }
 
-type timeoutConfig[R any] struct {
+type config[R any] struct {
 	timeLimit         time.Duration
 	onTimeoutExceeded func(failsafe.ExecutionDoneEvent[R])
 }
 
-var _ TimeoutBuilder[any] = &timeoutConfig[any]{}
+var _ TimeoutBuilder[any] = &config[any]{}
 
 type timeout[R any] struct {
-	config *timeoutConfig[R]
+	*config[R]
 }
 
 // With returns a new Timeout for execution result type R and the timeLimit. The Timeout will cancel executions if they
@@ -52,17 +52,17 @@ func With[R any](timeLimit time.Duration) Timeout[R] {
 // canceled. If the execution is configured with a Context, a child context will be created for the execution and canceled when the Timeout
 // is exceeded.
 func Builder[R any](timeLimit time.Duration) TimeoutBuilder[R] {
-	return &timeoutConfig[R]{
+	return &config[R]{
 		timeLimit: timeLimit,
 	}
 }
 
-func (c *timeoutConfig[R]) OnTimeoutExceeded(listener func(event failsafe.ExecutionDoneEvent[R])) TimeoutBuilder[R] {
+func (c *config[R]) OnTimeoutExceeded(listener func(event failsafe.ExecutionDoneEvent[R])) TimeoutBuilder[R] {
 	c.onTimeoutExceeded = listener
 	return c
 }
 
-func (c *timeoutConfig[R]) Build() Timeout[R] {
+func (c *config[R]) Build() Timeout[R] {
 	fbCopy := *c
 	return &timeout[R]{
 		config: &fbCopy, // TODO copy base fields
@@ -70,7 +70,7 @@ func (c *timeoutConfig[R]) Build() Timeout[R] {
 }
 
 func (t *timeout[R]) ToExecutor(_ R) any {
-	te := &timeoutExecutor[R]{
+	te := &executor[R]{
 		BaseExecutor: &policy.BaseExecutor[R]{},
 		timeout:      t,
 	}

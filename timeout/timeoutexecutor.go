@@ -11,15 +11,15 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// timeoutExecutor is a policy.Executor that handles failures according to a Timeout.
-type timeoutExecutor[R any] struct {
+// executor is a policy.Executor that handles failures according to a Timeout.
+type executor[R any] struct {
 	*policy.BaseExecutor[R]
 	*timeout[R]
 }
 
-var _ policy.Executor[any] = &timeoutExecutor[any]{}
+var _ policy.Executor[any] = &executor[any]{}
 
-func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
+func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	// This func sets up a race between a timeout and the innerFn returning
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
@@ -27,11 +27,11 @@ func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.P
 		// Create child context
 		execInternal = execInternal.CopyForCancellable().(policy.ExecutionInternal[R])
 		var result atomic.Pointer[common.PolicyResult[R]]
-		timer := time.AfterFunc(e.config.timeLimit, func() {
+		timer := time.AfterFunc(e.timeLimit, func() {
 			timeoutResult := internal.FailureResult[R](ErrExceeded)
 			if result.CompareAndSwap(nil, timeoutResult) {
-				if e.config.onTimeoutExceeded != nil {
-					e.config.onTimeoutExceeded(failsafe.ExecutionDoneEvent[R]{
+				if e.onTimeoutExceeded != nil {
+					e.onTimeoutExceeded(failsafe.ExecutionDoneEvent[R]{
 						ExecutionInfo: execInternal,
 						Error:         ErrExceeded,
 					})
@@ -52,6 +52,6 @@ func (e *timeoutExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.P
 	}
 }
 
-func (e *timeoutExecutor[R]) IsFailure(_ R, err error) bool {
+func (e *executor[R]) IsFailure(_ R, err error) bool {
 	return err != nil && errors.Is(err, ErrExceeded)
 }
