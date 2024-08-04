@@ -11,12 +11,12 @@ import (
 
 // Stats for a CircuitBreaker.
 // Implementations are not concurrency safe and must be guarded externally.
-type circuitStats interface {
-	getExecutionCount() uint
-	getFailureCount() uint
-	getFailureRate() uint
-	getSuccessCount() uint
-	getSuccessRate() uint
+type stats interface {
+	executionCount() uint
+	failureCount() uint
+	failureRate() uint
+	successCount() uint
+	successRate() uint
 	recordFailure()
 	recordSuccess()
 	reset()
@@ -25,8 +25,8 @@ type circuitStats interface {
 // The default number of buckets to aggregate time-based stats into.
 const defaultBucketCount = 10
 
-// A circuitStats implementation that counts execution results using a BitSet.
-type countingCircuitStats struct {
+// A stats implementation that counts execution results using a BitSet.
+type countingStats struct {
 	bitSet *bitset.BitSet
 	size   uint
 
@@ -37,15 +37,15 @@ type countingCircuitStats struct {
 	failures     uint
 }
 
-func newStats[R any](config *config[R], supportsTimeBased bool, capacity uint) circuitStats {
+func newStats[R any](config *config[R], supportsTimeBased bool, capacity uint) stats {
 	if supportsTimeBased && config.failureThresholdingPeriod != 0 {
-		return newTimedCircuitStats(defaultBucketCount, config.failureThresholdingPeriod, config.clock)
+		return newTimedStats(defaultBucketCount, config.failureThresholdingPeriod, config.clock)
 	}
-	return newCountingCircuitStats(capacity)
+	return newCountingStats(capacity)
 }
 
-func newCountingCircuitStats(size uint) *countingCircuitStats {
-	return &countingCircuitStats{
+func newCountingStats(size uint) *countingStats {
+	return &countingStats{
 		bitSet: bitset.New(size),
 		size:   size,
 	}
@@ -56,7 +56,7 @@ Sets the value of the next bit in the bitset, returning the previous value, else
 
 value is true if positive/success, false if negative/failure
 */
-func (c *countingCircuitStats) setNext(value bool) int {
+func (c *countingStats) setNext(value bool) int {
 	previousValue := -1
 	if c.occupiedBits < c.size {
 		c.occupiedBits++
@@ -90,48 +90,48 @@ func (c *countingCircuitStats) setNext(value bool) int {
 	return previousValue
 }
 
-func (c *countingCircuitStats) indexAfter(index uint) uint {
+func (c *countingStats) indexAfter(index uint) uint {
 	if index == c.size-1 {
 		return 0
 	}
 	return index + 1
 }
 
-func (c *countingCircuitStats) getExecutionCount() uint {
+func (c *countingStats) executionCount() uint {
 	return c.occupiedBits
 }
 
-func (c *countingCircuitStats) getFailureCount() uint {
+func (c *countingStats) failureCount() uint {
 	return c.failures
 }
 
-func (c *countingCircuitStats) getFailureRate() uint {
+func (c *countingStats) failureRate() uint {
 	if c.occupiedBits == 0 {
 		return 0
 	}
 	return uint(math.Round(float64(c.failures) / float64(c.occupiedBits) * 100.0))
 }
 
-func (c *countingCircuitStats) getSuccessCount() uint {
+func (c *countingStats) successCount() uint {
 	return c.successes
 }
 
-func (c *countingCircuitStats) getSuccessRate() uint {
+func (c *countingStats) successRate() uint {
 	if c.occupiedBits == 0 {
 		return 0
 	}
 	return uint(math.Round(float64(c.successes) / float64(c.occupiedBits) * 100.0))
 }
 
-func (c *countingCircuitStats) recordFailure() {
+func (c *countingStats) recordFailure() {
 	c.setNext(false)
 }
 
-func (c *countingCircuitStats) recordSuccess() {
+func (c *countingStats) recordSuccess() {
 	c.setNext(true)
 }
 
-func (c *countingCircuitStats) reset() {
+func (c *countingStats) reset() {
 	c.bitSet.ClearAll()
 	c.currentIndex = 0
 	c.occupiedBits = 0
@@ -139,8 +139,8 @@ func (c *countingCircuitStats) reset() {
 	c.failures = 0
 }
 
-// A circuitStats implementation that counts execution results within a time period, and buckets results to minimize overhead.
-type timedCircuitStats struct {
+// A stats implementation that counts execution results within a time period, and buckets results to minimize overhead.
+type timedStats struct {
 	clock      util.Clock
 	bucketSize time.Duration
 	windowSize time.Duration
@@ -176,7 +176,7 @@ func (s *stat) remove(bucket *bucket) {
 	s.failures -= bucket.failures
 }
 
-func newTimedCircuitStats(bucketCount int, thresholdingPeriod time.Duration, clock util.Clock) *timedCircuitStats {
+func newTimedStats(bucketCount int, thresholdingPeriod time.Duration, clock util.Clock) *timedStats {
 	buckets := make([]bucket, bucketCount)
 	for i := 0; i < bucketCount; i++ {
 		buckets[i] = bucket{
@@ -185,7 +185,7 @@ func newTimedCircuitStats(bucketCount int, thresholdingPeriod time.Duration, clo
 		}
 	}
 	buckets[0].startTime = clock.CurrentUnixNano()
-	result := &timedCircuitStats{
+	result := &timedStats{
 		buckets:    buckets,
 		windowSize: thresholdingPeriod,
 		bucketSize: thresholdingPeriod / time.Duration(bucketCount),
@@ -195,7 +195,7 @@ func newTimedCircuitStats(bucketCount int, thresholdingPeriod time.Duration, clo
 	return result
 }
 
-func (s *timedCircuitStats) getCurrentBucket() *bucket {
+func (s *timedStats) getCurrentBucket() *bucket {
 	previousBucket := &s.buckets[s.currentIndex]
 	currentBucket := previousBucket
 	timeDiff := s.clock.CurrentUnixNano() - currentBucket.startTime
@@ -226,49 +226,49 @@ func (s *timedCircuitStats) getCurrentBucket() *bucket {
 	return currentBucket
 }
 
-func (s *timedCircuitStats) nextIndex() int {
+func (s *timedStats) nextIndex() int {
 	return (s.currentIndex + 1) % len(s.buckets)
 }
 
-func (s *timedCircuitStats) getExecutionCount() uint {
+func (s *timedStats) executionCount() uint {
 	return s.summary.successes + s.summary.failures
 }
 
-func (s *timedCircuitStats) getFailureCount() uint {
+func (s *timedStats) failureCount() uint {
 	return s.summary.failures
 }
 
-func (s *timedCircuitStats) getFailureRate() uint {
-	executions := s.getExecutionCount()
+func (s *timedStats) failureRate() uint {
+	executions := s.executionCount()
 	if executions == 0 {
 		return 0
 	}
 	return uint(math.Round(float64(s.summary.failures) / float64(executions) * 100.0))
 }
 
-func (s *timedCircuitStats) getSuccessCount() uint {
+func (s *timedStats) successCount() uint {
 	return s.summary.successes
 }
 
-func (s *timedCircuitStats) getSuccessRate() uint {
-	executions := s.getExecutionCount()
+func (s *timedStats) successRate() uint {
+	executions := s.executionCount()
 	if executions == 0 {
 		return 0
 	}
 	return uint(math.Round(float64(s.summary.successes) / float64(executions) * 100.0))
 }
 
-func (s *timedCircuitStats) recordFailure() {
+func (s *timedStats) recordFailure() {
 	s.getCurrentBucket().failures++
 	s.summary.failures++
 }
 
-func (s *timedCircuitStats) recordSuccess() {
+func (s *timedStats) recordSuccess() {
 	s.getCurrentBucket().successes++
 	s.summary.successes++
 }
 
-func (s *timedCircuitStats) reset() {
+func (s *timedStats) reset() {
 	startTime := s.clock.CurrentUnixNano()
 	for i := range s.buckets {
 		bucket := &s.buckets[i]

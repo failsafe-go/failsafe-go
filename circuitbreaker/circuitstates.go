@@ -10,7 +10,7 @@ import (
 // Implementations are not concurrency safe and must be guarded externally.
 type circuitState[R any] interface {
 	getState() State
-	getStats() circuitStats
+	getStats() stats
 	getRemainingDelay() time.Duration
 	tryAcquirePermit() bool
 	checkThresholdAndReleasePermit(exec failsafe.Execution[R])
@@ -18,7 +18,7 @@ type circuitState[R any] interface {
 
 type closedState[R any] struct {
 	breaker *circuitBreaker[R]
-	stats   circuitStats
+	stats   stats
 }
 
 func newClosedState[R any](breaker *circuitBreaker[R]) *closedState[R] {
@@ -38,7 +38,7 @@ func (s *closedState[R]) getState() State {
 	return ClosedState
 }
 
-func (s *closedState[R]) getStats() circuitStats {
+func (s *closedState[R]) getStats() stats {
 	return s.stats
 }
 
@@ -53,11 +53,11 @@ func (s *closedState[R]) tryAcquirePermit() bool {
 // Checks to see if the executions and failure thresholds have been exceeded, opening the circuit if so.
 func (s *closedState[R]) checkThresholdAndReleasePermit(exec failsafe.Execution[R]) {
 	// Execution threshold can only be set for time based thresholding
-	if s.stats.getExecutionCount() >= s.breaker.failureExecutionThreshold {
+	if s.stats.executionCount() >= s.breaker.failureExecutionThreshold {
 		// Failure rate threshold can only be set for time based thresholding
 		failureRateThreshold := s.breaker.failureRateThreshold
-		if (failureRateThreshold != 0 && s.stats.getFailureRate() >= failureRateThreshold) ||
-			(failureRateThreshold == 0 && s.stats.getFailureCount() >= s.breaker.failureThreshold) {
+		if (failureRateThreshold != 0 && s.stats.failureRate() >= failureRateThreshold) ||
+			(failureRateThreshold == 0 && s.stats.failureCount() >= s.breaker.failureThreshold) {
 			s.breaker.open(exec)
 		}
 	}
@@ -65,7 +65,7 @@ func (s *closedState[R]) checkThresholdAndReleasePermit(exec failsafe.Execution[
 
 type openState[R any] struct {
 	breaker   *circuitBreaker[R]
-	stats     circuitStats
+	stats     stats
 	startTime int64
 	delay     time.Duration
 }
@@ -83,7 +83,7 @@ func (s *openState[R]) getState() State {
 	return OpenState
 }
 
-func (s *openState[R]) getStats() circuitStats {
+func (s *openState[R]) getStats() stats {
 	return s.stats
 }
 
@@ -105,7 +105,7 @@ func (s *openState[R]) checkThresholdAndReleasePermit(_ failsafe.Execution[R]) {
 
 type halfOpenState[R any] struct {
 	breaker             *circuitBreaker[R]
-	stats               circuitStats
+	stats               stats
 	permittedExecutions uint
 }
 
@@ -128,7 +128,7 @@ func (s *halfOpenState[R]) getState() State {
 	return HalfOpenState
 }
 
-func (s *halfOpenState[R]) getStats() circuitStats {
+func (s *halfOpenState[R]) getStats() stats {
 	return s.stats
 }
 
@@ -158,21 +158,21 @@ func (s *halfOpenState[R]) checkThresholdAndReleasePermit(exec failsafe.Executio
 	successThreshold := s.breaker.successThreshold
 	if successThreshold != 0 {
 		successThresholdingCapacity := s.breaker.successThresholdingCapacity
-		successesExceeded = s.stats.getSuccessCount() >= successThreshold
-		failuresExceeded = s.stats.getFailureCount() > successThresholdingCapacity-successThreshold
+		successesExceeded = s.stats.successCount() >= successThreshold
+		failuresExceeded = s.stats.failureCount() > successThresholdingCapacity-successThreshold
 	} else {
 		// Failure rate threshold can only be set for time based thresholding
 		failureRateThreshold := s.breaker.failureRateThreshold
 		if failureRateThreshold != 0 {
 			// Execution threshold can only be set for time based thresholding
-			executionThresholdExceeded := s.stats.getExecutionCount() >= s.breaker.failureExecutionThreshold
-			failuresExceeded = executionThresholdExceeded && s.stats.getFailureRate() >= failureRateThreshold
-			successesExceeded = executionThresholdExceeded && s.stats.getSuccessRate() > 100-failureRateThreshold
+			executionThresholdExceeded := s.stats.executionCount() >= s.breaker.failureExecutionThreshold
+			failuresExceeded = executionThresholdExceeded && s.stats.failureRate() >= failureRateThreshold
+			successesExceeded = executionThresholdExceeded && s.stats.successRate() > 100-failureRateThreshold
 		} else {
 			failureThresholdingCapacity := s.breaker.failureThresholdingCapacity
 			failureThreshold := s.breaker.failureThreshold
-			failuresExceeded = s.stats.getFailureCount() >= failureThreshold
-			successesExceeded = s.stats.getSuccessCount() > failureThresholdingCapacity-failureThreshold
+			failuresExceeded = s.stats.failureCount() >= failureThreshold
+			successesExceeded = s.stats.successCount() > failureThresholdingCapacity-failureThreshold
 		}
 	}
 

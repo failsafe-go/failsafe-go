@@ -214,31 +214,31 @@ func (cb *circuitBreaker[R]) IsClosed() bool {
 func (cb *circuitBreaker[R]) Executions() uint {
 	cb.mtx.Lock()
 	defer cb.mtx.Unlock()
-	return cb.state.getStats().getExecutionCount()
+	return cb.state.getStats().executionCount()
 }
 
 func (cb *circuitBreaker[R]) Failures() uint {
 	cb.mtx.Lock()
 	defer cb.mtx.Unlock()
-	return cb.state.getStats().getFailureCount()
+	return cb.state.getStats().failureCount()
 }
 
 func (cb *circuitBreaker[R]) FailureRate() uint {
 	cb.mtx.Lock()
 	defer cb.mtx.Unlock()
-	return cb.state.getStats().getFailureRate()
+	return cb.state.getStats().failureRate()
 }
 
 func (cb *circuitBreaker[R]) Successes() uint {
 	cb.mtx.Lock()
 	defer cb.mtx.Unlock()
-	return cb.state.getStats().getSuccessCount()
+	return cb.state.getStats().successCount()
 }
 
 func (cb *circuitBreaker[R]) SuccessRate() uint {
 	cb.mtx.Lock()
 	defer cb.mtx.Unlock()
-	return cb.state.getStats().getSuccessRate()
+	return cb.state.getStats().successRate()
 }
 
 func (cb *circuitBreaker[R]) RecordFailure() {
@@ -315,27 +315,27 @@ func (cb *circuitBreaker[R]) transitionTo(newState State, exec failsafe.Executio
 }
 
 type eventMetrics struct {
-	stats circuitStats
+	stats stats
 }
 
 func (m *eventMetrics) Executions() uint {
-	return m.stats.getExecutionCount()
+	return m.stats.executionCount()
 }
 
 func (m *eventMetrics) Failures() uint {
-	return m.stats.getFailureCount()
+	return m.stats.failureCount()
 }
 
 func (m *eventMetrics) FailureRate() uint {
-	return m.stats.getFailureRate()
+	return m.stats.failureRate()
 }
 
 func (m *eventMetrics) Successes() uint {
-	return m.stats.getSuccessCount()
+	return m.stats.successCount()
 }
 
 func (m *eventMetrics) SuccessRate() uint {
-	return m.stats.getSuccessRate()
+	return m.stats.successRate()
 }
 
 // Requires external locking.
