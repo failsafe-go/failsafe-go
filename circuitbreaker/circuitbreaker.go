@@ -186,13 +186,13 @@ func (cb *circuitBreaker[R]) Close() {
 func (cb *circuitBreaker[R]) State() State {
 	cb.mtx.Lock()
 	defer cb.mtx.Unlock()
-	return cb.state.getState()
+	return cb.state.state()
 }
 
 func (cb *circuitBreaker[R]) RemainingDelay() time.Duration {
 	cb.mtx.Lock()
 	defer cb.mtx.Unlock()
-	return cb.state.getRemainingDelay()
+	return cb.state.remainingDelay()
 }
 
 func (cb *circuitBreaker[R]) Metrics() Metrics {
@@ -214,31 +214,31 @@ func (cb *circuitBreaker[R]) IsClosed() bool {
 func (cb *circuitBreaker[R]) Executions() uint {
 	cb.mtx.Lock()
 	defer cb.mtx.Unlock()
-	return cb.state.getStats().executionCount()
+	return cb.state.executionCount()
 }
 
 func (cb *circuitBreaker[R]) Failures() uint {
 	cb.mtx.Lock()
 	defer cb.mtx.Unlock()
-	return cb.state.getStats().failureCount()
+	return cb.state.failureCount()
 }
 
 func (cb *circuitBreaker[R]) FailureRate() uint {
 	cb.mtx.Lock()
 	defer cb.mtx.Unlock()
-	return cb.state.getStats().failureRate()
+	return cb.state.failureRate()
 }
 
 func (cb *circuitBreaker[R]) Successes() uint {
 	cb.mtx.Lock()
 	defer cb.mtx.Unlock()
-	return cb.state.getStats().successCount()
+	return cb.state.successCount()
 }
 
 func (cb *circuitBreaker[R]) SuccessRate() uint {
 	cb.mtx.Lock()
 	defer cb.mtx.Unlock()
-	return cb.state.getStats().successRate()
+	return cb.state.successRate()
 }
 
 func (cb *circuitBreaker[R]) RecordFailure() {
@@ -281,9 +281,8 @@ func (cb *circuitBreaker[R]) ToExecutor(_ R) any {
 // Requires external locking.
 func (cb *circuitBreaker[R]) transitionTo(newState State, exec failsafe.Execution[R], listener func(StateChangedEvent)) {
 	transitioned := false
-	currentState := cb.state.getState()
-	currentStats := cb.state.getStats()
-	if currentState != newState {
+	currentState := cb.state
+	if currentState.state() != newState {
 		switch newState {
 		case ClosedState:
 			cb.state = newClosedState(cb)
@@ -301,9 +300,9 @@ func (cb *circuitBreaker[R]) transitionTo(newState State, exec failsafe.Executio
 
 	if transitioned && (listener != nil || cb.stateChangedListener != nil) {
 		event := StateChangedEvent{
-			OldState: currentState,
+			OldState: currentState.state(),
 			NewState: newState,
-			metrics:  &eventMetrics{currentStats},
+			metrics:  &eventMetrics{currentState},
 		}
 		if listener != nil {
 			listener(event)
@@ -372,17 +371,17 @@ func (cb *circuitBreaker[R]) recordResult(result R, err error) {
 
 // Requires external locking.
 func (cb *circuitBreaker[R]) recordSuccess() {
-	cb.state.getStats().recordSuccess()
+	cb.state.recordSuccess()
 	cb.state.checkThresholdAndReleasePermit(nil)
 }
 
 // Requires external locking.
 func (cb *circuitBreaker[R]) recordFailure(exec failsafe.Execution[R]) {
-	cb.state.getStats().recordFailure()
+	cb.state.recordFailure()
 	cb.state.checkThresholdAndReleasePermit(exec)
 }
 
 func (cb *circuitBreaker[R]) Reset() {
 	cb.close()
-	cb.state.getStats().reset()
+	cb.state.reset()
 }
