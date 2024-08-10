@@ -24,11 +24,11 @@ import (
 func TestListenersOnSuccess(t *testing.T) {
 	// Given - Fail 4 times then succeed
 	stub, _ := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 2, false, false, true)
-	rpBuilder := retrypolicy.Builder[bool]().HandleResult(false).WithMaxAttempts(10)
-	cbBuilder := circuitbreaker.Builder[bool]().HandleResult(false).WithDelay(0)
-	fbBuilder := fallback.BuilderWithResult(false)
+	rpBuilder := retrypolicy.NewBuilder[bool]().HandleResult(false).WithMaxAttempts(10)
+	cbBuilder := circuitbreaker.NewBuilder[bool]().HandleResult(false).WithDelay(0)
+	fbBuilder := fallback.NewBuilderWithResult(false)
 	_, fsCache := policytesting.NewCache[bool]()
-	cpBuilder := cachepolicy.Builder(fsCache).WithKey("foo")
+	cpBuilder := cachepolicy.NewBuilder(fsCache).WithKey("foo")
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
@@ -72,8 +72,8 @@ func TestListenersOnSuccess(t *testing.T) {
 func TestListenersForUnhandledFailure(t *testing.T) {
 	// Given - Fail 2 times then don't match policy
 	stub := testutil.ErrorNTimesThenError[bool](testutil.ErrInvalidState, 2, testutil.ErrInvalidArgument)
-	rpBuilder := retrypolicy.Builder[bool]().HandleErrors(testutil.ErrInvalidState).WithMaxAttempts(10)
-	cbBuilder := circuitbreaker.Builder[bool]().WithDelay(0)
+	rpBuilder := retrypolicy.NewBuilder[bool]().HandleErrors(testutil.ErrInvalidState).WithMaxAttempts(10)
+	cbBuilder := circuitbreaker.NewBuilder[bool]().WithDelay(0)
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
@@ -107,8 +107,8 @@ func TestListenersForUnhandledFailure(t *testing.T) {
 func TestListenersForRetriesExceeded(t *testing.T) {
 	// Given - Fail 4 times and exceed retries
 	stub, _ := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 10)
-	rpBuilder := retrypolicy.Builder[bool]().WithMaxRetries(3)
-	cbBuilder := circuitbreaker.Builder[bool]().WithDelay(0)
+	rpBuilder := retrypolicy.NewBuilder[bool]().WithMaxRetries(3)
+	cbBuilder := circuitbreaker.NewBuilder[bool]().WithDelay(0)
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
@@ -141,8 +141,8 @@ func TestListenersForRetriesExceeded(t *testing.T) {
 func TestListenersForAbort(t *testing.T) {
 	// Given - Fail twice then abort
 	stub := testutil.ErrorNTimesThenError[bool](testutil.ErrInvalidState, 3, testutil.ErrInvalidArgument)
-	rpBuilder := retrypolicy.Builder[bool]().AbortOnErrors(testutil.ErrInvalidArgument).WithMaxRetries(3)
-	cbBuilder := circuitbreaker.Builder[bool]().WithDelay(0)
+	rpBuilder := retrypolicy.NewBuilder[bool]().AbortOnErrors(testutil.ErrInvalidArgument).WithMaxRetries(3)
+	cbBuilder := circuitbreaker.NewBuilder[bool]().WithDelay(0)
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
@@ -176,10 +176,10 @@ func TestListenersForFailingRetryPolicy(t *testing.T) {
 	// Given - Fail 10 times
 	stub, _ := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 10)
 	// NewExecutor failing RetryPolicy
-	rpBuilder := retrypolicy.Builder[bool]()
+	rpBuilder := retrypolicy.NewBuilder[bool]()
 	// And successful CircuitBreaker and Fallback
-	cbBuilder := circuitbreaker.Builder[bool]().HandleErrors(testutil.ErrInvalidArgument).WithDelay(0)
-	fbBuilder := fallback.BuilderWithResult[bool](true).HandleErrors(testutil.ErrInvalidArgument)
+	cbBuilder := circuitbreaker.NewBuilder[bool]().HandleErrors(testutil.ErrInvalidArgument).WithDelay(0)
+	fbBuilder := fallback.NewBuilderWithResult[bool](true).HandleErrors(testutil.ErrInvalidArgument)
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
@@ -210,11 +210,11 @@ func TestListenersForFailingCircuitBreaker(t *testing.T) {
 	// Given - Fail 10 times
 	stub, _ := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 10)
 	// NewExecutor successful RetryPolicy
-	rpBuilder := retrypolicy.Builder[bool]().HandleErrors(testutil.ErrInvalidArgument)
+	rpBuilder := retrypolicy.NewBuilder[bool]().HandleErrors(testutil.ErrInvalidArgument)
 	// And failing CircuitBreaker
-	cbBuilder := circuitbreaker.Builder[bool]().WithDelay(0)
+	cbBuilder := circuitbreaker.NewBuilder[bool]().WithDelay(0)
 	// And successful Fallback
-	fbBuilder := fallback.BuilderWithResult[bool](true).HandleErrors(testutil.ErrInvalidArgument)
+	fbBuilder := fallback.NewBuilderWithResult[bool](true).HandleErrors(testutil.ErrInvalidArgument)
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
@@ -245,10 +245,10 @@ func TestListenersForFailingFallback(t *testing.T) {
 	// Given - Fail 10 times
 	stub, _ := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 10)
 	// Given successful RetryPolicy and CircuitBreaker
-	rpBuilder := retrypolicy.Builder[bool]().HandleErrors(testutil.ErrInvalidArgument)
-	cbBuilder := circuitbreaker.Builder[bool]().HandleErrors(testutil.ErrInvalidArgument).WithDelay(0)
+	rpBuilder := retrypolicy.NewBuilder[bool]().HandleErrors(testutil.ErrInvalidArgument)
+	cbBuilder := circuitbreaker.NewBuilder[bool]().HandleErrors(testutil.ErrInvalidArgument).WithDelay(0)
 	// And failing Fallback
-	fbBuilder := fallback.BuilderWithError[bool](testutil.ErrConnecting)
+	fbBuilder := fallback.NewBuilderWithError[bool](testutil.ErrConnecting)
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
@@ -276,7 +276,7 @@ func TestListenersForFailingFallback(t *testing.T) {
 }
 
 func TestGetElapsedTime(t *testing.T) {
-	rp := retrypolicy.Builder[any]().
+	rp := retrypolicy.NewBuilder[any]().
 		HandleResult(false).
 		OnRetryScheduled(func(e failsafe.ExecutionScheduledEvent[any]) {
 			assert.True(t, e.ElapsedAttemptTime().Milliseconds() >= 90)
@@ -290,7 +290,7 @@ func TestGetElapsedTime(t *testing.T) {
 
 func TestRetryPolicyOnScheduledRetry(t *testing.T) {
 	executions := 0
-	rp := retrypolicy.Builder[any]().HandleResult(nil).WithMaxRetries(1).
+	rp := retrypolicy.NewBuilder[any]().HandleResult(nil).WithMaxRetries(1).
 		OnFailure(func(e failsafe.ExecutionEvent[any]) {
 			if executions == 1 {
 				assert.True(t, e.IsFirstAttempt())
@@ -323,7 +323,7 @@ func TestRetryPolicyOnScheduledRetry(t *testing.T) {
 
 func TestListenersForRateLimiter(t *testing.T) {
 	// Given - Fail 4 times then succeed
-	rlBuilder := ratelimiter.SmoothBuilderWithMaxRate[any](100 * time.Millisecond)
+	rlBuilder := ratelimiter.NewSmoothBuilderWithMaxRate[any](100 * time.Millisecond)
 	stats := &listenerStats{}
 	registerRlListeners(stats, rlBuilder)
 	executor := failsafe.NewExecutor[any](rlBuilder.Build())
@@ -347,7 +347,7 @@ func TestListenersForRateLimiter(t *testing.T) {
 
 func TestListenersForBulkhead(t *testing.T) {
 	// Given
-	bhBuilder := bulkhead.Builder[any](2)
+	bhBuilder := bulkhead.NewBuilder[any](2)
 	stats := &listenerStats{}
 	registerBhListeners(stats, bhBuilder)
 	bh := bhBuilder.Build()
@@ -372,7 +372,7 @@ func TestListenersForBulkhead(t *testing.T) {
 
 func TestListenersForCache(t *testing.T) {
 	_, fsCache := policytesting.NewCache[any]()
-	cpBuilder := cachepolicy.Builder(fsCache).WithKey("foo")
+	cpBuilder := cachepolicy.NewBuilder(fsCache).WithKey("foo")
 	stats := &listenerStats{}
 	registerCpListeners(stats, cpBuilder)
 	executor := failsafe.NewExecutor[any](cpBuilder.Build())
@@ -395,7 +395,7 @@ func TestListenersForCache(t *testing.T) {
 }
 
 func TestListenersForHedgePolicy(t *testing.T) {
-	hpBuilder := hedgepolicy.BuilderWithDelay[bool](10 * time.Millisecond).WithMaxHedges(2)
+	hpBuilder := hedgepolicy.NewBuilderWithDelay[bool](10 * time.Millisecond).WithMaxHedges(2)
 	stats := &listenerStats{}
 	registerHpListeners(stats, hpBuilder)
 	executor := failsafe.NewExecutor[bool](hpBuilder.Build())
@@ -422,9 +422,9 @@ func TestListenersOnPanic(t *testing.T) {
 	// Given - Fail 2 times then panic
 	panicValue := "test panic"
 	stub := testutil.ErrorNTimesThenPanic[bool](testutil.ErrInvalidState, 2, panicValue)
-	rpBuilder := retrypolicy.Builder[bool]().WithMaxAttempts(10)
-	cbBuilder := circuitbreaker.Builder[bool]().WithDelay(0)
-	fbBuilder := fallback.BuilderWithResult(true)
+	rpBuilder := retrypolicy.NewBuilder[bool]().WithMaxAttempts(10)
+	cbBuilder := circuitbreaker.NewBuilder[bool]().WithDelay(0)
+	fbBuilder := fallback.NewBuilderWithResult(true)
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
@@ -503,7 +503,7 @@ type listenerStats struct {
 	failure int
 }
 
-func registerRpListeners[R any](stats *listenerStats, rpBuilder retrypolicy.RetryPolicyBuilder[R]) {
+func registerRpListeners[R any](stats *listenerStats, rpBuilder retrypolicy.Builder[R]) {
 	rpBuilder.OnAbort(func(f failsafe.ExecutionEvent[R]) {
 		stats.abort++
 	}).OnRetriesExceeded(func(f failsafe.ExecutionEvent[R]) {
@@ -520,7 +520,7 @@ func registerRpListeners[R any](stats *listenerStats, rpBuilder retrypolicy.Retr
 	})
 }
 
-func registerCbListeners[R any](stats *listenerStats, cbBuilder circuitbreaker.CircuitBreakerBuilder[R]) {
+func registerCbListeners[R any](stats *listenerStats, cbBuilder circuitbreaker.Builder[R]) {
 	cbBuilder.OnStateChanged(func(event circuitbreaker.StateChangedEvent) {
 		fmt.Println("CircuitBreaker state change from", event.OldState, "to", event.NewState)
 		stats.stateChanged++
@@ -541,7 +541,7 @@ func registerCbListeners[R any](stats *listenerStats, cbBuilder circuitbreaker.C
 	})
 }
 
-func registerFbListeners[R any](stats *listenerStats, fbBuilder fallback.FallbackBuilder[R]) {
+func registerFbListeners[R any](stats *listenerStats, fbBuilder fallback.Builder[R]) {
 	fbBuilder.OnFallbackExecuted(func(f failsafe.ExecutionDoneEvent[R]) {
 		stats.fbDone++
 	}).OnFailure(func(e failsafe.ExecutionEvent[R]) {
@@ -551,25 +551,25 @@ func registerFbListeners[R any](stats *listenerStats, fbBuilder fallback.Fallbac
 	})
 }
 
-func registerRlListeners[R any](stats *listenerStats, rlBuilder ratelimiter.RateLimiterBuilder[R]) {
+func registerRlListeners[R any](stats *listenerStats, rlBuilder ratelimiter.Builder[R]) {
 	rlBuilder.OnRateLimitExceeded(func(event failsafe.ExecutionEvent[R]) {
 		stats.rlExceeded++
 	})
 }
 
-func registerBhListeners[R any](stats *listenerStats, bhBuilder bulkhead.BulkheadBuilder[R]) {
+func registerBhListeners[R any](stats *listenerStats, bhBuilder bulkhead.Builder[R]) {
 	bhBuilder.OnFull(func(event failsafe.ExecutionEvent[R]) {
 		stats.bhFull++
 	})
 }
 
-func registerHpListeners[R any](stats *listenerStats, hpBuilder hedgepolicy.HedgePolicyBuilder[R]) {
+func registerHpListeners[R any](stats *listenerStats, hpBuilder hedgepolicy.Builder[R]) {
 	hpBuilder.OnHedge(func(f failsafe.ExecutionEvent[R]) {
 		stats.hpHedge++
 	})
 }
 
-func registerCpListeners[R any](stats *listenerStats, cpBuilder cachepolicy.CachePolicyBuilder[R]) {
+func registerCpListeners[R any](stats *listenerStats, cpBuilder cachepolicy.Builder[R]) {
 	cpBuilder.OnResultCached(func(event failsafe.ExecutionEvent[R]) {
 		stats.cpCached++
 	}).OnCacheHit(func(event failsafe.ExecutionDoneEvent[R]) {

@@ -13,7 +13,7 @@ import (
 )
 
 func TestHandleErrors(t *testing.T) {
-	fb := fallback.BuilderWithResult(true).
+	fb := fallback.NewBuilderWithResult(true).
 		HandleErrors(io.EOF).
 		Build()
 
@@ -25,7 +25,7 @@ func TestHandleErrors(t *testing.T) {
 }
 
 func TestHandleErrorsAs(t *testing.T) {
-	fb := fallback.BuilderWithResult(true).
+	fb := fallback.NewBuilderWithResult(true).
 		HandleErrorTypes(testutil.CompositeError{}).
 		Build()
 

@@ -22,32 +22,32 @@ type HedgePolicy[R any] interface {
 	failsafe.Policy[R]
 }
 
-// HedgePolicyBuilder builds HedgePolicy instances.
+// Builder builds HedgePolicy instances.
 //
 // R is the execution result type. This type is not concurrency safe.
-type HedgePolicyBuilder[R any] interface {
+type Builder[R any] interface {
 	// CancelOnResult specifies that any outstanding hedges should be canceled if the execution result matches the result using
 	// reflect.DeepEqual.
-	CancelOnResult(result R) HedgePolicyBuilder[R]
+	CancelOnResult(result R) Builder[R]
 
 	// CancelOnErrors specifies that any outstanding hedges should be canceled if the execution error matches any of the errors
 	// using errors.Is.
-	CancelOnErrors(errs ...error) HedgePolicyBuilder[R]
+	CancelOnErrors(errs ...error) Builder[R]
 
 	// CancelOnErrorTypes specifies the errors whose types should cause any outstanding hedges to be canceled. Any execution
 	// errors or their Unwrapped parents whose type matches any of the errs' types will cause outstanding hedges to be
 	// canceled. This is similar to the check that errors.As performs.
-	CancelOnErrorTypes(errs ...any) HedgePolicyBuilder[R]
+	CancelOnErrorTypes(errs ...any) Builder[R]
 
 	// CancelIf specifies that any outstanding hedges should be canceled if the predicate matches the result or error.
-	CancelIf(predicate func(R, error) bool) HedgePolicyBuilder[R]
+	CancelIf(predicate func(R, error) bool) Builder[R]
 
 	// OnHedge registers the listener to be called when a hedge is about to be attempted.
-	OnHedge(listener func(failsafe.ExecutionEvent[R])) HedgePolicyBuilder[R]
+	OnHedge(listener func(failsafe.ExecutionEvent[R])) Builder[R]
 
 	// WithMaxHedges sets the max number of hedges to perform when an execution attempt doesn't complete in time, which is 1
 	// by default.
-	WithMaxHedges(maxHedges int) HedgePolicyBuilder[R]
+	WithMaxHedges(maxHedges int) Builder[R]
 
 	// Build returns a new HedgePolicy using the builder's configuration.
 	Build() HedgePolicy[R]
@@ -61,47 +61,47 @@ type config[R any] struct {
 	onHedge   func(failsafe.ExecutionEvent[R])
 }
 
-var _ HedgePolicyBuilder[any] = &config[any]{}
+var _ Builder[any] = &config[any]{}
 
-// WithDelay returns a new HedgePolicy for execution result type R and the delay, which by default will allow a single
+// NewWithDelay returns a new HedgePolicy for execution result type R and the delay, which by default will allow a single
 // hedged execution to be performed, after the delay is elapsed, if the original execution is not done yet. Additional
 // hedged executions will be performed, with delay, up to the max configured hedges.
 //
 // If the execution is configured with a Context, a child context will be created for the execution and canceled when the
 // HedgePolicy is exceeded.
-func WithDelay[R any](delay time.Duration) HedgePolicy[R] {
-	return BuilderWithDelay[R](delay).Build()
+func NewWithDelay[R any](delay time.Duration) HedgePolicy[R] {
+	return NewBuilderWithDelay[R](delay).Build()
 }
 
-// WithDelayFunc returns a new HedgePolicy for execution result type R and the delayFunc, which by default will allow a
+// NewWithDelayFunc returns a new HedgePolicy for execution result type R and the delayFunc, which by default will allow a
 // single hedged execution to be performed, after the delayFunc result is elapsed, if the original execution is not done
 // yet. Additional hedged executions will be performed, with delay, up to the max configured hedges.
 //
 // If the execution is configured with a Context, a child context will be created for the execution and canceled when the
 // HedgePolicy is exceeded.
-func WithDelayFunc[R any](delayFunc failsafe.DelayFunc[R]) HedgePolicy[R] {
-	return BuilderWithDelayFunc[R](delayFunc).Build()
+func NewWithDelayFunc[R any](delayFunc failsafe.DelayFunc[R]) HedgePolicy[R] {
+	return NewBuilderWithDelayFunc[R](delayFunc).Build()
 }
 
-// BuilderWithDelay returns a new HedgePolicyBuilder for execution result type R and the delay, which by default will
+// NewBuilderWithDelay returns a new Builder for execution result type R and the delay, which by default will
 // allow a single hedged execution to be performed, after the delay is elapsed, if the original execution is not done
 // yet. Additional hedged executions will be performed, with delay, up to the max configured hedges.
 //
 // If the execution is configured with a Context, a child context will be created for the execution and canceled when the
 // HedgePolicy is exceeded.
-func BuilderWithDelay[R any](delay time.Duration) HedgePolicyBuilder[R] {
-	return BuilderWithDelayFunc[R](func(exec failsafe.ExecutionAttempt[R]) time.Duration {
+func NewBuilderWithDelay[R any](delay time.Duration) Builder[R] {
+	return NewBuilderWithDelayFunc[R](func(exec failsafe.ExecutionAttempt[R]) time.Duration {
 		return delay
 	})
 }
 
-// BuilderWithDelayFunc returns a new HedgePolicyBuilder for execution result type R and the delayFunc, which by default
+// NewBuilderWithDelayFunc returns a new Builder for execution result type R and the delayFunc, which by default
 // will allow a single hedged execution to be performed, after the delayFunc result is elapsed, if the original execution
 // is not done yet. Additional hedged executions will be performed, after additional delays, up to the max configured hedges.
 //
 // If the execution is configured with a Context, a child context will be created for the execution and canceled when the
 // HedgePolicy is exceeded.
-func BuilderWithDelayFunc[R any](delayFunc failsafe.DelayFunc[R]) HedgePolicyBuilder[R] {
+func NewBuilderWithDelayFunc[R any](delayFunc failsafe.DelayFunc[R]) Builder[R] {
 	return &config[R]{
 		BaseAbortablePolicy: &policy.BaseAbortablePolicy[R]{},
 		delayFunc:           delayFunc,
@@ -115,32 +115,32 @@ type hedgePolicy[R any] struct {
 
 var _ HedgePolicy[any] = &hedgePolicy[any]{}
 
-func (c *config[R]) CancelOnResult(result R) HedgePolicyBuilder[R] {
+func (c *config[R]) CancelOnResult(result R) Builder[R] {
 	c.BaseAbortablePolicy.AbortOnResult(result)
 	return c
 }
 
-func (c *config[R]) CancelOnErrors(errs ...error) HedgePolicyBuilder[R] {
+func (c *config[R]) CancelOnErrors(errs ...error) Builder[R] {
 	c.BaseAbortablePolicy.AbortOnErrors(errs...)
 	return c
 }
 
-func (c *config[R]) CancelOnErrorTypes(errs ...any) HedgePolicyBuilder[R] {
+func (c *config[R]) CancelOnErrorTypes(errs ...any) Builder[R] {
 	c.BaseAbortablePolicy.AbortOnErrorTypes(errs...)
 	return c
 }
 
-func (c *config[R]) CancelIf(predicate func(R, error) bool) HedgePolicyBuilder[R] {
+func (c *config[R]) CancelIf(predicate func(R, error) bool) Builder[R] {
 	c.BaseAbortablePolicy.AbortIf(predicate)
 	return c
 }
 
-func (c *config[R]) OnHedge(listener func(failsafe.ExecutionEvent[R])) HedgePolicyBuilder[R] {
+func (c *config[R]) OnHedge(listener func(failsafe.ExecutionEvent[R])) Builder[R] {
 	c.onHedge = listener
 	return c
 }
 
-func (c *config[R]) WithMaxHedges(maxHedges int) HedgePolicyBuilder[R] {
+func (c *config[R]) WithMaxHedges(maxHedges int) Builder[R] {
 	c.maxHedges = maxHedges
 	return c
 }

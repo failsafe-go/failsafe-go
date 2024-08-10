@@ -24,7 +24,7 @@ func TestServerSuccess(t *testing.T) {
 	// Given
 	mockedResponse := "pong"
 	server := testutil.MockGrpcResponses(mockedResponse)
-	executor := failsafe.NewExecutor[any](RetryPolicyBuilder[any]().Build())
+	executor := failsafe.NewExecutor[any](NewRetryPolicyBuilder[any]().Build())
 
 	// When / Then
 	testServerSuccess(t, nil, server, executor,
@@ -34,7 +34,7 @@ func TestServerSuccess(t *testing.T) {
 func TestServerFallback(t *testing.T) {
 	// Given
 	server := testutil.MockGrpcError(errors.New("err"))
-	fb := fallback.WithResult(&pbfixtures.PingResponse{Msg: "pong"})
+	fb := fallback.NewWithResult(&pbfixtures.PingResponse{Msg: "pong"})
 	executor := failsafe.NewExecutor[*pbfixtures.PingResponse](fb)
 
 	// When / Then
@@ -47,7 +47,7 @@ func TestServerCache(t *testing.T) {
 	server := testutil.MockGrpcResponses("foo")
 	cache, failsafeCache := policytesting.NewCache[any]()
 	cache["foo"] = &pbfixtures.PingResponse{Msg: "bar"}
-	cp := cachepolicy.Builder[any](failsafeCache).WithKey("foo").Build()
+	cp := cachepolicy.NewBuilder[any](failsafeCache).WithKey("foo").Build()
 	executor := failsafe.NewExecutor[any](cp)
 
 	// When / Then
@@ -83,7 +83,7 @@ func TestServerCancelWithContext(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Given
 			server := testutil.MockDelayedGrpcResponse("pong", time.Second)
-			rp := retrypolicy.Builder[any]().AbortOnErrors(context.Canceled).Build()
+			rp := retrypolicy.NewBuilder[any]().AbortOnErrors(context.Canceled).Build()
 			executor := failsafe.NewExecutor[any](rp)
 			if tc.executorCtx != nil {
 				executor = executor.WithContext(tc.executorCtx)

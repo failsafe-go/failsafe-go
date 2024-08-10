@@ -12,7 +12,7 @@ import (
 var _ RateLimiter[any] = &rateLimiter[any]{}
 
 func TestAcquirePermit(t *testing.T) {
-	limiter := SmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
+	limiter := NewSmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
 	setTestStopwatch(limiter)
 
 	elapsed := testutil.Timed(func() {
@@ -24,7 +24,7 @@ func TestAcquirePermit(t *testing.T) {
 }
 
 func TestAcquirePermitWithMaxWaitTime(t *testing.T) {
-	limiter := SmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
+	limiter := NewSmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
 	setTestStopwatch(limiter)
 
 	assert.Nil(t, limiter.AcquirePermitWithMaxWait(nil, 100*time.Millisecond))  // waits 0
@@ -34,7 +34,7 @@ func TestAcquirePermitWithMaxWaitTime(t *testing.T) {
 }
 
 func TestTryAcquirePermit(t *testing.T) {
-	limiter := SmoothBuilderWithMaxRate[any](100 * time.Nanosecond).Build()
+	limiter := NewSmoothBuilderWithMaxRate[any](100 * time.Nanosecond).Build()
 	stopwatch := setTestStopwatch(limiter)
 
 	assert.True(t, limiter.TryAcquirePermit())
@@ -51,7 +51,7 @@ func TestTryAcquirePermit(t *testing.T) {
 
 func TestReservePermit(t *testing.T) {
 	// Given
-	limiter := SmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
+	limiter := NewSmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
 
 	// When / Then
 	assert.Equal(t, time.Duration(0), limiter.ReservePermit())
@@ -61,7 +61,7 @@ func TestReservePermit(t *testing.T) {
 
 func TestTryReservePermit(t *testing.T) {
 	// Given
-	limiter := SmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
+	limiter := NewSmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
 
 	// When / Then
 	assert.Equal(t, time.Duration(0), limiter.TryReservePermit(1*time.Millisecond))

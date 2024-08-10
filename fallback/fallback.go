@@ -13,7 +13,7 @@ type Fallback[R any] interface {
 }
 
 /*
-FallbackBuilder builds Fallback instances.
+Builder builds Fallback instances.
   - By default, any error is considered a failure and will be handled by the policy. You can override this by specifying
     your own handle conditions. The default error handling condition will only be overridden by another condition that
     handles errors such as HandleErrors or HandleIf. Specifying a condition that only handles results, such as HandleResult
@@ -23,12 +23,12 @@ FallbackBuilder builds Fallback instances.
 
 R is the execution result type. This type is not concurrency safe.
 */
-type FallbackBuilder[R any] interface {
-	failsafe.FailurePolicyBuilder[FallbackBuilder[R], R]
+type Builder[R any] interface {
+	failsafe.FailurePolicyBuilder[Builder[R], R]
 
 	// OnFallbackExecuted registers the listener to be called when a Fallback has executed. The provided event will contain
 	// the execution result and error returned by the Fallback.
-	OnFallbackExecuted(listener func(event failsafe.ExecutionDoneEvent[R])) FallbackBuilder[R]
+	OnFallbackExecuted(listener func(event failsafe.ExecutionDoneEvent[R])) Builder[R]
 
 	// Build returns a new Fallback using the builder's configuration.
 	Build() Fallback[R]
@@ -40,83 +40,83 @@ type config[R any] struct {
 	onFallbackExecuted func(failsafe.ExecutionDoneEvent[R])
 }
 
-var _ FallbackBuilder[any] = &config[any]{}
+var _ Builder[any] = &config[any]{}
 
 type fallback[R any] struct {
 	*config[R]
 }
 
-// WithResult returns a Fallback for execution result type R that returns the result when an execution fails.
-func WithResult[R any](result R) Fallback[R] {
-	return BuilderWithResult[R](result).Build()
+// NewWithResult returns a Fallback for execution result type R that returns the result when an execution fails.
+func NewWithResult[R any](result R) Fallback[R] {
+	return NewBuilderWithResult[R](result).Build()
 }
 
-// WithError returns a Fallback for execution result type R that returns the err when an execution fails.
-func WithError[R any](err error) Fallback[R] {
-	return BuilderWithError[R](err).Build()
+// NewWithError returns a Fallback for execution result type R that returns the err when an execution fails.
+func NewWithError[R any](err error) Fallback[R] {
+	return NewBuilderWithError[R](err).Build()
 }
 
-// WithFunc returns a Fallback for execution result type R that uses fallbackFunc to handle a failed execution.
-func WithFunc[R any](fallbackFunc func(exec failsafe.Execution[R]) (R, error)) Fallback[R] {
-	return BuilderWithFunc(fallbackFunc).Build()
+// NewWithFunc returns a Fallback for execution result type R that uses fallbackFunc to handle a failed execution.
+func NewWithFunc[R any](fallbackFunc func(exec failsafe.Execution[R]) (R, error)) Fallback[R] {
+	return NewBuilderWithFunc(fallbackFunc).Build()
 }
 
-// BuilderWithResult returns a FallbackBuilder for execution result type R which builds Fallbacks that return the result
+// NewBuilderWithResult returns a Builder for execution result type R which builds Fallbacks that return the result
 // when an execution fails.
-func BuilderWithResult[R any](result R) FallbackBuilder[R] {
-	return BuilderWithFunc(func(exec failsafe.Execution[R]) (R, error) {
+func NewBuilderWithResult[R any](result R) Builder[R] {
+	return NewBuilderWithFunc(func(exec failsafe.Execution[R]) (R, error) {
 		return result, nil
 	})
 }
 
-// BuilderWithError returns a FallbackBuilder for execution result type R which builds Fallbacks that return the error
+// NewBuilderWithError returns a Builder for execution result type R which builds Fallbacks that return the error
 // when an execution fails.
-func BuilderWithError[R any](err error) FallbackBuilder[R] {
-	return BuilderWithFunc(func(exec failsafe.Execution[R]) (R, error) {
+func NewBuilderWithError[R any](err error) Builder[R] {
+	return NewBuilderWithFunc(func(exec failsafe.Execution[R]) (R, error) {
 		return *new(R), err
 	})
 }
 
-// BuilderWithFunc returns a FallbackBuilder for execution result type R which builds Fallbacks that use the fallbackFn to
+// NewBuilderWithFunc returns a Builder for execution result type R which builds Fallbacks that use the fallbackFn to
 // handle failed executions.
-func BuilderWithFunc[R any](fallbackFunc func(exec failsafe.Execution[R]) (R, error)) FallbackBuilder[R] {
+func NewBuilderWithFunc[R any](fallbackFunc func(exec failsafe.Execution[R]) (R, error)) Builder[R] {
 	return &config[R]{
 		BaseFailurePolicy: &policy.BaseFailurePolicy[R]{},
 		fn:                fallbackFunc,
 	}
 }
 
-func (c *config[R]) HandleErrors(errs ...error) FallbackBuilder[R] {
+func (c *config[R]) HandleErrors(errs ...error) Builder[R] {
 	c.BaseFailurePolicy.HandleErrors(errs...)
 	return c
 }
 
-func (c *config[R]) HandleErrorTypes(errs ...any) FallbackBuilder[R] {
+func (c *config[R]) HandleErrorTypes(errs ...any) Builder[R] {
 	c.BaseFailurePolicy.HandleErrorTypes(errs...)
 	return c
 }
 
-func (c *config[R]) HandleResult(result R) FallbackBuilder[R] {
+func (c *config[R]) HandleResult(result R) Builder[R] {
 	c.BaseFailurePolicy.HandleResult(result)
 	return c
 }
 
-func (c *config[R]) HandleIf(predicate func(R, error) bool) FallbackBuilder[R] {
+func (c *config[R]) HandleIf(predicate func(R, error) bool) Builder[R] {
 	c.BaseFailurePolicy.HandleIf(predicate)
 	return c
 }
 
-func (c *config[R]) OnSuccess(listener func(event failsafe.ExecutionEvent[R])) FallbackBuilder[R] {
+func (c *config[R]) OnSuccess(listener func(event failsafe.ExecutionEvent[R])) Builder[R] {
 	c.BaseFailurePolicy.OnSuccess(listener)
 	return c
 }
 
-func (c *config[R]) OnFailure(listener func(event failsafe.ExecutionEvent[R])) FallbackBuilder[R] {
+func (c *config[R]) OnFailure(listener func(event failsafe.ExecutionEvent[R])) Builder[R] {
 	c.BaseFailurePolicy.OnFailure(listener)
 	return c
 }
 
-func (c *config[R]) OnFallbackExecuted(listener func(event failsafe.ExecutionDoneEvent[R])) FallbackBuilder[R] {
+func (c *config[R]) OnFallbackExecuted(listener func(event failsafe.ExecutionDoneEvent[R])) Builder[R] {
 	c.onFallbackExecuted = listener
 	return c
 }

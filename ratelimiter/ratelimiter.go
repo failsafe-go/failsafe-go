@@ -16,8 +16,8 @@ var ErrExceeded = errors.New("rate limit exceeded")
 /*
 RateLimiter is a Policy that can control the rate of executions as a way of preventing system overload.
 
-There are two types of rate limiting: smooth and bursty. Smooth rate limiting will evenly spread out execution requests
-over-time, effectively smoothing out uneven execution request rates. Bursty rate limiting allows potential bursts of
+There are two types of rate limiting: smooth and bursty. NewSmooth rate limiting will evenly spread out execution requests
+over-time, effectively smoothing out uneven execution request rates. NewBursty rate limiting allows potential bursts of
 executions to occur, up to a configured max per time period.
 
 Rate limiting is based on permits, which can be requested in order to perform rate limited execution. Permits are
@@ -114,20 +114,20 @@ type RateLimiter[R any] interface {
 }
 
 /*
-RateLimiterBuilder builds RateLimiter instances.
+Builder builds RateLimiter instances.
 
 R is the execution result type. This type is not concurrency safe.
 */
-type RateLimiterBuilder[R any] interface {
+type Builder[R any] interface {
 	// WithMaxWaitTime configures the maxWaitTime to wait for permits to be available. If permits cannot be acquired before
 	// the maxWaitTime is exceeded, then the rate limiter will return ErrExceeded.
 	//
 	// This setting only applies when the resulting RateLimiter is used with the failsafe.Run or related APIs. It does not
 	// apply when the RateLimiter is used in a standalone way.
-	WithMaxWaitTime(maxWaitTime time.Duration) RateLimiterBuilder[R]
+	WithMaxWaitTime(maxWaitTime time.Duration) Builder[R]
 
 	// OnRateLimitExceeded registers the listener to be called when the rate limit is exceeded.
-	OnRateLimitExceeded(listener func(failsafe.ExecutionEvent[R])) RateLimiterBuilder[R]
+	OnRateLimitExceeded(listener func(failsafe.ExecutionEvent[R])) Builder[R]
 
 	// Build returns a new RateLimiter using the builder's configuration.
 	Build() RateLimiter[R]
@@ -147,94 +147,94 @@ type config[R any] struct {
 }
 
 /*
-Smooth returns a smooth RateLimiter for execution result type R and the maxExecutions and period, which control how
+NewSmooth returns a smooth RateLimiter for execution result type R and the maxExecutions and period, which control how
 frequently an execution is permitted. The individual execution rate is computed as period / maxExecutions. For example,
 with maxExecutions of 100 and a period of 1000 millis, individual executions will be permitted at a max rate of one
 every 10 millis. The returned RateLimiter will have a max wait time of 0.
 
 Executions are performed with no delay until they exceed the max rate, after which they are rejected.
 */
-func Smooth[R any](maxExecutions uint, period time.Duration) RateLimiter[R] {
-	return SmoothBuilder[R](maxExecutions, period).Build()
+func NewSmooth[R any](maxExecutions uint, period time.Duration) RateLimiter[R] {
+	return NewSmoothBuilder[R](maxExecutions, period).Build()
 }
 
 /*
-SmoothWithMaxRate returns a smooth RateLimiter for execution result type R and the maxRate, which controls how
+NewSmoothWithMaxRate returns a smooth RateLimiter for execution result type R and the maxRate, which controls how
 frequently an execution is permitted. For example, a maxRate of 10*time.Millisecond would allow up to one execution
 every 10 milliseconds. The returned RateLimiter will have a max wait time of 0.
 
 Executions are performed with no delay until they exceed the max rate, after which they are rejected.
 */
-func SmoothWithMaxRate[R any](maxRate time.Duration) RateLimiter[R] {
-	return SmoothBuilderWithMaxRate[R](maxRate).Build()
+func NewSmoothWithMaxRate[R any](maxRate time.Duration) RateLimiter[R] {
+	return NewSmoothBuilderWithMaxRate[R](maxRate).Build()
 }
 
 /*
-SmoothBuilder returns a smooth RateLimiterBuilder for execution result type R and the maxExecutions and period, which
+NewSmoothBuilder returns a smooth Builder for execution result type R and the maxExecutions and period, which
 control how frequently an execution is permitted. The individual execution rate is computed as period / maxExecutions.
 For example, with maxExecutions of 100 and a period of 1000 millis, individual executions will be permitted at a max
 rate of one every 10 millis.
 
-By default, the returned RateLimiterBuilder will have a max wait time of 0.
+By default, the returned Builder will have a max wait time of 0.
 
 Executions are performed with no delay until they exceed the max rate, after which they are either rejected or
 will block and wait until the max wait time is exceeded.
 */
-func SmoothBuilder[R any](maxExecutions uint, period time.Duration) RateLimiterBuilder[R] {
+func NewSmoothBuilder[R any](maxExecutions uint, period time.Duration) Builder[R] {
 	return &config[R]{
 		interval: period / time.Duration(maxExecutions),
 	}
 }
 
 /*
-SmoothBuilderWithMaxRate returns a smooth RateLimiterBuilder for execution result type R and the maxRate, which controls
+NewSmoothBuilderWithMaxRate returns a smooth Builder for execution result type R and the maxRate, which controls
 how frequently an execution is permitted. For example, a maxRate of 10*time.Millisecond would allow up to one execution
 every 10 milliseconds.
 
-By default, the returned RateLimiterBuilder will have a max wait time of 0.
+By default, the returned Builder will have a max wait time of 0.
 
 Executions are performed with no delay until they exceed the maxRate, after which they are either rejected or will block
 and wait until the max wait time is exceeded.
 */
-func SmoothBuilderWithMaxRate[R any](maxRate time.Duration) RateLimiterBuilder[R] {
+func NewSmoothBuilderWithMaxRate[R any](maxRate time.Duration) Builder[R] {
 	return &config[R]{
 		interval: maxRate,
 	}
 }
 
 /*
-Bursty returns a bursty RateLimiter for execution result type R and the maxExecutions per period. For example, a
+NewBursty returns a bursty RateLimiter for execution result type R and the maxExecutions per period. For example, a
 maxExecutions value of 100 with a period of 1 second would allow up to 100 executions every 1 second. The returned
 RateLimiter will have a max wait time of 0.
 
 Executions are performed with no delay until they exceed the max rate, after which they are rejected.
 */
-func Bursty[R any](maxExecutions uint, period time.Duration) RateLimiter[R] {
-	return BurstyBuilder[R](maxExecutions, period).Build()
+func NewBursty[R any](maxExecutions uint, period time.Duration) RateLimiter[R] {
+	return NewBurstyBuilder[R](maxExecutions, period).Build()
 }
 
 /*
-BurstyBuilder returns a bursty RateLimiterBuilder for execution result type R and the maxExecutions per period. For
+NewBurstyBuilder returns a bursty Builder for execution result type R and the maxExecutions per period. For
 example, a maxExecutions value of 100 with a period of 1 second would allow up to 100 executions every 1 second.
 
-By default, the returned RateLimiterBuilder will have a max wait time of 0.
+By default, the returned Builder will have a max wait time of 0.
 
 Executions are performed with no delay up until the maxExecutions are reached for the current period, after which
 executions are either rejected or will block and wait until the max wait time is exceeded.
 */
-func BurstyBuilder[R any](maxExecutions uint, period time.Duration) RateLimiterBuilder[R] {
+func NewBurstyBuilder[R any](maxExecutions uint, period time.Duration) Builder[R] {
 	return &config[R]{
 		periodPermits: int(maxExecutions),
 		period:        period,
 	}
 }
 
-func (c *config[R]) WithMaxWaitTime(maxWaitTime time.Duration) RateLimiterBuilder[R] {
+func (c *config[R]) WithMaxWaitTime(maxWaitTime time.Duration) Builder[R] {
 	c.maxWaitTime = maxWaitTime
 	return c
 }
 
-func (c *config[R]) OnRateLimitExceeded(listener func(event failsafe.ExecutionEvent[R])) RateLimiterBuilder[R] {
+func (c *config[R]) OnRateLimitExceeded(listener func(event failsafe.ExecutionEvent[R])) Builder[R] {
 	c.onRateLimitExceeded = listener
 	return c
 }
