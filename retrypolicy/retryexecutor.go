@@ -19,7 +19,7 @@ type executor[R any] struct {
 	// Mutable state
 	failedAttempts  int
 	retriesExceeded bool
-	lastDelay       time.Duration // The last fixed, backoff, random, or computed delay time
+	lastDelay       time.Duration // The last backoff delay time
 }
 
 var _ policy.Executor[any] = &executor[any]{}
@@ -107,14 +107,11 @@ func (e *executor[R]) OnFailure(exec policy.ExecutionInternal[R], result *common
 
 // getDelay updates lastDelay and returns the new delay
 func (e *executor[R]) getDelay(exec failsafe.ExecutionAttempt[R]) time.Duration {
-	delay := e.lastDelay
-	computedDelay := e.ComputeDelay(exec)
-	if computedDelay != -1 {
+	var delay time.Duration
+	if computedDelay := e.ComputeDelay(exec); computedDelay != -1 {
 		delay = computedDelay
 	} else {
-		delay = e.getFixedOrRandomDelay(delay)
-		delay = e.adjustForBackoff(exec, delay)
-		e.lastDelay = delay
+		delay = e.getFixedOrRandomDelay(exec)
 	}
 	if delay != 0 {
 		delay = e.adjustForJitter(delay)
@@ -123,22 +120,21 @@ func (e *executor[R]) getDelay(exec failsafe.ExecutionAttempt[R]) time.Duration 
 	return delay
 }
 
-func (e *executor[R]) getFixedOrRandomDelay(delay time.Duration) time.Duration {
-	if delay == 0 && e.Delay != 0 {
-		return e.Delay
+func (e *executor[R]) getFixedOrRandomDelay(exec failsafe.ExecutionAttempt[R]) time.Duration {
+	if e.Delay != 0 {
+		// Adjust for backoffs
+		if e.lastDelay != 0 && exec.Retries() >= 1 && e.maxDelay != 0 {
+			backoffDelay := time.Duration(float32(e.lastDelay) * e.delayFactor)
+			e.lastDelay = min(backoffDelay, e.maxDelay)
+		} else {
+			e.lastDelay = e.Delay
+		}
+		return e.lastDelay
 	}
 	if e.delayMin != 0 && e.delayMax != 0 {
 		return time.Duration(util.RandomDelayInRange(e.delayMin.Nanoseconds(), e.delayMax.Nanoseconds(), rand.Float64()))
 	}
-	return delay
-}
-
-func (e *executor[R]) adjustForBackoff(exec failsafe.ExecutionAttempt[R], delay time.Duration) time.Duration {
-	if exec.Attempts() != 1 && e.maxDelay != 0 {
-		backoffDelay := time.Duration(float32(delay) * e.delayFactor)
-		delay = min(backoffDelay, e.maxDelay)
-	}
-	return delay
+	return 0
 }
 
 func (e *executor[R]) adjustForJitter(delay time.Duration) time.Duration {

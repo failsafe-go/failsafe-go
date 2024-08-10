@@ -9,28 +9,26 @@ import (
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
 )
 
-func TestAdjustForBackoff(t *testing.T) {
+func TestGetFixedOrRandomDelay(t *testing.T) {
 	// Given
-	rpc := Builder[any]().WithBackoff(time.Second, 10*time.Second).(*config[any])
+	rpc := Builder[any]().WithBackoffFactor(2*time.Second, 30*time.Second, 2).(*config[any])
 	rpe := &executor[any]{
 		retryPolicy: &retryPolicy[any]{
 			config: rpc,
 		},
 	}
-	exec := &testutil.TestExecution[any]{
-		TheAttempts: 1,
-	}
+	exec := &testutil.TestExecution[any]{}
 	delay := rpc.Delay
 	f := func() time.Duration {
-		delay = rpe.adjustForBackoff(exec, delay)
-		exec.TheAttempts++
+		delay = rpe.getFixedOrRandomDelay(exec)
+		exec.TheRetries++
 		return delay
 	}
 
 	// When / Then
-	assert.Equal(t, time.Second, f())
 	assert.Equal(t, 2*time.Second, f())
 	assert.Equal(t, 4*time.Second, f())
 	assert.Equal(t, 8*time.Second, f())
-	assert.Equal(t, 10*time.Second, f())
+	assert.Equal(t, 16*time.Second, f())
+	assert.Equal(t, 30*time.Second, f())
 }
