@@ -13,7 +13,7 @@ import (
 var _ circuitState[any] = &openState[any]{}
 
 func TestTryAcquirePermit(t *testing.T) {
-	breaker := Builder[any]().WithDelayFunc(func(exec failsafe.ExecutionAttempt[any]) time.Duration {
+	breaker := NewBuilder[any]().WithDelayFunc(func(exec failsafe.ExecutionAttempt[any]) time.Duration {
 		return 100 * time.Millisecond
 	}).Build().(*circuitBreaker[any])
 	breaker.open(testutil.TestExecution[any]{})
@@ -29,7 +29,7 @@ func TestTryAcquirePermit(t *testing.T) {
 }
 
 func TestRemainingDelay(t *testing.T) {
-	breaker := Builder[any]().WithDelayFunc(func(exec failsafe.ExecutionAttempt[any]) time.Duration {
+	breaker := NewBuilder[any]().WithDelayFunc(func(exec failsafe.ExecutionAttempt[any]) time.Duration {
 		return 1 * time.Second
 	}).Build().(*circuitBreaker[any])
 	breaker.open(testutil.TestExecution[any]{})
@@ -46,7 +46,7 @@ func TestRemainingDelay(t *testing.T) {
 }
 
 func TestNoRemainingDelay(t *testing.T) {
-	breaker := Builder[any]().WithDelayFunc(func(exec failsafe.ExecutionAttempt[any]) time.Duration {
+	breaker := NewBuilder[any]().WithDelayFunc(func(exec failsafe.ExecutionAttempt[any]) time.Duration {
 		return 10 * time.Millisecond
 	}).Build().(*circuitBreaker[any])
 	assert.Equal(t, time.Duration(0), breaker.RemainingDelay())

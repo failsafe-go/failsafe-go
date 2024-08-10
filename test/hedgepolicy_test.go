@@ -15,7 +15,7 @@ import (
 func TestShouldNotHedgeWhenDelayNotExceeded(t *testing.T) {
 	// Given
 	stats := &policytesting.Stats{}
-	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[any](time.Second), stats).Build()
+	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelay[any](time.Second), stats).Build()
 
 	// When / Then
 	testutil.Test[any](t).
@@ -31,7 +31,7 @@ func TestShouldNotHedgeWhenDelayNotExceeded(t *testing.T) {
 func TestShouldHedgeWhenDelayExceeded(t *testing.T) {
 	// Given
 	stats := &policytesting.Stats{}
-	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[bool](10*time.Millisecond).WithMaxHedges(2), stats).Build()
+	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelay[bool](10*time.Millisecond).WithMaxHedges(2), stats).Build()
 
 	// When / Then
 	testutil.Test[bool](t).
@@ -54,7 +54,7 @@ func TestShouldHedgeWhenDelayExceeded(t *testing.T) {
 func TestAllHedgesUsed(t *testing.T) {
 	// Given
 	stats := &policytesting.Stats{}
-	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[int](20*time.Millisecond).WithMaxHedges(2), stats).Build()
+	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelay[int](20*time.Millisecond).WithMaxHedges(2), stats).Build()
 
 	// When / Then
 	testutil.Test[int](t).
@@ -75,7 +75,7 @@ func TestAllHedgesUsed(t *testing.T) {
 func TestBackupExecutions(t *testing.T) {
 	// Given
 	stats := &policytesting.Stats{}
-	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[int](0).
+	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelay[int](0).
 		WithMaxHedges(2).
 		CancelOnResult(3), stats).Build()
 
@@ -95,7 +95,7 @@ func TestBackupExecutions(t *testing.T) {
 func TestCancelOnResult(t *testing.T) {
 	// Given
 	stats := &policytesting.Stats{}
-	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[any](10*time.Millisecond).
+	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelay[any](10*time.Millisecond).
 		WithMaxHedges(4).
 		CancelOnResult(true).
 		CancelOnResult(3), stats).

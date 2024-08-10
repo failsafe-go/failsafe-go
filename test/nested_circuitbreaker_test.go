@@ -13,8 +13,8 @@ import (
 
 // Tests that multiple circuit breakers handle failures as expected, regardless of order.
 func TestNestedCircuitBreakers(t *testing.T) {
-	innerCb := circuitbreaker.Builder[any]().HandleErrors(testutil.ErrInvalidArgument).Build()
-	outerCb := circuitbreaker.Builder[any]().HandleErrors(testutil.ErrInvalidState).Build()
+	innerCb := circuitbreaker.NewBuilder[any]().HandleErrors(testutil.ErrInvalidArgument).Build()
+	outerCb := circuitbreaker.NewBuilder[any]().HandleErrors(testutil.ErrInvalidState).Build()
 
 	failsafe.RunWithExecution(testutil.RunFn(testutil.ErrInvalidArgument), innerCb, outerCb)
 	assert.True(t, innerCb.IsOpen())
@@ -29,8 +29,8 @@ func TestNestedCircuitBreakers(t *testing.T) {
 // CircuitBreaker -> CircuitBreaker
 func TestCircuitBreakerCircuitBreaker(t *testing.T) {
 	// Given
-	cb1 := circuitbreaker.Builder[any]().HandleErrors(testutil.ErrInvalidState).Build()
-	cb2 := circuitbreaker.Builder[any]().HandleErrors(testutil.ErrInvalidArgument).Build()
+	cb1 := circuitbreaker.NewBuilder[any]().HandleErrors(testutil.ErrInvalidState).Build()
+	cb2 := circuitbreaker.NewBuilder[any]().HandleErrors(testutil.ErrInvalidArgument).Build()
 	setup := func() {
 		policytesting.ResetCircuitBreaker(cb1)
 		policytesting.ResetCircuitBreaker(cb2)

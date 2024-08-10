@@ -21,7 +21,7 @@ import (
 // Asserts that an execution is marked as canceled when a provided Context is canceled.
 func TestCancelWithContextDuringExecution(t *testing.T) {
 	// Given
-	rp := retrypolicy.WithDefaults[any]()
+	rp := retrypolicy.NewWithDefaults[any]()
 	setup := testutil.SetupWithContextSleep(100 * time.Millisecond)
 
 	// When / Then
@@ -38,7 +38,7 @@ func TestCancelWithContextDuringExecution(t *testing.T) {
 // Asserts that an execution is marked as canceled when a provided Context deadline is exceeded.
 func TestCancelWithContextDeadlineDuringExecution(t *testing.T) {
 	// Given
-	rp := retrypolicy.WithDefaults[any]()
+	rp := retrypolicy.NewWithDefaults[any]()
 	setup := func() context.Context {
 		ctx, _ := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		return ctx
@@ -59,7 +59,7 @@ func TestCancelWithContextDeadlineDuringExecution(t *testing.T) {
 // Also asserts that the context provided to an execution is canceled.
 func TestCancelWithExecutionResultDuringExecution(t *testing.T) {
 	// Given
-	rp := retrypolicy.WithDefaults[any]()
+	rp := retrypolicy.NewWithDefaults[any]()
 
 	// When
 	result := failsafe.NewExecutor[any](rp).RunWithExecutionAsync(func(e failsafe.Execution[any]) error {
@@ -81,7 +81,7 @@ func TestCancelWithExecutionResultDuringExecution(t *testing.T) {
 // Also asserts that the context provided to an execution is canceled.
 func TestCancelWithTimeoutDuringExecution(t *testing.T) {
 	// Given
-	to := timeout.With[any](100 * time.Millisecond)
+	to := timeout.New[any](100 * time.Millisecond)
 	executor := failsafe.NewExecutor[any](to).WithContext(context.Background())
 
 	// When / Then
@@ -97,7 +97,7 @@ func TestCancelWithTimeoutDuringExecution(t *testing.T) {
 // Asserts that when a RetryPolicy is blocked on a delay, canceling the context results in a Canceled error being returned.
 func TestCancelWithContextDuringPendingRetry(t *testing.T) {
 	// Given
-	rp := policytesting.WithRetryLogs[any](retrypolicy.Builder[any]().WithDelay(time.Second)).Build()
+	rp := policytesting.WithRetryLogs[any](retrypolicy.NewBuilder[any]().WithDelay(time.Second)).Build()
 	setup := testutil.SetupWithContextSleep(50 * time.Millisecond)
 
 	// When / Then
@@ -131,7 +131,7 @@ func TestCancelWithExecutionResultDuringPendingRetry(t *testing.T) {
 // Asserts that a cancellation with a fallback returns the expected error.
 func TestCancelWithContextWithFallback(t *testing.T) {
 	// Given
-	fb := fallback.WithError[any](nil)
+	fb := fallback.NewWithError[any](nil)
 	setup := testutil.SetupWithContextSleep(50 * time.Millisecond)
 
 	// When / Then
@@ -148,7 +148,7 @@ func TestCancelWithContextWithFallback(t *testing.T) {
 // Asserts that waiting on a cancelation from a context works from within a fallback function.
 func TestCancelWithContextDuringFallbackFn(t *testing.T) {
 	// Given
-	fb := fallback.WithFunc(func(exec failsafe.Execution[any]) (any, error) {
+	fb := fallback.NewWithFunc(func(exec failsafe.Execution[any]) (any, error) {
 		testutil.WaitAndAssertCanceled(t, time.Second, exec)
 		return nil, nil
 	})
@@ -188,7 +188,7 @@ func TestCancelWithExecutionResultDuringFallbackFn(t *testing.T) {
 // Asserts that when a RateLimiter is blocked on a delay, canceling the context results in a Canceled error being returned.
 func TestCancelWithContextDuringRateLimiterDelay(t *testing.T) {
 	// Given
-	rl := ratelimiter.SmoothBuilderWithMaxRate[any](time.Second).WithMaxWaitTime(time.Minute).Build()
+	rl := ratelimiter.NewSmoothBuilderWithMaxRate[any](time.Second).WithMaxWaitTime(time.Minute).Build()
 	setup := testutil.SetupWithContextSleep(100 * time.Millisecond)
 	rl.TryAcquirePermit() // All permits used
 
@@ -203,8 +203,8 @@ func TestCancelWithContextDuringRateLimiterDelay(t *testing.T) {
 // Asserts that when a RateLimiter is blocked on a delay, canceling with a timeout results in the rate limiter being unblocked.
 func TestCancelWithTimeoutDuringRateLimiterDelay(t *testing.T) {
 	// Given
-	rl := ratelimiter.SmoothBuilder[any](1, 30*time.Second).WithMaxWaitTime(time.Minute).Build()
-	to := timeout.With[any](100 * time.Millisecond)
+	rl := ratelimiter.NewSmoothBuilder[any](1, 30*time.Second).WithMaxWaitTime(time.Minute).Build()
+	to := timeout.New[any](100 * time.Millisecond)
 	rl.TryAcquirePermit() // All permits used
 
 	// When / Then
@@ -238,7 +238,7 @@ func TestCancelWithExecutionResultDuringRateLimiterDelay(t *testing.T) {
 
 func TestCancelWithContextDuringBulkheadDelay(t *testing.T) {
 	// Given
-	bh := bulkhead.Builder[any](2).WithMaxWaitTime(200 * time.Millisecond).Build()
+	bh := bulkhead.NewBuilder[any](2).WithMaxWaitTime(200 * time.Millisecond).Build()
 	setup := testutil.SetupWithContextSleep(100 * time.Millisecond)
 	bh.TryAcquirePermit()
 	bh.TryAcquirePermit() // bulkhead should be full
@@ -253,8 +253,8 @@ func TestCancelWithContextDuringBulkheadDelay(t *testing.T) {
 
 func TestCancelWithTimeoutDuringBulkheadDelay(t *testing.T) {
 	// Given
-	to := timeout.With[any](10 * time.Millisecond)
-	bh := bulkhead.Builder[any](2).WithMaxWaitTime(100 * time.Millisecond).Build()
+	to := timeout.New[any](10 * time.Millisecond)
+	bh := bulkhead.NewBuilder[any](2).WithMaxWaitTime(100 * time.Millisecond).Build()
 	bh.TryAcquirePermit()
 	bh.TryAcquirePermit() // bulkhead should be full
 
@@ -291,7 +291,7 @@ func TestCancelWithExecutionResultDuringBulkheadDelay(t *testing.T) {
 func TestCancelWithContextBeforeHedge(t *testing.T) {
 	// Given
 	stats := &policytesting.Stats{}
-	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[any](time.Second).WithMaxHedges(2), stats).Build()
+	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelay[any](time.Second).WithMaxHedges(2), stats).Build()
 	setup := testutil.SetupWithContextSleep(100 * time.Millisecond)
 
 	// When / Then
@@ -311,7 +311,7 @@ func TestCancelWithContextBeforeHedge(t *testing.T) {
 // Tests canceling an execution after hedges have been started.
 func TestCancelWithContextDuringHedge(t *testing.T) {
 	// Given
-	hp := hedgepolicy.BuilderWithDelay[any](10 * time.Millisecond).WithMaxHedges(2).Build()
+	hp := hedgepolicy.NewBuilderWithDelay[any](10 * time.Millisecond).WithMaxHedges(2).Build()
 	setup := testutil.SetupWithContextSleep(100 * time.Millisecond)
 	waiter := testutil.NewWaiter()
 
@@ -331,8 +331,8 @@ func TestCancelWithContextDuringHedge(t *testing.T) {
 
 func TestCancelWithTimeoutDuringHedge(t *testing.T) {
 	// Given
-	to := timeout.With[any](100 * time.Millisecond)
-	hp := hedgepolicy.BuilderWithDelay[any](10 * time.Millisecond).WithMaxHedges(2).Build()
+	to := timeout.New[any](100 * time.Millisecond)
+	hp := hedgepolicy.NewBuilderWithDelay[any](10 * time.Millisecond).WithMaxHedges(2).Build()
 	waiter := testutil.NewWaiter()
 
 	// When / Then
@@ -352,7 +352,7 @@ func TestCancelWithTimeoutDuringHedge(t *testing.T) {
 // closedChan.
 func TestCloseCanceledChannelBeforeAccessingIt(t *testing.T) {
 	// Given
-	to := timeout.With[any](10 * time.Millisecond)
+	to := timeout.New[any](10 * time.Millisecond)
 
 	// When / Then
 	testutil.Test[any](t).

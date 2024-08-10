@@ -12,9 +12,9 @@ import (
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
 )
 
-// Tests Fallback.WithResult
+// Tests Fallback.NewWithResult
 func TestFallbackWithResult(t *testing.T) {
-	fb := fallback.WithResult(true)
+	fb := fallback.NewWithResult(true)
 
 	testutil.Test[bool](t).
 		With(fb).
@@ -22,9 +22,9 @@ func TestFallbackWithResult(t *testing.T) {
 		AssertSuccess(1, 1, true)
 }
 
-// Tests Fallback.WithError
+// Tests Fallback.NewWithError
 func TestShouldFallbackWithError(t *testing.T) {
-	fb := fallback.WithError[bool](testutil.ErrInvalidArgument)
+	fb := fallback.NewWithError[bool](testutil.ErrInvalidArgument)
 
 	testutil.Test[bool](t).
 		With(fb).
@@ -32,9 +32,9 @@ func TestShouldFallbackWithError(t *testing.T) {
 		AssertFailure(1, 1, testutil.ErrInvalidArgument)
 }
 
-// Tests Fallback.WithFunc
+// Tests Fallback.NewWithFunc
 func TestShouldFallbackWithFunc(t *testing.T) {
-	fb := fallback.WithFunc(func(exec failsafe.Execution[bool]) (bool, error) {
+	fb := fallback.NewWithFunc(func(exec failsafe.Execution[bool]) (bool, error) {
 		return false, testutil.CompositeError{Cause: exec.LastError()}
 	})
 
@@ -47,14 +47,14 @@ func TestShouldFallbackWithFunc(t *testing.T) {
 // Tests a successful execution that does not fallback
 func TestShouldNotFallback(t *testing.T) {
 	testutil.Test[bool](t).
-		With(fallback.WithResult(true)).
+		With(fallback.NewWithResult(true)).
 		Get(testutil.GetFn(false, nil)).
 		AssertSuccess(1, 1, false)
 }
 
 // Tests a fallback with failure conditions
 func TestShouldFallbackWithFailureConditions(t *testing.T) {
-	fb := fallback.BuilderWithResult[int](0).
+	fb := fallback.NewBuilderWithResult[int](0).
 		HandleResult(500).
 		Build()
 
@@ -74,14 +74,14 @@ func TestShouldFallbackWithFailureConditions(t *testing.T) {
 // Asserts that the fallback result itself can cause an execution to be considered a failure.
 func TestShouldVerifyFallbackResult(t *testing.T) {
 	// Assert a failure is still a failure
-	fb := fallback.WithError[any](testutil.ErrInvalidArgument)
+	fb := fallback.NewWithError[any](testutil.ErrInvalidArgument)
 	testutil.Test[any](t).
 		With(fb).
 		Get(testutil.GetFn[any](false, errors.New("test"))).
 		AssertFailure(1, 1, testutil.ErrInvalidArgument)
 
 	// Assert a success after a failure is a success
-	fb = fallback.WithResult[any](true)
+	fb = fallback.NewWithResult[any](true)
 	testutil.Test[any](t).
 		With(fb).
 		Get(testutil.GetFn[any](false, errors.New("test"))).
@@ -90,7 +90,7 @@ func TestShouldVerifyFallbackResult(t *testing.T) {
 
 func TestShouldNotCallFallbackWhenCanceled(t *testing.T) {
 	// Given
-	fb := fallback.WithFunc(func(exec failsafe.Execution[any]) (any, error) {
+	fb := fallback.NewWithFunc(func(exec failsafe.Execution[any]) (any, error) {
 		assert.Fail(t, "should not call fallback")
 		return nil, nil
 	})

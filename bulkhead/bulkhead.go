@@ -42,15 +42,15 @@ type Bulkhead[R any] interface {
 	TryAcquirePermit() bool
 }
 
-// BulkheadBuilder builds Bulkhead instances.
+// Builder builds Bulkhead instances.
 //
 // R is the execution result type. This type is not concurrency safe.
-type BulkheadBuilder[R any] interface {
+type Builder[R any] interface {
 	// WithMaxWaitTime configures the maxWaitTime to wait for permits to be available.
-	WithMaxWaitTime(maxWaitTime time.Duration) BulkheadBuilder[R]
+	WithMaxWaitTime(maxWaitTime time.Duration) Builder[R]
 
 	// OnFull registers the listener to be called when the bulkhead is full.
-	OnFull(listener func(event failsafe.ExecutionEvent[R])) BulkheadBuilder[R]
+	OnFull(listener func(event failsafe.ExecutionEvent[R])) Builder[R]
 
 	// Build returns a new Bulkhead using the builder's configuration.
 	Build() Bulkhead[R]
@@ -62,12 +62,12 @@ type config[R any] struct {
 	onFull         func(failsafe.ExecutionEvent[R])
 }
 
-func (c *config[R]) WithMaxWaitTime(maxWaitTime time.Duration) BulkheadBuilder[R] {
+func (c *config[R]) WithMaxWaitTime(maxWaitTime time.Duration) Builder[R] {
 	c.maxWaitTime = maxWaitTime
 	return c
 }
 
-func (c *config[R]) OnFull(listener func(event failsafe.ExecutionEvent[R])) BulkheadBuilder[R] {
+func (c *config[R]) OnFull(listener func(event failsafe.ExecutionEvent[R])) Builder[R] {
 	c.onFull = listener
 	return c
 }
@@ -79,15 +79,15 @@ func (c *config[R]) Build() Bulkhead[R] {
 	}
 }
 
-var _ BulkheadBuilder[any] = &config[any]{}
+var _ Builder[any] = &config[any]{}
 
-// With returns a new Bulkhead for execution result type R and the maxConcurrency.
-func With[R any](maxConcurrency uint) Bulkhead[R] {
-	return Builder[R](maxConcurrency).Build()
+// New returns a new Bulkhead for execution result type R and the maxConcurrency.
+func New[R any](maxConcurrency uint) Bulkhead[R] {
+	return NewBuilder[R](maxConcurrency).Build()
 }
 
-// Builder returns a BulkheadBuilder for execution result type R which builds Timeouts for the timeoutDelay.
-func Builder[R any](maxConcurrency uint) BulkheadBuilder[R] {
+// NewBuilder returns a Builder for execution result type R which builds Timeouts for the timeoutDelay.
+func NewBuilder[R any](maxConcurrency uint) Builder[R] {
 	return &config[R]{
 		maxConcurrency: maxConcurrency,
 	}

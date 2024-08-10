@@ -23,8 +23,8 @@ import (
 // RetryPolicy -> CircuitBreaker
 func TestRetryPolicyCircuitBreaker(t *testing.T) {
 	// Given
-	rp := retrypolicy.Builder[bool]().WithMaxRetries(-1).Build()
-	cb := circuitbreaker.Builder[bool]().
+	rp := retrypolicy.NewBuilder[bool]().WithMaxRetries(-1).Build()
+	cb := circuitbreaker.NewBuilder[bool]().
 		WithFailureThreshold(3).
 		WithDelay(10 * time.Minute).
 		Build()
@@ -50,8 +50,8 @@ func TestRetryPolicyCircuitBreaker(t *testing.T) {
 // Tests RetryPolicy with a CircuitBreaker that is open.
 func TestRetryPolicyCircuitBreakerOpen(t *testing.T) {
 	// Given
-	rp := policytesting.WithRetryLogs(retrypolicy.Builder[any]()).Build()
-	cb := policytesting.WithBreakerLogs(circuitbreaker.Builder[any]()).Build()
+	rp := policytesting.WithRetryLogs(retrypolicy.NewBuilder[any]()).Build()
+	cb := policytesting.WithBreakerLogs(circuitbreaker.NewBuilder[any]()).Build()
 	setup := func() {
 		policytesting.ResetCircuitBreaker(cb)
 	}
@@ -67,8 +67,8 @@ func TestRetryPolicyCircuitBreakerOpen(t *testing.T) {
 // CircuitBreaker -> RetryPolicy
 func TestCircuitBreakerRetryPolicy(t *testing.T) {
 	// Given
-	rp := retrypolicy.WithDefaults[any]()
-	cb := circuitbreaker.Builder[any]().WithFailureThreshold(3).Build()
+	rp := retrypolicy.NewWithDefaults[any]()
+	cb := circuitbreaker.NewBuilder[any]().WithFailureThreshold(3).Build()
 	setup := func() {
 		policytesting.ResetCircuitBreaker(cb)
 	}
@@ -88,8 +88,8 @@ func TestCircuitBreakerRetryPolicy(t *testing.T) {
 // Fallback -> RetryPolicy
 func TestFallbackRetryPolicy(t *testing.T) {
 	// Given
-	fb := fallback.BuilderWithResult(true).HandleErrors(retrypolicy.ErrExceeded).Build()
-	rp := retrypolicy.WithDefaults[bool]()
+	fb := fallback.NewBuilderWithResult(true).HandleErrors(retrypolicy.ErrExceeded).Build()
+	rp := retrypolicy.NewWithDefaults[bool]()
 
 	// When / Then
 	testutil.Test[bool](t).
@@ -98,7 +98,7 @@ func TestFallbackRetryPolicy(t *testing.T) {
 		AssertSuccess(3, 3, true)
 
 	// Given
-	fb = fallback.WithFunc(func(exec failsafe.Execution[bool]) (bool, error) {
+	fb = fallback.NewWithFunc(func(exec failsafe.Execution[bool]) (bool, error) {
 		assert.False(t, exec.LastResult())
 		assert.ErrorIs(t, exec.LastError(), testutil.ErrInvalidState)
 		return true, nil
@@ -114,8 +114,8 @@ func TestFallbackRetryPolicy(t *testing.T) {
 // Fallback -> HedgePolicy
 func TestFallbackHedgePolicy(t *testing.T) {
 	// Given
-	fb := fallback.WithResult(true)
-	hp := hedgepolicy.WithDelay[bool](10 * time.Millisecond)
+	fb := fallback.NewWithResult(true)
+	hp := hedgepolicy.NewWithDelay[bool](10 * time.Millisecond)
 
 	// When / Then
 	testutil.Test[bool](t).
@@ -130,8 +130,8 @@ func TestFallbackHedgePolicy(t *testing.T) {
 // RetryPolicy -> Fallback
 func TestRetryPolicyFallback(t *testing.T) {
 	// Given
-	rp := retrypolicy.WithDefaults[string]()
-	fb := fallback.WithResult("test")
+	rp := retrypolicy.NewWithDefaults[string]()
+	fb := fallback.NewWithResult("test")
 
 	// When / Then
 	testutil.Test[string](t).
@@ -145,12 +145,12 @@ func TestRetryPolicyFallback(t *testing.T) {
 // Tests fallback with a circuit breaker that is closed.
 func TestFallbackCircuitBreaker(t *testing.T) {
 	// Given
-	fb := fallback.WithFunc(func(exec failsafe.Execution[bool]) (bool, error) {
+	fb := fallback.NewWithFunc(func(exec failsafe.Execution[bool]) (bool, error) {
 		assert.False(t, exec.LastResult())
 		assert.ErrorIs(t, testutil.ErrInvalidState, exec.LastError())
 		return true, nil
 	})
-	cb := circuitbreaker.Builder[bool]().WithSuccessThreshold(3).Build()
+	cb := circuitbreaker.NewBuilder[bool]().WithSuccessThreshold(3).Build()
 	setup := func() {
 		policytesting.ResetCircuitBreaker(cb)
 	}
@@ -168,12 +168,12 @@ func TestFallbackCircuitBreaker(t *testing.T) {
 // Tests fallback with a circuit breaker that is open.
 func TestFallbackCircuitBreakerOpen(t *testing.T) {
 	// Given
-	fb := fallback.WithFunc(func(exec failsafe.Execution[bool]) (bool, error) {
+	fb := fallback.NewWithFunc(func(exec failsafe.Execution[bool]) (bool, error) {
 		assert.False(t, exec.LastResult())
 		assert.ErrorIs(t, circuitbreaker.ErrOpen, exec.LastError())
 		return false, nil
 	})
-	cb := circuitbreaker.Builder[bool]().WithSuccessThreshold(3).Build()
+	cb := circuitbreaker.NewBuilder[bool]().WithSuccessThreshold(3).Build()
 
 	// When / Then
 	cb.Open()
@@ -187,8 +187,8 @@ func TestFallbackCircuitBreakerOpen(t *testing.T) {
 func TestRetryPolicyRateLimiter(t *testing.T) {
 	// Given
 	rpStats := &policytesting.Stats{}
-	rp := policytesting.WithRetryStats(retrypolicy.Builder[any](), rpStats).WithMaxAttempts(7).Build()
-	rl := ratelimiter.BurstyBuilder[any](3, 1*time.Second).Build()
+	rp := policytesting.WithRetryStats(retrypolicy.NewBuilder[any](), rpStats).WithMaxAttempts(7).Build()
+	rl := ratelimiter.NewBurstyBuilder[any](3, 1*time.Second).Build()
 	setup := func() {
 		rpStats.Reset()
 		policytesting.ResetRateLimiter(rl)
@@ -208,9 +208,9 @@ func TestRetryPolicyRateLimiter(t *testing.T) {
 // Fallback -> RetryPolicy -> CircuitBreaker
 func TestFallbackRetryPolicyCircuitBreaker(t *testing.T) {
 	// Given
-	rp := retrypolicy.WithDefaults[string]()
-	cb := circuitbreaker.Builder[string]().WithFailureThreshold(5).Build()
-	fb := fallback.WithResult("test")
+	rp := retrypolicy.NewWithDefaults[string]()
+	cb := circuitbreaker.NewBuilder[string]().WithFailureThreshold(5).Build()
+	fb := fallback.NewWithResult("test")
 	setup := func() {
 		policytesting.ResetCircuitBreaker(cb)
 	}
@@ -232,11 +232,11 @@ func TestFallbackRetryPolicyCircuitBreaker(t *testing.T) {
 // Tests 2 timeouts, then a success, and asserts the execution is cancelled after each timeout.
 func TestRetryPolicyTimeout(t *testing.T) {
 	// Given
-	rp := retrypolicy.Builder[any]().OnFailure(func(e failsafe.ExecutionEvent[any]) {
+	rp := retrypolicy.NewBuilder[any]().OnFailure(func(e failsafe.ExecutionEvent[any]) {
 		assert.ErrorIs(t, e.LastError(), timeout.ErrExceeded)
 	}).Build()
 	toStats := &policytesting.Stats{}
-	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](50*time.Millisecond), toStats).Build()
+	to := policytesting.WithTimeoutStatsAndLogs(timeout.NewBuilder[any](50*time.Millisecond), toStats).Build()
 
 	// When / Then
 	testutil.Test[any](t).
@@ -260,10 +260,10 @@ func TestRetryPolicyTimeout(t *testing.T) {
 func TestRetryPolicyHedgePolicy(t *testing.T) {
 	// Given
 	stats := &policytesting.Stats{}
-	rp := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[any](), stats).Build()
+	rp := policytesting.WithRetryStatsAndLogs(retrypolicy.NewBuilder[any](), stats).Build()
 
 	t.Run("when hedge runs multiple times", func(t *testing.T) {
-		hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[any](10*time.Millisecond), stats).Build()
+		hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelay[any](10*time.Millisecond), stats).Build()
 
 		testutil.Test[any](t).
 			With(rp, hp).
@@ -279,7 +279,7 @@ func TestRetryPolicyHedgePolicy(t *testing.T) {
 	})
 
 	t.Run("when hedge returns error", func(t *testing.T) {
-		hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[any](time.Second), stats).Build()
+		hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelay[any](time.Second), stats).Build()
 
 		testutil.Test[any](t).
 			With(rp, hp).
@@ -297,8 +297,8 @@ func TestRetryPolicyHedgePolicy(t *testing.T) {
 // CircuitBreaker -> Timeout
 func TestCircuitBreakerTimeout(t *testing.T) {
 	// Given
-	to := timeout.With[string](50 * time.Millisecond)
-	cb := circuitbreaker.WithDefaults[string]()
+	to := timeout.New[string](50 * time.Millisecond)
+	cb := circuitbreaker.NewWithDefaults[string]()
 	assert.True(t, cb.IsClosed())
 	setup := func() {
 		policytesting.ResetCircuitBreaker(cb)
@@ -320,8 +320,8 @@ func TestCircuitBreakerTimeout(t *testing.T) {
 // Fallback -> Timeout
 func TestFallbackTimeout(t *testing.T) {
 	// Given
-	to := timeout.With[bool](10 * time.Millisecond)
-	fb := fallback.WithFunc(func(e failsafe.Execution[bool]) (bool, error) {
+	to := timeout.New[bool](10 * time.Millisecond)
+	fb := fallback.NewWithFunc(func(e failsafe.Execution[bool]) (bool, error) {
 		assert.ErrorIs(t, e.LastError(), timeout.ErrExceeded)
 		return true, nil
 	})
@@ -338,8 +338,8 @@ func TestFallbackTimeout(t *testing.T) {
 
 // RetryPolicy -> Bulkhead
 func TestRetryPolicyBulkhead(t *testing.T) {
-	rp := retrypolicy.Builder[any]().WithMaxAttempts(7).Build()
-	bh := bulkhead.With[any](2)
+	rp := retrypolicy.NewBuilder[any]().WithMaxAttempts(7).Build()
+	bh := bulkhead.New[any](2)
 	bh.TryAcquirePermit()
 	bh.TryAcquirePermit() // bulkhead should be full
 
@@ -356,14 +356,14 @@ func TestRetryPolicyBulkhead(t *testing.T) {
 func TestHedgePolicyTimeout(t *testing.T) {
 	// Given
 	stats := &policytesting.Stats{}
-	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[any](10*time.Millisecond).
+	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelay[any](10*time.Millisecond).
 		CancelIf(func(a any, err error) bool {
 			return err == nil
 		}).
 		WithMaxHedges(2), stats).
 		Build()
 	toStats := &policytesting.Stats{}
-	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](100*time.Millisecond), toStats).Build()
+	to := policytesting.WithTimeoutStatsAndLogs(timeout.NewBuilder[any](100*time.Millisecond), toStats).Build()
 
 	// When / Then
 	testutil.Test[any](t).
@@ -384,9 +384,9 @@ func TestCachePolicyRetryPolicy(t *testing.T) {
 	// Given
 	cpStats := &policytesting.Stats{}
 	cache, failsafeCache := policytesting.NewCache[any]()
-	cp := policytesting.WithCacheStats[any](cachepolicy.Builder(failsafeCache), cpStats).WithKey("foo").Build()
+	cp := policytesting.WithCacheStats[any](cachepolicy.NewBuilder(failsafeCache), cpStats).WithKey("foo").Build()
 	rpStats := &policytesting.Stats{}
-	rp := policytesting.WithRetryStats(retrypolicy.Builder[any](), rpStats).Build()
+	rp := policytesting.WithRetryStats(retrypolicy.NewBuilder[any](), rpStats).Build()
 	execution, reset := testutil.ErrorNTimesThenReturn[any](testutil.ErrInvalidState, 2, "bar")
 	setup := func() {
 		cpStats.Reset()

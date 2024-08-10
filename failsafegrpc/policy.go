@@ -13,13 +13,13 @@ var retryableStatusCodes = map[codes.Code]struct{}{
 	codes.ResourceExhausted: {},
 }
 
-// RetryPolicyBuilder returns a retrypolicy.RetryPolicyBuilder that will retry on gRPC status codes that are considered
+// NewRetryPolicyBuilder returns a retrypolicy.Builder that will retry on gRPC status codes that are considered
 // retryable (UNAVAILABLE, DEADLINE_EXCEEDED, RESOURCE_EXHAUSTED), up to 2 times by default, with no delay between
 // attempts. Additional handling can be added by chaining the builder with more conditions.
 //
 // R is the execution result type.
-func RetryPolicyBuilder[R any]() retrypolicy.RetryPolicyBuilder[R] {
-	return retrypolicy.Builder[R]().HandleIf(func(_ R, err error) bool {
+func NewRetryPolicyBuilder[R any]() retrypolicy.Builder[R] {
+	return retrypolicy.NewBuilder[R]().HandleIf(func(_ R, err error) bool {
 		if err != nil {
 			s, ok := status.FromError(err)
 			if !ok {

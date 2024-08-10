@@ -179,14 +179,14 @@ func TestShouldHaveZeroWaitTime(t *testing.T) {
 }
 
 func newSmoothLimiterStats(maxRate time.Duration) (*smoothStats[any], *testutil.TestStopwatch) {
-	s := SmoothBuilderWithMaxRate[any](maxRate).Build().(*rateLimiter[any]).stats.(*smoothStats[any])
+	s := NewSmoothBuilderWithMaxRate[any](maxRate).Build().(*rateLimiter[any]).stats.(*smoothStats[any])
 	stopwatch := &testutil.TestStopwatch{}
 	s.stopwatch = stopwatch
 	return s, stopwatch
 }
 
 func newBurstyLimiterStats(maxPermits uint, period time.Duration) (*burstyStats[any], *testutil.TestStopwatch) {
-	s := BurstyBuilder[any](maxPermits, period).Build().(*rateLimiter[any]).stats.(*burstyStats[any])
+	s := NewBurstyBuilder[any](maxPermits, period).Build().(*rateLimiter[any]).stats.(*burstyStats[any])
 	stopwatch := &testutil.TestStopwatch{}
 	s.stopwatch = stopwatch
 	return s, stopwatch

@@ -19,7 +19,7 @@ import (
 // Tests a simple execution that does not timeout.
 func TestShouldNotTimeout(t *testing.T) {
 	// Given
-	timeout := timeout.With[any](time.Second)
+	timeout := timeout.New[any](time.Second)
 
 	// When / Then
 	testutil.Test[any](t).
@@ -33,8 +33,8 @@ func TestRetryTimeoutWithBlockedFunc(t *testing.T) {
 	// Given
 	timeoutStats := &policytesting.Stats{}
 	rpStats := &policytesting.Stats{}
-	timeout := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](50*time.Millisecond), timeoutStats).Build()
-	rp := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[any](), rpStats).Build()
+	timeout := policytesting.WithTimeoutStatsAndLogs(timeout.NewBuilder[any](50*time.Millisecond), timeoutStats).Build()
+	rp := policytesting.WithRetryStatsAndLogs(retrypolicy.NewBuilder[any](), rpStats).Build()
 
 	// When / Then
 	testutil.Test[any](t).
@@ -60,8 +60,8 @@ func TestRetryTimeoutWithPendingRetry(t *testing.T) {
 	// Given
 	timeoutStats := &policytesting.Stats{}
 	rpStats := &policytesting.Stats{}
-	timeout := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](50*time.Millisecond), timeoutStats).Build()
-	rp := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[any]().WithDelay(100*time.Millisecond), rpStats).Build()
+	timeout := policytesting.WithTimeoutStatsAndLogs(timeout.NewBuilder[any](50*time.Millisecond), timeoutStats).Build()
+	rp := policytesting.WithRetryStatsAndLogs(retrypolicy.NewBuilder[any]().WithDelay(100*time.Millisecond), rpStats).Build()
 
 	// When / Then
 	testutil.Test[any](t).
@@ -81,8 +81,8 @@ func TestRetryTimeoutWithPendingRetry(t *testing.T) {
 func TestTimeoutRetryWithBlockedFunc(t *testing.T) {
 	// Given
 	timeoutStats := &policytesting.Stats{}
-	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](150*time.Millisecond), timeoutStats).Build()
-	rp := retrypolicy.WithDefaults[any]()
+	to := policytesting.WithTimeoutStatsAndLogs(timeout.NewBuilder[any](150*time.Millisecond), timeoutStats).Build()
+	rp := retrypolicy.NewWithDefaults[any]()
 
 	// When / Then
 	testutil.Test[any](t).
@@ -105,8 +105,8 @@ func TestTimeoutRetryWithPendingRetry(t *testing.T) {
 	// Given
 	timeoutStats := &policytesting.Stats{}
 	rpStats := &policytesting.Stats{}
-	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](100*time.Millisecond), timeoutStats).Build()
-	rp := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[any]().WithDelay(time.Second), rpStats).Build()
+	to := policytesting.WithTimeoutStatsAndLogs(timeout.NewBuilder[any](100*time.Millisecond), timeoutStats).Build()
+	rp := policytesting.WithRetryStatsAndLogs(retrypolicy.NewBuilder[any]().WithDelay(time.Second), rpStats).Build()
 
 	// When / Then
 	testutil.Test[any](t).
@@ -125,8 +125,8 @@ func TestTimeoutRetryWithPendingRetry(t *testing.T) {
 func TestTimeoutHedgeWithBlockedFunc(t *testing.T) {
 	// Given
 	stats := &policytesting.Stats{}
-	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](100*time.Millisecond), stats).Build()
-	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[any](10*time.Millisecond), stats).WithMaxHedges(2).Build()
+	to := policytesting.WithTimeoutStatsAndLogs(timeout.NewBuilder[any](100*time.Millisecond), stats).Build()
+	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelay[any](10*time.Millisecond), stats).WithMaxHedges(2).Build()
 
 	// When / Then
 	testutil.Test[any](t).
@@ -147,8 +147,8 @@ func TestFallbackTimeoutWithBlockedFunc(t *testing.T) {
 	// Given
 	timeoutStats := &policytesting.Stats{}
 	fbStats := &policytesting.Stats{}
-	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](10*time.Millisecond), timeoutStats).Build()
-	fb := policytesting.WithFallbackStatsAndLogs(fallback.BuilderWithError[any](testutil.ErrInvalidArgument), fbStats).Build()
+	to := policytesting.WithTimeoutStatsAndLogs(timeout.NewBuilder[any](10*time.Millisecond), timeoutStats).Build()
+	fb := policytesting.WithFallbackStatsAndLogs(fallback.NewBuilderWithError[any](testutil.ErrInvalidArgument), fbStats).Build()
 
 	// When / Then
 	testutil.Test[any](t).
@@ -170,8 +170,8 @@ func TestFallbackWithInnerTimeout(t *testing.T) {
 	// Given
 	timeoutStats := &policytesting.Stats{}
 	fbStats := &policytesting.Stats{}
-	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](10*time.Millisecond), timeoutStats).Build()
-	fb := policytesting.WithFallbackStatsAndLogs(fallback.BuilderWithError[any](testutil.ErrInvalidArgument), fbStats).Build()
+	to := policytesting.WithTimeoutStatsAndLogs(timeout.NewBuilder[any](10*time.Millisecond), timeoutStats).Build()
+	fb := policytesting.WithFallbackStatsAndLogs(fallback.NewBuilderWithError[any](testutil.ErrInvalidArgument), fbStats).Build()
 
 	// When / Then
 	testutil.Test[any](t).
@@ -189,8 +189,8 @@ func TestTimeoutFallbackWithBlockedFunc(t *testing.T) {
 	// Given
 	timeoutStats := &policytesting.Stats{}
 	fbStats := &policytesting.Stats{}
-	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](10*time.Millisecond), timeoutStats).Build()
-	fb := policytesting.WithFallbackStatsAndLogs(fallback.BuilderWithError[any](testutil.ErrInvalidArgument), fbStats).Build()
+	to := policytesting.WithTimeoutStatsAndLogs(timeout.NewBuilder[any](10*time.Millisecond), timeoutStats).Build()
+	fb := policytesting.WithFallbackStatsAndLogs(fallback.NewBuilderWithError[any](testutil.ErrInvalidArgument), fbStats).Build()
 
 	// When / Then
 	testutil.Test[any](t).
@@ -211,8 +211,8 @@ func TestTimeoutFallbackWithBlockedFallback(t *testing.T) {
 	// Given
 	timeoutStats := &policytesting.Stats{}
 	fbStats := &policytesting.Stats{}
-	to := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](100*time.Millisecond), timeoutStats).Build()
-	fb := policytesting.WithFallbackStatsAndLogs(fallback.BuilderWithFunc[any](func(_ failsafe.Execution[any]) (any, error) {
+	to := policytesting.WithTimeoutStatsAndLogs(timeout.NewBuilder[any](100*time.Millisecond), timeoutStats).Build()
+	fb := policytesting.WithFallbackStatsAndLogs(fallback.NewBuilderWithFunc[any](func(_ failsafe.Execution[any]) (any, error) {
 		time.Sleep(200 * time.Millisecond)
 		return nil, testutil.ErrInvalidState
 	}), fbStats).Build()

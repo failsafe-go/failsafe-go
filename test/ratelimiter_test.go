@@ -13,7 +13,7 @@ import (
 
 func TestRateLimiterPermitAcquiredAfterWait(t *testing.T) {
 	// Given
-	limiter := ratelimiter.SmoothBuilderWithMaxRate[string](50 * time.Millisecond).
+	limiter := ratelimiter.NewSmoothBuilderWithMaxRate[string](50 * time.Millisecond).
 		WithMaxWaitTime(2 * time.Second).
 		Build()
 
@@ -27,7 +27,7 @@ func TestRateLimiterPermitAcquiredAfterWait(t *testing.T) {
 
 func TestShouldReturnRateLimitExceededError(t *testing.T) {
 	// Given
-	limiter := ratelimiter.SmoothBuilderWithMaxRate[any](1 * time.Hour).Build()
+	limiter := ratelimiter.NewSmoothBuilderWithMaxRate[any](1 * time.Hour).Build()
 
 	// When / Then
 	limiter.TryAcquirePermit() // limiter should now be out of permits
@@ -40,7 +40,7 @@ func TestShouldReturnRateLimitExceededError(t *testing.T) {
 // Asserts that an exceeded maxWaitTime causes ErrExceeded.
 func TestRateLimiterMaxWaitTimeExceeded(t *testing.T) {
 	// Given
-	limiter := ratelimiter.SmoothBuilderWithMaxRate[any](10 * time.Millisecond).Build()
+	limiter := ratelimiter.NewSmoothBuilderWithMaxRate[any](10 * time.Millisecond).Build()
 
 	// When
 	go func() {
@@ -57,7 +57,7 @@ func TestRateLimiterMaxWaitTimeExceeded(t *testing.T) {
 
 func TestCancelRateLimiting(t *testing.T) {
 	// Given
-	limiter := ratelimiter.SmoothBuilderWithMaxRate[any](time.Second).Build()
+	limiter := ratelimiter.NewSmoothBuilderWithMaxRate[any](time.Second).Build()
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		time.Sleep(100 * time.Millisecond)

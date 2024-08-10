@@ -68,7 +68,7 @@ func TestBodyReader(t *testing.T) {
 func TestSuccess(t *testing.T) {
 	// Given
 	server := testutil.MockResponse(200, "foo")
-	rp := RetryPolicyBuilder().Build()
+	rp := NewRetryPolicyBuilder().Build()
 
 	// When / Then
 	test(t, server).
@@ -78,7 +78,7 @@ func TestSuccess(t *testing.T) {
 
 func TestRetryPolicyWithError(t *testing.T) {
 	test(t, nil).
-		With(RetryPolicyBuilder().ReturnLastFailure().Build()).
+		With(NewRetryPolicyBuilder().ReturnLastFailure().Build()).
 		Url("http://localhost:55555").
 		AssertFailure(3, 3, syscall.ECONNREFUSED)
 }
@@ -86,7 +86,7 @@ func TestRetryPolicyWithError(t *testing.T) {
 func TestRetryPolicyWith429(t *testing.T) {
 	// Given
 	server := testutil.MockResponse(429, "foo")
-	rp := RetryPolicyBuilder().ReturnLastFailure().Build()
+	rp := NewRetryPolicyBuilder().ReturnLastFailure().Build()
 
 	// When / Then
 	test(t, server).
@@ -97,7 +97,7 @@ func TestRetryPolicyWith429(t *testing.T) {
 func TestRetryPolicyWith429ThenSuccess(t *testing.T) {
 	// Given
 	server, setup := testutil.MockFlakyServer(2, 429, 0, "foo")
-	rp := RetryPolicyBuilder().Build()
+	rp := NewRetryPolicyBuilder().Build()
 
 	// When / Then
 	test(t, server).
@@ -111,7 +111,7 @@ func TestRetryPolicyWithRedirects(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusFound)
 	}))
-	rp := RetryPolicyBuilder().Build()
+	rp := NewRetryPolicyBuilder().Build()
 
 	// When / Then
 	// expected attempts and executions are only 1 since redirects are followed by the HTTP client
@@ -128,7 +128,7 @@ func TestRetryPolicyWithRedirects(t *testing.T) {
 func TestRetryPolicyWithUnsupportedProtocolScheme(t *testing.T) {
 	// Given
 	server := testutil.MockResponse(200, "foo")
-	rp := RetryPolicyBuilder().Build()
+	rp := NewRetryPolicyBuilder().Build()
 
 	// When / Then
 	expectedErr := &url.Error{
@@ -145,8 +145,8 @@ func TestRetryPolicyWithUnsupportedProtocolScheme(t *testing.T) {
 func TestRetryPolicyFallback(t *testing.T) {
 	// Given
 	server := testutil.MockResponse(429, "bad")
-	rp := RetryPolicyBuilder().ReturnLastFailure().Build()
-	fb := fallback.BuilderWithFunc[*http.Response](func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
+	rp := NewRetryPolicyBuilder().ReturnLastFailure().Build()
+	fb := fallback.NewBuilderWithFunc[*http.Response](func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
 		response := &http.Response{}
 		response.StatusCode = 200
 		response.Body = io.NopCloser(bytes.NewBufferString("fallback"))
@@ -187,8 +187,8 @@ func TestRetryPolicyFallback(t *testing.T) {
 func TestCircuitBreaker(t *testing.T) {
 	// Given
 	server := testutil.MockResponse(200, "success")
-	cb := circuitbreaker.WithDefaults[*http.Response]()
-	rp := retrypolicy.WithDefaults[*http.Response]()
+	cb := circuitbreaker.NewWithDefaults[*http.Response]()
+	rp := retrypolicy.NewWithDefaults[*http.Response]()
 	cb.Open()
 
 	// When / Then
@@ -201,7 +201,7 @@ func TestHedgePolicy(t *testing.T) {
 	// Given
 	server := testutil.MockDelayedResponse(200, "foo", 100*time.Millisecond)
 	stats := &policytesting.Stats{}
-	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[*http.Response](80*time.Millisecond), stats).Build()
+	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelay[*http.Response](80*time.Millisecond), stats).Build()
 
 	// When / Then
 	test(t, server).
@@ -249,7 +249,7 @@ func TestCancelWithContext(t *testing.T) {
 			// Given
 			server := testutil.MockDelayedResponse(200, "bad", time.Second)
 			t.Cleanup(server.Close)
-			rp := retrypolicy.Builder[*http.Response]().AbortOnErrors(context.Canceled).Build()
+			rp := retrypolicy.NewBuilder[*http.Response]().AbortOnErrors(context.Canceled).Build()
 			executor := failsafe.NewExecutor[*http.Response](rp)
 			if tc.executorCtx != nil {
 				executor = executor.WithContext(tc.executorCtx)
@@ -270,7 +270,7 @@ func TestCancelWithContext(t *testing.T) {
 func TestCancelWithTimeout(t *testing.T) {
 	// Given
 	server := testutil.MockDelayedResponse(200, "bad", time.Second)
-	to := timeout.With[*http.Response](100 * time.Millisecond)
+	to := timeout.New[*http.Response](100 * time.Millisecond)
 
 	// When / Then
 	start := time.Now()

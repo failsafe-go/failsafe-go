@@ -10,14 +10,14 @@ import (
 var _ CircuitBreaker[any] = &circuitBreaker[any]{}
 
 func TestShouldDefaultDelay(t *testing.T) {
-	breaker := WithDefaults[any]()
+	breaker := NewWithDefaults[any]()
 	breaker.RecordFailure()
 	assert.True(t, breaker.IsOpen())
 }
 
 func TestGetSuccessAndFailureStats(t *testing.T) {
 	// Given
-	breaker := Builder[any]().
+	breaker := NewBuilder[any]().
 		WithFailureThresholdRatio(5, 10).
 		WithSuccessThresholdRatio(15, 20).
 		Build()
@@ -71,7 +71,7 @@ func TestGetSuccessAndFailureStats(t *testing.T) {
 
 func BenchmarkTimedCircuitBreaker(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_ = Builder[any]().
+		_ = NewBuilder[any]().
 			WithDelay(time.Minute).
 			WithFailureThresholdPeriod(10, time.Minute).
 			Build()

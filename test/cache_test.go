@@ -32,7 +32,7 @@ func TestCache(t *testing.T) {
 		{
 			name: "with global key",
 			executor: failsafe.NewExecutor[string](
-				policytesting.WithCacheStats(cachepolicy.Builder[string](failsafeCache).
+				policytesting.WithCacheStats(cachepolicy.NewBuilder[string](failsafeCache).
 					WithKey("foo"), stats).
 					Build(),
 			),
@@ -45,7 +45,7 @@ func TestCache(t *testing.T) {
 		{
 			name: "with context key",
 			executor: failsafe.NewExecutor[string](
-				policytesting.WithCacheStats(cachepolicy.Builder[string](failsafeCache), stats).Build()).
+				policytesting.WithCacheStats(cachepolicy.NewBuilder[string](failsafeCache), stats).Build()).
 				WithContext(context.WithValue(context.Background(), cachepolicy.CacheKey, "foo2")),
 			expectedExecutions: 0,
 			expectedResult:     "bar",
@@ -56,7 +56,7 @@ func TestCache(t *testing.T) {
 		{
 			name: "with no key",
 			executor: failsafe.NewExecutor[string](
-				policytesting.WithCacheStats(cachepolicy.Builder[string](failsafeCache), stats).Build(),
+				policytesting.WithCacheStats(cachepolicy.NewBuilder[string](failsafeCache), stats).Build(),
 			),
 			expectedExecutions: 1,
 			expectedResult:     "missing",
@@ -107,20 +107,20 @@ func TestConditionalCache(t *testing.T) {
 	// When / Then
 	tests := []struct {
 		name           string
-		cpb            cachepolicy.CachePolicyBuilder[string]
+		cpb            cachepolicy.Builder[string]
 		result         string
 		expectedCaches int
 	}{
 		{
 			name: "with matching condition",
-			cpb: policytesting.WithCacheStats(cachepolicy.Builder[string](failsafeCache), stats).WithKey("foo").
+			cpb: policytesting.WithCacheStats(cachepolicy.NewBuilder[string](failsafeCache), stats).WithKey("foo").
 				CacheIf(barPredicate),
 			result:         "bar",
 			expectedCaches: 1,
 		},
 		{
 			name: "with non-matching condition",
-			cpb: policytesting.WithCacheStats(cachepolicy.Builder[string](failsafeCache), stats).WithKey("foo").
+			cpb: policytesting.WithCacheStats(cachepolicy.NewBuilder[string](failsafeCache), stats).WithKey("foo").
 				CacheIf(barPredicate),
 			result:         "baz",
 			expectedCaches: 0,
@@ -153,7 +153,7 @@ func TestDoNotCacheOnError(t *testing.T) {
 	// Given
 	_, failsafeCache := policytesting.NewCache[string]()
 	stats := &policytesting.Stats{}
-	cp := policytesting.WithCacheStats(cachepolicy.Builder[string](failsafeCache), stats).
+	cp := policytesting.WithCacheStats(cachepolicy.NewBuilder[string](failsafeCache), stats).
 		WithKey("foo").
 		Build()
 

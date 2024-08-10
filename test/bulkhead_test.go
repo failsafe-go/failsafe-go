@@ -13,7 +13,7 @@ import (
 
 func TestBulkheadPermitAcquiredAfterWait(t *testing.T) {
 	// Given
-	bh := bulkhead.Builder[string](2).WithMaxWaitTime(time.Second).Build()
+	bh := bulkhead.NewBuilder[string](2).WithMaxWaitTime(time.Second).Build()
 	setup := func() {
 		bh.TryAcquirePermit()
 		bh.TryAcquirePermit() // bulkhead should be full
@@ -34,7 +34,7 @@ func TestBulkheadPermitAcquiredAfterWait(t *testing.T) {
 func TestBulkheadNotFull(t *testing.T) {
 	// Given
 	stats := &policytesting.Stats{}
-	bh := policytesting.WithBulkheadStatsAndLogs(bulkhead.Builder[any](2), stats, true).Build()
+	bh := policytesting.WithBulkheadStatsAndLogs(bulkhead.NewBuilder[any](2), stats, true).Build()
 
 	// When / Then
 	testutil.Test[any](t).
@@ -47,7 +47,7 @@ func TestBulkheadNotFull(t *testing.T) {
 func TestBulkheadFull(t *testing.T) {
 	// Given
 	stats := &policytesting.Stats{}
-	bh := policytesting.WithBulkheadStatsAndLogs(bulkhead.Builder[any](2), stats, true).Build()
+	bh := policytesting.WithBulkheadStatsAndLogs(bulkhead.NewBuilder[any](2), stats, true).Build()
 	assert.True(t, bh.TryAcquirePermit())
 	assert.True(t, bh.TryAcquirePermit()) // bulkhead should be full
 
@@ -64,7 +64,7 @@ func TestBulkheadFull(t *testing.T) {
 // Asserts that an exceeded maxWaitTime causes ErrFull.
 func TestBulkheadMaxWaitTimeExceeded(t *testing.T) {
 	// Given
-	bh := bulkhead.Builder[any](2).WithMaxWaitTime(20 * time.Millisecond).Build()
+	bh := bulkhead.NewBuilder[any](2).WithMaxWaitTime(20 * time.Millisecond).Build()
 	bh.TryAcquirePermit()
 	bh.TryAcquirePermit() // bulkhead should be full
 
@@ -78,7 +78,7 @@ func TestBulkheadMaxWaitTimeExceeded(t *testing.T) {
 // Asserts that a short maxWaitTime still allows a permit to be claimed.
 func TestBulkheadWithShortMaxWaitTime(t *testing.T) {
 	// Given
-	bh := bulkhead.Builder[any](1).WithMaxWaitTime(1 * time.Nanosecond).Build()
+	bh := bulkhead.NewBuilder[any](1).WithMaxWaitTime(1 * time.Nanosecond).Build()
 
 	// When / Then
 	testutil.Test[any](t).

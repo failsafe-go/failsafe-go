@@ -20,12 +20,12 @@ type Timeout[R any] interface {
 	failsafe.Policy[R]
 }
 
-// TimeoutBuilder builds Timeout instances.
+// Builder builds Timeout instances.
 //
 // R is the execution result type. This type is not concurrency safe.
-type TimeoutBuilder[R any] interface {
+type Builder[R any] interface {
 	// OnTimeoutExceeded registers the listener to be called when the timeout is exceeded.
-	OnTimeoutExceeded(listener func(event failsafe.ExecutionDoneEvent[R])) TimeoutBuilder[R]
+	OnTimeoutExceeded(listener func(event failsafe.ExecutionDoneEvent[R])) Builder[R]
 
 	// Build returns a new Timeout using the builder's configuration.
 	Build() Timeout[R]
@@ -36,31 +36,27 @@ type config[R any] struct {
 	onTimeoutExceeded func(failsafe.ExecutionDoneEvent[R])
 }
 
-var _ TimeoutBuilder[any] = &config[any]{}
+var _ Builder[any] = &config[any]{}
 
-type timeout[R any] struct {
-	*config[R]
-}
-
-// With returns a new Timeout for execution result type R and the timeLimit. The Timeout will cancel executions if they
+// New returns a new Timeout for execution result type R and the timeLimit. The Timeout will cancel executions if they
 // exceed a time limit. Any policies composed inside the timeout, such as retries, will also be canceled. If the
 // execution is configured with a Context, a child context will be created for the execution and canceled when the
 // Timeout is exceeded.
-func With[R any](timeLimit time.Duration) Timeout[R] {
-	return Builder[R](timeLimit).Build()
+func New[R any](timeLimit time.Duration) Timeout[R] {
+	return NewBuilder[R](timeLimit).Build()
 }
 
-// Builder returns a TimeoutBuilder for execution result type R which builds Timeouts for the timeLimit. The Timeout will
+// NewBuilder returns a Builder for execution result type R which builds Timeouts for the timeLimit. The Timeout will
 // cancel executions if they exceed a time limit. Any policies composed inside the timeout, such as retries, will also be
 // canceled. If the execution is configured with a Context, a child context will be created for the execution and canceled when the Timeout
 // is exceeded.
-func Builder[R any](timeLimit time.Duration) TimeoutBuilder[R] {
+func NewBuilder[R any](timeLimit time.Duration) Builder[R] {
 	return &config[R]{
 		timeLimit: timeLimit,
 	}
 }
 
-func (c *config[R]) OnTimeoutExceeded(listener func(event failsafe.ExecutionDoneEvent[R])) TimeoutBuilder[R] {
+func (c *config[R]) OnTimeoutExceeded(listener func(event failsafe.ExecutionDoneEvent[R])) Builder[R] {
 	c.onTimeoutExceeded = listener
 	return c
 }
@@ -70,6 +66,10 @@ func (c *config[R]) Build() Timeout[R] {
 	return &timeout[R]{
 		config: &fbCopy, // TODO copy base fields
 	}
+}
+
+type timeout[R any] struct {
+	*config[R]
 }
 
 func (t *timeout[R]) ToExecutor(_ R) any {
