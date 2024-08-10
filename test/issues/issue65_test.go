@@ -34,14 +34,14 @@ func TestIssue65(t *testing.T) {
 
 	t.Run("without retry policy", func(t *testing.T) {
 		test(t,
-			policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[*http.Response](time.Nanosecond), &policytesting.Stats{}).Build(),
+			policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelay[*http.Response](time.Nanosecond), &policytesting.Stats{}).Build(),
 		)
 	})
 
 	t.Run("with retry policy", func(t *testing.T) {
 		test(t,
-			failsafehttp.RetryPolicyBuilder().Build(),
-			policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[*http.Response](time.Nanosecond), &policytesting.Stats{}).Build(),
+			failsafehttp.NewRetryPolicyBuilder().Build(),
+			policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelay[*http.Response](time.Nanosecond), &policytesting.Stats{}).Build(),
 		)
 	})
 }

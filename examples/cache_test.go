@@ -13,7 +13,7 @@ import (
 
 func TestCache(t *testing.T) {
 	_, cache := policytesting.NewCache[net.Conn]()
-	cachePolicy := cachepolicy.Builder[net.Conn](cache).WithKey("connection").Build()
+	cachePolicy := cachepolicy.NewBuilder[net.Conn](cache).WithKey("connection").Build()
 
 	// Get initial connection
 	connection1, err := failsafe.Get[net.Conn](Connect, cachePolicy)

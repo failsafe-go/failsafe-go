@@ -16,7 +16,7 @@ import (
 
 func TestShouldRejectInitialExecutionWhenCircuitOpen(t *testing.T) {
 	// Given
-	cb := circuitbreaker.WithDefaults[any]()
+	cb := circuitbreaker.NewWithDefaults[any]()
 	cb.Open()
 
 	// When / Then
@@ -31,7 +31,7 @@ func TestShouldRejectInitialExecutionWhenCircuitOpen(t *testing.T) {
 // Should return ErrOpen when max half-open executions are occurring.
 func TestShouldRejectExcessiveAttemptsWhenBreakerHalfOpen(t *testing.T) {
 	// Given
-	cb := circuitbreaker.Builder[any]().WithSuccessThreshold(3).Build()
+	cb := circuitbreaker.NewBuilder[any]().WithSuccessThreshold(3).Build()
 	cb.HalfOpen()
 	waiter := testutil.NewWaiter()
 
@@ -55,7 +55,7 @@ func TestShouldRejectExcessiveAttemptsWhenBreakerHalfOpen(t *testing.T) {
 // Tests the handling of a circuit breaker with no failure conditions.
 func TestCircuitBreakerWithoutConditions(t *testing.T) {
 	// Given
-	cb1 := circuitbreaker.Builder[any]().WithDelay(0).Build()
+	cb1 := circuitbreaker.NewBuilder[any]().WithDelay(0).Build()
 
 	//	When / Then
 	testutil.Test[any](t).
@@ -66,9 +66,9 @@ func TestCircuitBreakerWithoutConditions(t *testing.T) {
 		})
 
 	// Given
-	cb2 := circuitbreaker.Builder[bool]().WithDelay(0).Build()
+	cb2 := circuitbreaker.NewBuilder[bool]().WithDelay(0).Build()
 	var counter int
-	retryPolicy := retrypolicy.WithDefaults[bool]()
+	retryPolicy := retrypolicy.NewWithDefaults[bool]()
 	setup := func() {
 		counter = 0
 	}
@@ -91,7 +91,7 @@ func TestCircuitBreakerWithoutConditions(t *testing.T) {
 
 func TestShouldReturnErrCircuitBreakerOpenAfterFailuresExceeded(t *testing.T) {
 	// Given
-	cb := circuitbreaker.Builder[bool]().
+	cb := circuitbreaker.NewBuilder[bool]().
 		WithFailureThreshold(2).
 		HandleResult(false).
 		WithDelay(10 * time.Second).
@@ -114,8 +114,8 @@ func TestShouldReturnErrCircuitBreakerOpenAfterFailuresExceeded(t *testing.T) {
 func TestRejectedWithRetries(t *testing.T) {
 	// Given
 	rpStats := &policytesting.Stats{}
-	rp := policytesting.WithRetryStats(retrypolicy.Builder[any]().WithMaxAttempts(7), rpStats).Build()
-	cb := circuitbreaker.Builder[any]().WithFailureThreshold(3).Build()
+	rp := policytesting.WithRetryStats(retrypolicy.NewBuilder[any]().WithMaxAttempts(7), rpStats).Build()
+	cb := circuitbreaker.NewBuilder[any]().WithFailureThreshold(3).Build()
 	setup := func() {
 		rpStats.Reset()
 		policytesting.ResetCircuitBreaker(cb)
@@ -137,7 +137,7 @@ func TestRejectedWithRetries(t *testing.T) {
 // Tests circuit breaker time based failure thresholding state transitions.
 func TestShouldSupportTimeBasedFailureThresholding(t *testing.T) {
 	// Given
-	cb := circuitbreaker.Builder[bool]().
+	cb := circuitbreaker.NewBuilder[bool]().
 		WithFailureThresholdPeriod(2, 200*time.Millisecond).
 		WithDelay(0).
 		HandleResult(false).
@@ -171,7 +171,7 @@ func TestShouldSupportTimeBasedFailureThresholding(t *testing.T) {
 // Tests circuit breaker time based failure rate thresholding state transitions.
 func TestShouldSupportTimeBasedFailureRateThresholding(t *testing.T) {
 	// Given
-	cb := circuitbreaker.Builder[bool]().
+	cb := circuitbreaker.NewBuilder[bool]().
 		WithFailureRateThreshold(50, 3, 200*time.Millisecond).
 		WithDelay(0).
 		HandleResult(false).
@@ -209,7 +209,7 @@ func TestStateChangeListener(t *testing.T) {
 	t.Run("without context", func(t *testing.T) {
 		// Given
 		var called bool
-		cb := circuitbreaker.Builder[bool]().
+		cb := circuitbreaker.NewBuilder[bool]().
 			WithFailureThresholdRatio(1, 2).
 			OnOpen(func(e circuitbreaker.StateChangedEvent) {
 				called = true
@@ -229,7 +229,7 @@ func TestStateChangeListener(t *testing.T) {
 		// Given
 		var called bool
 		ctx, _ := context.WithCancel(context.Background())
-		cb := circuitbreaker.Builder[any]().
+		cb := circuitbreaker.NewBuilder[any]().
 			WithFailureThreshold(1).
 			OnOpen(func(e circuitbreaker.StateChangedEvent) {
 				called = true
@@ -248,7 +248,7 @@ func TestStateChangeListener(t *testing.T) {
 func TestStateChangeListenerOnClose(t *testing.T) {
 	// Given
 	var called bool
-	cb := circuitbreaker.Builder[bool]().
+	cb := circuitbreaker.NewBuilder[bool]().
 		WithSuccessThresholdRatio(3, 5).
 		OnClose(func(e circuitbreaker.StateChangedEvent) {
 			called = true
