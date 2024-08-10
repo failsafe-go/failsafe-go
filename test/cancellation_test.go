@@ -165,7 +165,7 @@ func TestCancelWithContextDuringFallbackFn(t *testing.T) {
 // Asserts that waiting on a cancelation from an ExecutionResult works from within a fallback function.
 func TestCancelWithExecutionResultDuringFallbackFn(t *testing.T) {
 	// Given
-	fb := fallback.WithFunc(func(exec failsafe.Execution[any]) (any, error) {
+	fb := fallback.NewWithFunc(func(exec failsafe.Execution[any]) (any, error) {
 		testutil.WaitAndAssertCanceled(t, time.Second, exec)
 		return nil, nil
 	})
@@ -218,7 +218,7 @@ func TestCancelWithTimeoutDuringRateLimiterDelay(t *testing.T) {
 // Also asserts that the context provided to an execution is canceled.
 func TestCancelWithExecutionResultDuringRateLimiterDelay(t *testing.T) {
 	// Given
-	rl := ratelimiter.SmoothBuilder[any](1, 30*time.Second).WithMaxWaitTime(time.Minute).Build()
+	rl := ratelimiter.NewSmoothBuilder[any](1, 30*time.Second).WithMaxWaitTime(time.Minute).Build()
 	rl.TryAcquirePermit() // All permits used
 
 	// When
@@ -268,7 +268,7 @@ func TestCancelWithTimeoutDuringBulkheadDelay(t *testing.T) {
 // Asserts that waiting on a cancelation from an ExecutionResult works from within a bulkhead function.
 func TestCancelWithExecutionResultDuringBulkheadDelay(t *testing.T) {
 	// Given
-	bh := bulkhead.Builder[any](2).WithMaxWaitTime(time.Second).Build()
+	bh := bulkhead.NewBuilder[any](2).WithMaxWaitTime(time.Second).Build()
 	bh.TryAcquirePermit()
 	bh.TryAcquirePermit() // bulkhead should be full
 
