@@ -19,10 +19,10 @@ var (
 	stoppedAfterRedirects = regexp.MustCompile(`stopped after \d+ redirects\z`)
 )
 
-// RetryPolicyBuilder returns a retrypolicy.RetryPolicyBuilder that will retry non-terminal HTTP errors and responses up
+// NewRetryPolicyBuilder returns a retrypolicy.Builder that will retry non-terminal HTTP errors and responses up
 // to 2 times, by default. If a Retry-After header is present in the response, it will be used as a delay between
 // retries. Additional handling and delay configuration can be added to the resulting builder.
-func RetryPolicyBuilder() retrypolicy.RetryPolicyBuilder[*http.Response] {
+func NewRetryPolicyBuilder() retrypolicy.Builder[*http.Response] {
 	retryHandleFunc := func(resp *http.Response, err error) bool {
 		// Handle errors
 		if err != nil {
@@ -61,7 +61,7 @@ func RetryPolicyBuilder() retrypolicy.RetryPolicyBuilder[*http.Response] {
 		return false
 	}
 
-	return retrypolicy.Builder[*http.Response]().
+	return retrypolicy.NewBuilder[*http.Response]().
 		HandleIf(retryHandleFunc).
 		AbortOnErrors(context.Canceled).
 		WithDelayFunc(DelayFunc)

@@ -17,11 +17,11 @@ import (
 
 // Asserts that load limiting policies prevent executions from occurring on the client or server side.
 func TestLoadLimiting(t *testing.T) {
-	cb := circuitbreaker.WithDefaults[any]()
+	cb := circuitbreaker.NewWithDefaults[any]()
 	cb.Open()
-	bh := bulkhead.With[any](1)
+	bh := bulkhead.New[any](1)
 	bh.TryAcquirePermit() // Exhaust permits
-	rl := ratelimiter.Bursty[any](1, time.Minute)
+	rl := ratelimiter.NewBursty[any](1, time.Minute)
 	rl.TryAcquirePermit() // Exhaust permits
 
 	tests := []struct {
@@ -89,7 +89,7 @@ func TestCircuitBreakerWithResult(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Given
-			cb := circuitbreaker.Builder[*pbfixtures.PingResponse]().HandleIf(func(r *pbfixtures.PingResponse, err error) bool {
+			cb := circuitbreaker.NewBuilder[*pbfixtures.PingResponse]().HandleIf(func(r *pbfixtures.PingResponse, err error) bool {
 				return r.Msg == "test"
 			}).Build()
 
@@ -128,7 +128,7 @@ func TestCancelWithTimeout(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Given
-			executor := failsafe.NewExecutor[any](timeout.With[any](100 * time.Millisecond))
+			executor := failsafe.NewExecutor[any](timeout.New[any](100 * time.Millisecond))
 
 			// When / Then
 			start := time.Now()
