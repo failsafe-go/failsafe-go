@@ -14,7 +14,7 @@ var _ circuitState[any] = &halfOpenState[any]{}
 // Asserts that  the circuit is opened after a single failure.
 func TestHalfOpenStateFailureWithDefaultConfig(t *testing.T) {
 	// Given
-	breaker := WithDefaults[any]()
+	breaker := NewWithDefaults[any]()
 	breaker.HalfOpen()
 	assert.False(t, breaker.IsOpen())
 	assert.False(t, breaker.IsClosed())
@@ -29,7 +29,7 @@ func TestHalfOpenStateFailureWithDefaultConfig(t *testing.T) {
 // Asserts that the circuit is opened after the failure threshold is met.
 func TestHalfOpenFailureWithFailureThreshold(t *testing.T) {
 	// Given
-	breaker := Builder[any]().WithFailureThreshold(3).Build()
+	breaker := NewBuilder[any]().WithFailureThreshold(3).Build()
 	breaker.HalfOpen()
 
 	// When
@@ -46,7 +46,7 @@ func TestHalfOpenFailureWithFailureThreshold(t *testing.T) {
 // Asserts that the circuit is opened after the failure ratio is met.
 func TestHalfOpenFailureWithFailureRatio(t *testing.T) {
 	// Given
-	breaker := Builder[any]().WithFailureThresholdRatio(2, 3).Build()
+	breaker := NewBuilder[any]().WithFailureThresholdRatio(2, 3).Build()
 	breaker.HalfOpen()
 	assert.False(t, breaker.IsOpen())
 
@@ -64,7 +64,7 @@ func TestHalfOpenFailureWithFailureRatio(t *testing.T) {
 // Asserts that the circuit is opened after a single failure. The failure threshold is ignored.
 func TestHalfOpenFailureWithSuccessAndFailureThresholds(t *testing.T) {
 	// Given
-	breaker := Builder[any]().
+	breaker := NewBuilder[any]().
 		WithSuccessThreshold(3).
 		WithFailureThreshold(2).
 		Build()
@@ -85,7 +85,7 @@ func TestHalfOpenFailureWithSuccessAndFailureThresholds(t *testing.T) {
 // Asserts that the circuit is opened after the success ratio fails to be met. The failure ratio is ignored.
 func TestHalfOpenFailureWithSuccessAndFailureRatios(t *testing.T) {
 	// Given
-	breaker := Builder[any]().
+	breaker := NewBuilder[any]().
 		WithSuccessThresholdRatio(3, 4).
 		WithFailureThresholdRatio(3, 5).Build()
 	breaker.HalfOpen()
@@ -105,7 +105,7 @@ func TestHalfOpenFailureWithSuccessAndFailureRatios(t *testing.T) {
 // Asserts that the circuit is opened after the success ratio fails to be met.
 func TestHalfOpenFailureWithSuccessRatio(t *testing.T) {
 	// Given
-	breaker := Builder[any]().WithSuccessThresholdRatio(2, 3).Build()
+	breaker := NewBuilder[any]().WithSuccessThresholdRatio(2, 3).Build()
 	breaker.HalfOpen()
 	assert.False(t, breaker.IsOpen())
 
@@ -123,7 +123,7 @@ func TestHalfOpenFailureWithSuccessRatio(t *testing.T) {
 // Asserts that the circuit is opened after the success ratio fails to be met. The failure threshold is ignored.
 func TestHalfOpenFailureWithSuccessRatioAndFailureThreshold(t *testing.T) {
 	// Given
-	breaker := Builder[any]().
+	breaker := NewBuilder[any]().
 		WithSuccessThresholdRatio(2, 4).
 		WithFailureThreshold(1).
 		Build()
@@ -144,7 +144,7 @@ func TestHalfOpenFailureWithSuccessRatioAndFailureThreshold(t *testing.T) {
 // Asserts that the circuit is opened after a single failure.
 func TestHalfOpenFailureWithSuccessThreshold(t *testing.T) {
 	// Given
-	breaker := Builder[any]().WithSuccessThreshold(3).Build()
+	breaker := NewBuilder[any]().WithSuccessThreshold(3).Build()
 	breaker.HalfOpen()
 	assert.False(t, breaker.IsOpen())
 	assert.False(t, breaker.IsClosed())
@@ -160,7 +160,7 @@ func TestHalfOpenFailureWithSuccessThreshold(t *testing.T) {
 // Asserts that the circuit is opened after a single failure.
 func TestHalfOpenFailureWithSuccessThresholdAndFailureRatio(t *testing.T) {
 	// Given
-	breaker := Builder[any]().
+	breaker := NewBuilder[any]().
 		WithSuccessThreshold(3).
 		WithFailureThresholdRatio(3, 5).
 		Build()
@@ -178,7 +178,7 @@ func TestHalfOpenFailureWithSuccessThresholdAndFailureRatio(t *testing.T) {
 // Asserts that the circuit is closed after a single success.
 func TestHalfOpenSuccessWithDefaultConfig(t *testing.T) {
 	// Given
-	breaker := WithDefaults[any]()
+	breaker := NewWithDefaults[any]()
 	breaker.HalfOpen()
 	assert.False(t, breaker.IsOpen())
 	assert.False(t, breaker.IsClosed())
@@ -195,7 +195,7 @@ func TestHalfOpenSuccessWithDefaultConfig(t *testing.T) {
  */
 func TestHalfOpenSuccessWithFailureRatio(t *testing.T) {
 	// Given
-	breaker := Builder[any]().WithFailureThresholdRatio(2, 3).Build()
+	breaker := NewBuilder[any]().WithFailureThresholdRatio(2, 3).Build()
 	breaker.HalfOpen()
 
 	// When
@@ -214,7 +214,7 @@ func TestHalfOpenSuccessWithFailureRatio(t *testing.T) {
  */
 func TestHalfOpenSuccessWithFailureThreshold(t *testing.T) {
 	// Given
-	breaker := Builder[any]().WithFailureThreshold(3).Build()
+	breaker := NewBuilder[any]().WithFailureThreshold(3).Build()
 	breaker.HalfOpen()
 	assert.False(t, breaker.IsOpen())
 	assert.False(t, breaker.IsClosed())
@@ -232,7 +232,7 @@ func TestHalfOpenSuccessWithFailureThreshold(t *testing.T) {
  */
 func TestHalfOpenSuccessWithSuccessAndFailureRatios(t *testing.T) {
 	// Given
-	breaker := Builder[any]().
+	breaker := NewBuilder[any]().
 		WithFailureThresholdRatio(3, 5).
 		WithSuccessThresholdRatio(3, 4).Build()
 	breaker.HalfOpen()
@@ -254,7 +254,7 @@ func TestHalfOpenSuccessWithSuccessAndFailureRatios(t *testing.T) {
  */
 func TestHalfOpenSuccessWithSuccessAndFailureThresholds(t *testing.T) {
 	// Given
-	breaker := Builder[any]().
+	breaker := NewBuilder[any]().
 		WithFailureThreshold(2).
 		WithSuccessThreshold(3).
 		Build()
@@ -276,7 +276,7 @@ func TestHalfOpenSuccessWithSuccessAndFailureThresholds(t *testing.T) {
  */
 func TestHalfOpenSuccessWithSuccessRatio(t *testing.T) {
 	// Given
-	breaker := Builder[any]().WithSuccessThresholdRatio(2, 3).Build()
+	breaker := NewBuilder[any]().WithSuccessThresholdRatio(2, 3).Build()
 	breaker.HalfOpen()
 
 	// When
@@ -295,7 +295,7 @@ func TestHalfOpenSuccessWithSuccessRatio(t *testing.T) {
  */
 func TestHalfOpenSuccessWithSuccessRatioAndFailureThreshold(t *testing.T) {
 	// Given
-	breaker := Builder[any]().
+	breaker := NewBuilder[any]().
 		WithFailureThreshold(2).
 		WithSuccessThresholdRatio(3, 4).
 		Build()
@@ -318,7 +318,7 @@ func TestHalfOpenSuccessWithSuccessRatioAndFailureThreshold(t *testing.T) {
  */
 func TestHalfOpenSuccessWithSuccessThreshold(t *testing.T) {
 	// Given
-	breaker := Builder[any]().WithSuccessThreshold(3).Build()
+	breaker := NewBuilder[any]().WithSuccessThreshold(3).Build()
 	breaker.HalfOpen()
 
 	// When
@@ -337,7 +337,7 @@ func TestHalfOpenSuccessWithSuccessThreshold(t *testing.T) {
  */
 func TestHalfOpenSuccessWithSuccessThresholdAndFailureRatio(t *testing.T) {
 	// Given
-	breaker := Builder[any]().
+	breaker := NewBuilder[any]().
 		WithFailureThresholdRatio(3, 5).
 		WithSuccessThreshold(2).
 		Build()
@@ -354,7 +354,7 @@ func TestHalfOpenSuccessWithSuccessThresholdAndFailureRatio(t *testing.T) {
 }
 
 func TestRemainingDelayInHalfOpenState(t *testing.T) {
-	breaker := Builder[any]().WithDelayFunc(func(exec failsafe.ExecutionAttempt[any]) time.Duration {
+	breaker := NewBuilder[any]().WithDelayFunc(func(exec failsafe.ExecutionAttempt[any]) time.Duration {
 		return 1 * time.Second
 	}).Build().(*circuitBreaker[any])
 

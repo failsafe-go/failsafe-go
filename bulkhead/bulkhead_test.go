@@ -12,7 +12,7 @@ import (
 var _ Bulkhead[any] = &bulkhead[any]{}
 
 func TestAcquirePermit(t *testing.T) {
-	bulkhead := With[any](2)
+	bulkhead := New[any](2)
 
 	go func() {
 		time.Sleep(200 * time.Millisecond)
@@ -27,7 +27,7 @@ func TestAcquirePermit(t *testing.T) {
 }
 
 func TestAcquirePermitWithMaxWaitTime(t *testing.T) {
-	bulkhead := With[any](1)
+	bulkhead := New[any](1)
 
 	assert.Nil(t, bulkhead.AcquirePermitWithMaxWait(nil, 100*time.Millisecond)) // waits 0
 	err := bulkhead.AcquirePermitWithMaxWait(nil, 100*time.Millisecond)         // waits 100
@@ -35,7 +35,7 @@ func TestAcquirePermitWithMaxWaitTime(t *testing.T) {
 }
 
 func TestTryAcquirePermitAndReleasePermit(t *testing.T) {
-	bulkhead := With[any](2)
+	bulkhead := New[any](2)
 
 	assert.True(t, bulkhead.TryAcquirePermit())
 	assert.True(t, bulkhead.TryAcquirePermit())

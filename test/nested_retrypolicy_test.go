@@ -21,8 +21,8 @@ func TestNestedRetryPoliciesWhereInnerIsExceeded(t *testing.T) {
 	// Given
 	outerRetryStats := &policytesting.Stats{}
 	innerRetryStats := &policytesting.Stats{}
-	outerRetryPolicy := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[bool]().WithMaxRetries(10), outerRetryStats).Build()
-	innerRetryPolicy := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[bool]().WithMaxRetries(1), innerRetryStats).Build()
+	outerRetryPolicy := policytesting.WithRetryStatsAndLogs(retrypolicy.NewBuilder[bool]().WithMaxRetries(10), outerRetryStats).Build()
+	innerRetryPolicy := policytesting.WithRetryStatsAndLogs(retrypolicy.NewBuilder[bool]().WithMaxRetries(1), innerRetryStats).Build()
 	fn, reset := testutil.ErrorNTimesThenReturn[bool](testutil.ErrConnecting, 5, true)
 	setup := func() {
 		reset()
@@ -51,8 +51,8 @@ RetryPolicy -> RetryPolicy
 Asserts that attempt counts are as expected when using nested retry policies.
 */
 func TestRetryPolicyRetryPolicyAttempts(t *testing.T) {
-	rp1 := policytesting.WithRetryLogs(retrypolicy.Builder[any]()).Build()
-	rp2 := policytesting.WithRetryLogs(retrypolicy.Builder[any]()).Build()
+	rp1 := policytesting.WithRetryLogs(retrypolicy.NewBuilder[any]()).Build()
+	rp2 := policytesting.WithRetryLogs(retrypolicy.NewBuilder[any]()).Build()
 	testutil.Test[any](t).
 		With(rp2, rp1).
 		Get(testutil.GetFn[any](nil, testutil.ErrInvalidArgument)).
@@ -66,9 +66,9 @@ func TestFallbackRetryPolicyRetryPolicy(t *testing.T) {
 	// Given
 	retryPolicy1Stats := &policytesting.Stats{}
 	retryPolicy2Stats := &policytesting.Stats{}
-	retryPolicy1 := policytesting.WithRetryStats(retrypolicy.Builder[any]().HandleErrors(testutil.ErrInvalidState).WithMaxRetries(2), retryPolicy1Stats).Build()
-	retryPolicy2 := policytesting.WithRetryStats(retrypolicy.Builder[any]().HandleErrors(testutil.ErrInvalidArgument).WithMaxRetries(3), retryPolicy2Stats).Build()
-	fb := fallback.WithResult[any](true)
+	retryPolicy1 := policytesting.WithRetryStats(retrypolicy.NewBuilder[any]().HandleErrors(testutil.ErrInvalidState).WithMaxRetries(2), retryPolicy1Stats).Build()
+	retryPolicy2 := policytesting.WithRetryStats(retrypolicy.NewBuilder[any]().HandleErrors(testutil.ErrInvalidArgument).WithMaxRetries(3), retryPolicy2Stats).Build()
+	fb := fallback.NewWithResult[any](true)
 	fn := func(exec failsafe.Execution[any]) (any, error) {
 		if exec.Attempts()%2 == 1 {
 			return false, testutil.ErrInvalidState

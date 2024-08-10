@@ -18,13 +18,13 @@ import (
 	"github.com/failsafe-go/failsafe-go/timeout"
 )
 
-// This test demonstrates how to use a failsafehttp.RetryPolicyBuilder using two different approaches:
+// This test demonstrates how to use a failsafehttp.NewRetryPolicyBuilder using two different approaches:
 //
 //   - a failsafe http.RoundTripper
 //   - a failsafe execution
 func TestHttpWithRetryPolicy(t *testing.T) {
 	// Create a RetryPolicy that handles non-terminal responses
-	retryPolicy := failsafehttp.RetryPolicyBuilder().
+	retryPolicy := failsafehttp.NewRetryPolicyBuilder().
 		OnRetryScheduled(func(e failsafe.ExecutionScheduledEvent[*http.Response]) {
 			fmt.Println("Ping retry", e.Attempts(), "after delay of", e.Delay)
 		}).Build()
@@ -69,7 +69,7 @@ func TestHttpWithCustomRetryPolicy(t *testing.T) {
 	defer server.Close()
 
 	// Create a RetryPolicy that only handles 500 responses, with backoff delays between retries
-	retryPolicy := retrypolicy.Builder[*http.Response]().
+	retryPolicy := retrypolicy.NewBuilder[*http.Response]().
 		HandleIf(func(response *http.Response, _ error) bool {
 			return response != nil && response.StatusCode == 500
 		}).
@@ -95,7 +95,7 @@ func TestHttpWithCircuitBreaker(t *testing.T) {
 	defer server.Close()
 
 	// Create a CircuitBreaker that handles 429 responses and uses a half-open delay based on the Retry-After header
-	circuitBreaker := circuitbreaker.Builder[*http.Response]().
+	circuitBreaker := circuitbreaker.NewBuilder[*http.Response]().
 		HandleIf(func(response *http.Response, err error) bool {
 			return response != nil && response.StatusCode == 429
 		}).
@@ -135,7 +135,7 @@ func TestHttpWithHedgePolicy(t *testing.T) {
 	defer server.Close()
 
 	// Create a HedgePolicy that sends up to 2 hedges after a 1 second delay each
-	hedgePolicy := hedgepolicy.BuilderWithDelay[*http.Response](time.Second).
+	hedgePolicy := hedgepolicy.NewBuilderWithDelay[*http.Response](time.Second).
 		WithMaxHedges(2).
 		OnHedge(func(f failsafe.ExecutionEvent[*http.Response]) {
 			fmt.Println("Sending hedged ping")
@@ -174,7 +174,7 @@ func TestHttpWithTimeout(t *testing.T) {
 	defer server.Close()
 
 	// Create a Timeout for 1 second
-	timeOut := timeout.With[*http.Response](time.Second)
+	timeOut := timeout.New[*http.Response](time.Second)
 
 	// Use the Timeout with a failsafe RoundTripper
 	roundTripper := failsafehttp.NewRoundTripper(nil, timeOut)
