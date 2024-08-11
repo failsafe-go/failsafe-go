@@ -196,30 +196,25 @@ func newTimedStats(bucketCount int, thresholdingPeriod time.Duration, clock util
 }
 
 func (s *timedStats) getCurrentBucket() *bucket {
-	previousBucket := &s.buckets[s.currentIndex]
-	currentBucket := previousBucket
+	currentBucket := &s.buckets[s.currentIndex]
 	timeDiff := s.clock.CurrentUnixNano() - currentBucket.startTime
-	if timeDiff >= s.bucketSize.Nanoseconds() {
-		bucketsToMove := int(timeDiff / s.bucketSize.Nanoseconds())
-		if bucketsToMove <= len(s.buckets) {
-			// Reset some buckets
-			for ; bucketsToMove > 0; bucketsToMove-- {
-				s.currentIndex = s.nextIndex()
-				previousBucket = currentBucket
-				currentBucket = &s.buckets[s.currentIndex]
-				var bucketStartTime int64
-				if currentBucket.startTime == -1 {
-					bucketStartTime = previousBucket.startTime + s.bucketSize.Nanoseconds()
-				} else {
-					bucketStartTime = currentBucket.startTime + s.windowSize.Nanoseconds()
-				}
-				s.summary.remove(currentBucket)
-				currentBucket.reset()
-				currentBucket.startTime = bucketStartTime
+	bucketsToMove := int(timeDiff / s.bucketSize.Nanoseconds())
+
+	if bucketsToMove > len(s.buckets) {
+		// Reset all buckets
+		s.reset()
+	} else {
+		// Reset some buckets
+		for i := 0; i < bucketsToMove; i++ {
+			previousBucket := currentBucket
+			currentBucket = &s.buckets[s.nextIndex()]
+			s.summary.remove(currentBucket)
+			currentBucket.reset()
+			if currentBucket.startTime == -1 {
+				currentBucket.startTime = previousBucket.startTime + s.bucketSize.Nanoseconds()
+			} else {
+				currentBucket.startTime = currentBucket.startTime + s.windowSize.Nanoseconds()
 			}
-		} else {
-			// Reset all buckets
-			s.reset()
 		}
 	}
 
@@ -227,7 +222,8 @@ func (s *timedStats) getCurrentBucket() *bucket {
 }
 
 func (s *timedStats) nextIndex() int {
-	return (s.currentIndex + 1) % len(s.buckets)
+	s.currentIndex = (s.currentIndex + 1) % len(s.buckets)
+	return s.currentIndex
 }
 
 func (s *timedStats) executionCount() uint {
