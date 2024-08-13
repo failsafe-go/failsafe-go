@@ -142,18 +142,13 @@ func (c *countingStats) reset() {
 // A stats implementation that counts execution results within a time period, and buckets results to minimize overhead.
 type timedStats struct {
 	clock      util.Clock
-	bucketSize time.Duration
-	windowSize time.Duration
+	bucketSize int64
 
 	// Mutable state
-	buckets      []bucket
-	summary      stat
-	currentIndex int
-}
-
-type bucket struct {
-	stat
-	startTime int64
+	buckets                []stat
+	summary                stat
+	currentIndex           int
+	currentBucketStartTime int64
 }
 
 type stat struct {
@@ -166,39 +161,31 @@ func (s *stat) reset() {
 	s.failures = 0
 }
 
-func (s *stat) add(bucket *bucket) {
-	s.successes += bucket.successes
-	s.failures += bucket.failures
-}
-
-func (s *stat) remove(bucket *bucket) {
+func (s *stat) remove(bucket *stat) {
 	s.successes -= bucket.successes
 	s.failures -= bucket.failures
 }
 
 func newTimedStats(bucketCount int, thresholdingPeriod time.Duration, clock util.Clock) *timedStats {
-	buckets := make([]bucket, bucketCount)
+	buckets := make([]stat, bucketCount)
 	for i := 0; i < bucketCount; i++ {
-		buckets[i] = bucket{
-			stat:      stat{},
-			startTime: -1,
-		}
+		buckets[i] = stat{}
 	}
-	buckets[0].startTime = clock.CurrentUnixNano()
 	result := &timedStats{
 		buckets:    buckets,
-		windowSize: thresholdingPeriod,
-		bucketSize: thresholdingPeriod / time.Duration(bucketCount),
+		bucketSize: (thresholdingPeriod / time.Duration(bucketCount)).Nanoseconds(),
 		clock:      clock,
 		summary:    stat{},
 	}
+	result.setBucketStartTime(clock.CurrentUnixNano())
 	return result
 }
 
-func (s *timedStats) getCurrentBucket() *bucket {
+func (s *timedStats) getCurrentBucket() *stat {
 	currentBucket := &s.buckets[s.currentIndex]
-	timeDiff := s.clock.CurrentUnixNano() - currentBucket.startTime
-	bucketsToMove := int(timeDiff / s.bucketSize.Nanoseconds())
+	now := s.clock.CurrentUnixNano()
+	timeDiff := now - s.currentBucketStartTime
+	bucketsToMove := int(timeDiff / s.bucketSize)
 
 	if bucketsToMove > len(s.buckets) {
 		// Reset all buckets
@@ -206,24 +193,21 @@ func (s *timedStats) getCurrentBucket() *bucket {
 	} else {
 		// Reset some buckets
 		for i := 0; i < bucketsToMove; i++ {
-			previousBucket := currentBucket
-			currentBucket = &s.buckets[s.nextIndex()]
+			s.currentIndex = (s.currentIndex + 1) % len(s.buckets)
+			currentBucket = &s.buckets[s.currentIndex]
 			s.summary.remove(currentBucket)
 			currentBucket.reset()
-			if currentBucket.startTime == -1 {
-				currentBucket.startTime = previousBucket.startTime + s.bucketSize.Nanoseconds()
-			} else {
-				currentBucket.startTime = currentBucket.startTime + s.windowSize.Nanoseconds()
-			}
 		}
 	}
 
+	if bucketsToMove > 0 {
+		s.setBucketStartTime(now)
+	}
 	return currentBucket
 }
 
-func (s *timedStats) nextIndex() int {
-	s.currentIndex = (s.currentIndex + 1) % len(s.buckets)
-	return s.currentIndex
+func (s *timedStats) setBucketStartTime(now int64) {
+	s.currentBucketStartTime = now - now%s.bucketSize
 }
 
 func (s *timedStats) executionCount() uint {
@@ -265,12 +249,9 @@ func (s *timedStats) recordSuccess() {
 }
 
 func (s *timedStats) reset() {
-	startTime := s.clock.CurrentUnixNano()
 	for i := range s.buckets {
 		bucket := &s.buckets[i]
 		bucket.reset()
-		bucket.startTime = startTime
-		startTime += s.bucketSize.Nanoseconds()
 	}
 	s.summary.reset()
 	s.currentIndex = 0
