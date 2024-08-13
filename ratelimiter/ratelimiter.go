@@ -243,7 +243,7 @@ func (c *config[R]) Build() RateLimiter[R] {
 	if c.interval != 0 {
 		return &rateLimiter[R]{
 			config: c,
-			stats: &smoothRateLimiterStats[R]{
+			stats: &smoothStats[R]{
 				config:    c, // TODO copy base fields
 				stopwatch: util.NewStopwatch(),
 			},
@@ -251,7 +251,7 @@ func (c *config[R]) Build() RateLimiter[R] {
 	}
 	return &rateLimiter[R]{
 		config: c,
-		stats: &burstyRateLimiterStats[R]{
+		stats: &burstyStats[R]{
 			config:           c, // TODO copy base fields
 			stopwatch:        util.NewStopwatch(),
 			availablePermits: c.periodPermits,
@@ -261,7 +261,7 @@ func (c *config[R]) Build() RateLimiter[R] {
 
 type rateLimiter[R any] struct {
 	*config[R]
-	stats rateLimiterStats
+	stats stats
 }
 
 func (r *rateLimiter[R]) AcquirePermit(ctx context.Context) error {

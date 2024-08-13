@@ -73,6 +73,6 @@ func TestTryReservePermit(t *testing.T) {
 
 func setTestStopwatch[R any](limiter RateLimiter[R]) *testutil.TestStopwatch {
 	stopwatch := &testutil.TestStopwatch{}
-	limiter.(*rateLimiter[R]).stats.(*smoothRateLimiterStats[R]).stopwatch = stopwatch
+	limiter.(*rateLimiter[R]).stats.(*smoothStats[R]).stopwatch = stopwatch
 	return stopwatch
 }

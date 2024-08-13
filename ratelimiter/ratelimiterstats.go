@@ -7,7 +7,7 @@ import (
 	"github.com/failsafe-go/failsafe-go/internal/util"
 )
 
-type rateLimiterStats interface {
+type stats interface {
 	// acquirePermits eagerly acquires requestedPermits and returns the time that must be waited in order to use the permits,
 	// else returns -1 if the wait time would exceed the maxWaitTime. A maxWaitTime of -1 indicates no max wait.
 	acquirePermits(requestedPermits int, maxWaitTime time.Duration) time.Duration
@@ -17,7 +17,7 @@ type rateLimiterStats interface {
 
 // A rate limiter implementation that evenly distributes permits over time, based on the max permits per period. This
 // implementation focuses on the interval between permits, and tracks the next interval in which a permit is free.
-type smoothRateLimiterStats[R any] struct {
+type smoothStats[R any] struct {
 	*config[R]
 	stopwatch util.Stopwatch
 	mtx       sync.Mutex
@@ -28,7 +28,7 @@ type smoothRateLimiterStats[R any] struct {
 	nextFreePermitTime time.Duration
 }
 
-func (s *smoothRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWaitTime time.Duration) time.Duration {
+func (s *smoothStats[R]) acquirePermits(requestedPermits int, maxWaitTime time.Duration) time.Duration {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
@@ -54,7 +54,7 @@ func (s *smoothRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWait
 	return waitTime
 }
 
-func (s *smoothRateLimiterStats[R]) reset() {
+func (s *smoothStats[R]) reset() {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	s.stopwatch.Reset()
@@ -65,7 +65,7 @@ func (s *smoothRateLimiterStats[R]) reset() {
 // tracks the current period and available permits, which can go into a deficit. A deficit of available permits will
 // cause wait times for callers that can be several periods long, depending on the size of the deficit and the number of
 // requested permits.
-type burstyRateLimiterStats[R any] struct {
+type burstyStats[R any] struct {
 	*config[R]
 	stopwatch util.Stopwatch
 	mtx       sync.Mutex
@@ -76,7 +76,7 @@ type burstyRateLimiterStats[R any] struct {
 	currentPeriod    int
 }
 
-func (s *burstyRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWaitTime time.Duration) time.Duration {
+func (s *burstyStats[R]) acquirePermits(requestedPermits int, maxWaitTime time.Duration) time.Duration {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
@@ -119,7 +119,7 @@ func (s *burstyRateLimiterStats[R]) acquirePermits(requestedPermits int, maxWait
 	return waitTime
 }
 
-func (s *burstyRateLimiterStats[R]) reset() {
+func (s *burstyStats[R]) reset() {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	s.stopwatch.Reset()
