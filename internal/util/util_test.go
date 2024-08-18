@@ -157,10 +157,10 @@ func TestAppliesToAny(t *testing.T) {
 }
 
 func TestRoundDown(t *testing.T) {
-	assert.Equal(t, time.Duration(0), RoundDown(0, 20))
-	assert.Equal(t, time.Duration(40), RoundDown(40, 20))
-	assert.Equal(t, time.Duration(40), RoundDown(57, 20))
-	assert.Equal(t, time.Duration(45), RoundDown(57, 15))
+	assert.Equal(t, time.Duration(0), RoundDown(time.Duration(0), time.Duration(20)))
+	assert.Equal(t, time.Duration(40), RoundDown(time.Duration(40), time.Duration(20)))
+	assert.Equal(t, time.Duration(40), RoundDown(time.Duration(57), time.Duration(20)))
+	assert.Equal(t, 45, RoundDown(57, 15))
 }
 
 func TestRandomDelayInRange(t *testing.T) {

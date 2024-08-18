@@ -98,8 +98,8 @@ func AppliesToAny[A any, B any](biPredicates []func(A, B) bool, value1 A, value2
 }
 
 // RoundDown returns the input rounded down to the nearest interval.
-func RoundDown(input time.Duration, interval time.Duration) time.Duration {
-	return (input / interval) * interval
+func RoundDown[T number](input T, interval T) T {
+	return input - input%interval
 }
 
 func RandomDelayInRange[T number](delayMin T, delayMax T, random float64) T {

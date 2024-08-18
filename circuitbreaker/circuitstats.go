@@ -171,13 +171,14 @@ func newTimedStats(bucketCount int, thresholdingPeriod time.Duration, clock util
 	for i := 0; i < bucketCount; i++ {
 		buckets[i] = stat{}
 	}
+	bucketSize := (thresholdingPeriod / time.Duration(bucketCount)).Nanoseconds()
 	result := &timedStats{
-		buckets:    buckets,
-		bucketSize: (thresholdingPeriod / time.Duration(bucketCount)).Nanoseconds(),
-		clock:      clock,
-		summary:    stat{},
+		buckets:                buckets,
+		bucketSize:             bucketSize,
+		clock:                  clock,
+		summary:                stat{},
+		currentBucketStartTime: util.RoundDown(clock.CurrentUnixNano(), bucketSize),
 	}
-	result.setBucketStartTime(clock.CurrentUnixNano())
 	return result
 }
 
@@ -201,13 +202,9 @@ func (s *timedStats) getCurrentBucket() *stat {
 	}
 
 	if bucketsToMove > 0 {
-		s.setBucketStartTime(now)
+		s.currentBucketStartTime = util.RoundDown(now, s.bucketSize)
 	}
 	return currentBucket
-}
-
-func (s *timedStats) setBucketStartTime(now int64) {
-	s.currentBucketStartTime = now - now%s.bucketSize
 }
 
 func (s *timedStats) executionCount() uint {
