@@ -14,8 +14,8 @@ import (
 // have been started, they are left to run until a cancellable result is returned, then the remaining hedges are
 // canceled.
 //
-// If the execution is configured with a Context, a child context will be created for the execution and canceled when the
-// HedgePolicy is exceeded.
+// If the execution is configured with a Context, a child context will be created for each attempt and outstanding
+// contexts are canceled when the HedgePolicy is exceeded.
 //
 // This type is concurrency safe.
 type HedgePolicy[R any] interface {
