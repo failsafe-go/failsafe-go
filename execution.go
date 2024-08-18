@@ -205,11 +205,11 @@ func (e *execution[R]) InitializeRetry() *common.PolicyResult[R] {
 	return nil
 }
 
-func (e *execution[R]) Cancel(result *common.PolicyResult[R]) *common.PolicyResult[R] {
+func (e *execution[R]) Cancel(result *common.PolicyResult[R]) {
 	e.mtx.Lock()
 	defer e.mtx.Unlock()
-	if canceled, cancelResult := e.isCanceledWithResult(); canceled {
-		return cancelResult
+	if canceled, _ := e.isCanceledWithResult(); canceled {
+		return
 	}
 
 	*e.canceledResult = result
@@ -220,7 +220,6 @@ func (e *execution[R]) Cancel(result *common.PolicyResult[R]) *common.PolicyResu
 	if e.cancelFunc != nil {
 		e.cancelFunc()
 	}
-	return result
 }
 
 func (e *execution[R]) IsCanceledWithResult() (bool, *common.PolicyResult[R]) {
@@ -263,6 +262,7 @@ func (e *execution[R]) CopyForHedge() Execution[R] {
 	c.isHedge = true
 	c.attempts.Add(1)
 	c.hedges.Add(1)
+	c.ctx, c.cancelFunc = context.WithCancel(c.ctx)
 	return c
 }
 

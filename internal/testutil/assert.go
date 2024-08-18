@@ -19,13 +19,13 @@ func (w *Waiter) AssertEqual(t *testing.T, expected, actual interface{}, msgAndA
 }
 
 func WaitAndAssertCanceled[R any](t *testing.T, waitDuration time.Duration, exec failsafe.Execution[R]) {
-	assert.False(t, exec.IsCanceled())
+	assert.False(t, exec.IsCanceled(), "execution should not be canceled before waiting")
 	timer := time.NewTimer(waitDuration)
 	select {
 	case <-timer.C:
 	case <-exec.Canceled():
 		timer.Stop()
-		assert.True(t, exec.IsCanceled())
+		assert.True(t, exec.IsCanceled(), "execution should be canceled after waiting")
 		if exec.Context() != nil {
 			assert.NotNil(t, exec.Context().Err(), "execution Context Err should be not nil")
 		}

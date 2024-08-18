@@ -14,6 +14,25 @@ import (
 	"github.com/failsafe-go/failsafe-go/timeout"
 )
 
+// Timeout -> Timeout
+func TestTimeoutTimeout(t *testing.T) {
+	innerTimeoutStats := &policytesting.Stats{}
+	outerTimeoutStats := &policytesting.Stats{}
+	innerTimeout := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](100*time.Millisecond), innerTimeoutStats).Build()
+	outerTimeout := policytesting.WithTimeoutStatsAndLogs(timeout.Builder[any](500*time.Millisecond), outerTimeoutStats).Build()
+
+	testutil.Test[any](t).
+		With(outerTimeout, innerTimeout).
+		Reset(innerTimeoutStats, outerTimeoutStats).
+		Run(func(exec failsafe.Execution[any]) error {
+			testutil.WaitAndAssertCanceled(t, 150*time.Millisecond, exec)
+			return nil
+		}).
+		AssertFailure(1, 1, timeout.ErrExceeded, func() {
+			assert.Equal(t, 1, innerTimeoutStats.Executions())
+		})
+}
+
 // Timeout -> RetryPolicy -> Timeout
 //
 // Tests a scenario where an inner timeout is exceeded, triggering retries, then eventually the outer timeout is exceeded.
@@ -27,6 +46,7 @@ func TestTimeoutRetryPolicyTimeout(t *testing.T) {
 
 	testutil.Test[any](t).
 		With(outerTimeout, retryPolicy, innerTimeout).
+		Reset(innerTimeoutStats, outerTimeoutStats).
 		Run(func(exec failsafe.Execution[any]) error {
 			testutil.WaitAndAssertCanceled(t, 150*time.Millisecond, exec)
 			return nil

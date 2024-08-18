@@ -45,3 +45,17 @@ func MockDelayedResponse(statusCode int, body string, delay time.Duration) *http
 		}
 	}))
 }
+
+func MockDelayedResponseWithEarlyFlush(statusCode int, body string, delay time.Duration) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		w.WriteHeader(statusCode)
+		w.(http.Flusher).Flush() // Ensure data and error is sent to the client
+		timer := time.NewTimer(delay)
+		select {
+		case <-timer.C:
+			fmt.Fprintf(w, body)
+		case <-request.Context().Done():
+			timer.Stop()
+		}
+	}))
+}

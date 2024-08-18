@@ -1,7 +1,6 @@
 package testutil
 
 import (
-	"reflect"
 	"sync/atomic"
 	"time"
 )
@@ -70,12 +69,4 @@ func (w *Waiter) Resume() {
 
 func MillisToNanos(millis int) int64 {
 	return (time.Duration(millis) * time.Millisecond).Nanoseconds()
-}
-
-func GetType(myvar interface{}) string {
-	if t := reflect.TypeOf(myvar); t.Kind() == reflect.Ptr {
-		return t.Elem().Name()
-	} else {
-		return t.Name()
-	}
 }

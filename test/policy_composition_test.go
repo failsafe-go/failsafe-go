@@ -261,20 +261,37 @@ func TestRetryPolicyHedgePolicy(t *testing.T) {
 	// Given
 	stats := &policytesting.Stats{}
 	rp := policytesting.WithRetryStatsAndLogs(retrypolicy.Builder[any](), stats).Build()
-	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[any](10*time.Millisecond), stats).Build()
 
-	// When / Then
-	testutil.Test[any](t).
-		With(rp, hp).
-		Reset(stats).
-		Get(func(e failsafe.Execution[any]) (any, error) {
-			time.Sleep(20 * time.Millisecond)
-			return nil, testutil.ErrInvalidState
-		}).
-		AssertFailure(6, -1, testutil.ErrInvalidState, func() {
-			assert.Equal(t, 2, stats.Retries())
-			assert.Equal(t, 3, stats.Hedges())
-		})
+	t.Run("when hedge runs multiple times", func(t *testing.T) {
+		hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[any](10*time.Millisecond), stats).Build()
+
+		testutil.Test[any](t).
+			With(rp, hp).
+			Reset(stats).
+			Get(func(e failsafe.Execution[any]) (any, error) {
+				time.Sleep(20 * time.Millisecond)
+				return nil, testutil.ErrInvalidState
+			}).
+			AssertFailure(6, -1, testutil.ErrInvalidState, func() {
+				assert.Equal(t, 2, stats.Retries())
+				assert.Equal(t, 3, stats.Hedges())
+			})
+	})
+
+	t.Run("when hedge returns error", func(t *testing.T) {
+		hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.BuilderWithDelay[any](time.Second), stats).Build()
+
+		testutil.Test[any](t).
+			With(rp, hp).
+			Reset(stats).
+			Get(func(e failsafe.Execution[any]) (any, error) {
+				return nil, testutil.ErrInvalidState
+			}).
+			AssertFailure(3, 3, testutil.ErrInvalidState, func() {
+				assert.Equal(t, 2, stats.Retries())
+				assert.Equal(t, 0, stats.Hedges())
+			})
+	})
 }
 
 // CircuitBreaker -> Timeout

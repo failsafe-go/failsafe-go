@@ -13,7 +13,6 @@ import (
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
 	"github.com/failsafe-go/failsafe-go/fallback"
 	"github.com/failsafe-go/failsafe-go/hedgepolicy"
-	"github.com/failsafe-go/failsafe-go/internal/testutil"
 	"github.com/failsafe-go/failsafe-go/ratelimiter"
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
 	"github.com/failsafe-go/failsafe-go/timeout"
@@ -47,17 +46,17 @@ func withRetryStatsAndLogs[R any](rp retrypolicy.RetryPolicyBuilder[R], stats *S
 	rp.OnRetry(func(e failsafe.ExecutionEvent[R]) {
 		stats.retries.Add(1)
 		if withLogging {
-			fmt.Printf("%s %p retrying [result: %v, error: %s]\n", testutil.GetType(rp), rp, e.LastResult(), e.LastError())
+			fmt.Printf("retrypolicy %p retrying [result: %v, error: %s]\n", rp, e.LastResult(), e.LastError())
 		}
 	}).OnRetriesExceeded(func(e failsafe.ExecutionEvent[R]) {
 		stats.retriesExceeded.Add(1)
 		if withLogging {
-			fmt.Printf("%s %p retries exceeded\n", testutil.GetType(rp), rp)
+			fmt.Printf("retrypolicy %p exceeded\n", rp)
 		}
 	}).OnAbort(func(e failsafe.ExecutionEvent[R]) {
 		stats.aborts.Add(1)
 		if withLogging {
-			fmt.Printf("%s %p abort\n", testutil.GetType(rp), rp)
+			fmt.Printf("retrypolicy %p aborted\n", rp)
 		}
 	})
 	withStatsAndLogs[retrypolicy.RetryPolicyBuilder[R], R](rp, stats, withLogging)
@@ -77,17 +76,17 @@ func WithBreakerLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R]) circuitb
 func withBreakerStatsAndLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R], stats *Stats, withLogging bool) circuitbreaker.CircuitBreakerBuilder[R] {
 	cb.OnOpen(func(event circuitbreaker.StateChangedEvent) {
 		if withLogging {
-			fmt.Printf("%s %p opened\n", testutil.GetType(cb), cb)
+			fmt.Printf("circuitbreaker %p opened\n", cb)
 		}
 	})
 	cb.OnHalfOpen(func(event circuitbreaker.StateChangedEvent) {
 		if withLogging {
-			fmt.Printf("%s %p half-opened\n", testutil.GetType(cb), cb)
+			fmt.Printf("circuitbreaker %p half-opened\n", cb)
 		}
 	})
 	cb.OnClose(func(event circuitbreaker.StateChangedEvent) {
 		if withLogging {
-			fmt.Printf("%s %p closed\n", testutil.GetType(cb), cb)
+			fmt.Printf("circuitbreaker %p closed\n", cb)
 		}
 	})
 	withStatsAndLogs[circuitbreaker.CircuitBreakerBuilder[R], R](cb, stats, withLogging)
@@ -97,7 +96,7 @@ func withBreakerStatsAndLogs[R any](cb circuitbreaker.CircuitBreakerBuilder[R], 
 func WithTimeoutStatsAndLogs[R any](to timeout.TimeoutBuilder[R], stats *Stats) timeout.TimeoutBuilder[R] {
 	to.OnTimeoutExceeded(func(e failsafe.ExecutionDoneEvent[R]) {
 		stats.executions.Add(1)
-		fmt.Printf("%s %p exceeded [attempts: %d, executions: %d]\n", testutil.GetType(to), to, e.Attempts(), e.Executions())
+		fmt.Printf("timeout %p exceeded [attempts: %d, executions: %d]\n", to, e.Attempts(), e.Executions())
 	})
 	return to
 }
@@ -105,8 +104,8 @@ func WithTimeoutStatsAndLogs[R any](to timeout.TimeoutBuilder[R], stats *Stats) 
 func WithFallbackStatsAndLogs[R any](fb fallback.FallbackBuilder[R], stats *Stats) fallback.FallbackBuilder[R] {
 	fb.OnFallbackExecuted(func(e failsafe.ExecutionDoneEvent[R]) {
 		stats.executions.Add(1)
-		fmt.Printf("%s %p done [result: %v, error: %s, attempts: %d, executions: %d]\n",
-			testutil.GetType(fb), fb, e.Result, e.Error, e.Attempts(), e.Executions())
+		fmt.Printf("fallback %p executed [result: %v, error: %s, attempts: %d, executions: %d]\n",
+			fb, e.Result, e.Error, e.Attempts(), e.Executions())
 	})
 	return fb
 }
@@ -114,7 +113,7 @@ func WithFallbackStatsAndLogs[R any](fb fallback.FallbackBuilder[R], stats *Stat
 func WithHedgeStatsAndLogs[R any](hp hedgepolicy.HedgePolicyBuilder[R], stats *Stats) hedgepolicy.HedgePolicyBuilder[R] {
 	hp.OnHedge(func(e failsafe.ExecutionEvent[R]) {
 		stats.hedges.Add(1)
-		fmt.Printf("%s %p hedging [attempts: %v]\n", testutil.GetType(hp), hp, e.Attempts())
+		fmt.Printf("hedge %p starting [attempts: %v]\n", hp, e.Attempts())
 	})
 	return hp
 }
@@ -123,7 +122,7 @@ func WithBulkheadStatsAndLogs[R any](bh bulkhead.BulkheadBuilder[R], stats *Stat
 	bh.OnFull(func(event failsafe.ExecutionEvent[R]) {
 		if withLogging {
 			stats.fulls.Add(1)
-			fmt.Printf("%s %p full\n", testutil.GetType(bh), bh)
+			fmt.Printf("bulkhead %p full\n", bh)
 		}
 	})
 	return bh
@@ -145,16 +144,16 @@ func withStatsAndLogs[P any, R any](policy failsafe.FailurePolicyBuilder[P, R], 
 		stats.executions.Add(1)
 		stats.successes.Add(1)
 		if withLogging {
-			fmt.Printf("%s %p success [result: %v, attempts: %d, executions: %d]\n",
-				testutil.GetType(policy), policy, e.LastResult(), e.Attempts(), e.Executions())
+			fmt.Printf("policy %p success [result: %v, attempts: %d, executions: %d]\n",
+				policy, e.LastResult(), e.Attempts(), e.Executions())
 		}
 	})
 	policy.OnFailure(func(e failsafe.ExecutionEvent[R]) {
 		stats.executions.Add(1)
 		stats.failures.Add(1)
 		if withLogging {
-			fmt.Printf("%s %p failure [result: %v, error: %s, attempts: %d, executions: %d]\n",
-				testutil.GetType(policy), policy, e.LastResult(), e.LastError(), e.Attempts(), e.Executions())
+			fmt.Printf("policy %p failure [result: %v, error: %s, attempts: %d, executions: %d]\n",
+				policy, e.LastResult(), e.LastError(), e.Attempts(), e.Executions())
 		}
 	})
 }
