@@ -1,6 +1,7 @@
 package circuitbreaker
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
@@ -145,11 +146,18 @@ type StateChangedEvent struct {
 	OldState State
 	NewState State
 	metrics  *eventMetrics
+	context  context.Context
 }
 
 // Metrics returns metrics from the CircuitBreaker old state.
 func (e *StateChangedEvent) Metrics() Metrics {
 	return e.metrics
+}
+
+// Context returns the context configured for the execution, else context.Background if none was configured. For
+// executions involving a timeout or hedge, each attempt will get a separate child context.
+func (e *StateChangedEvent) Context() context.Context {
+	return e.context
 }
 
 type circuitBreaker[R any] struct {
@@ -299,10 +307,15 @@ func (cb *circuitBreaker[R]) transitionTo(newState State, exec failsafe.Executio
 	}
 
 	if transitioned && (listener != nil || cb.stateChangedListener != nil) {
+		ctx := context.Background()
+		if exec != nil {
+			ctx = exec.Context()
+		}
 		event := StateChangedEvent{
 			OldState: currentState.state(),
 			NewState: newState,
 			metrics:  &eventMetrics{currentState},
+			context:  ctx,
 		}
 		if listener != nil {
 			listener(event)

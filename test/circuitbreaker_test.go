@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -205,21 +206,43 @@ func TestShouldSupportTimeBasedFailureRateThresholding(t *testing.T) {
 }
 
 func TestStateChangeListener(t *testing.T) {
-	// Given
-	var called bool
-	cb := circuitbreaker.Builder[bool]().
-		WithFailureThresholdRatio(1, 2).
-		OnOpen(func(e circuitbreaker.StateChangedEvent) {
-			called = true
-			assert.Equal(t, uint(1), e.Metrics().Failures())
-			assert.Equal(t, uint(1), e.Metrics().Successes())
-		}).
-		Build()
+	t.Run("without context", func(t *testing.T) {
+		// Given
+		var called bool
+		cb := circuitbreaker.Builder[bool]().
+			WithFailureThresholdRatio(1, 2).
+			OnOpen(func(e circuitbreaker.StateChangedEvent) {
+				called = true
+				assert.Equal(t, uint(1), e.Metrics().Failures())
+				assert.Equal(t, uint(1), e.Metrics().Successes())
+				assert.Equal(t, context.Background(), e.Context())
+			}).
+			Build()
 
-	// When / Then
-	cb.RecordSuccess()
-	cb.RecordFailure()
-	assert.True(t, called)
+		// When / Then
+		cb.RecordSuccess()
+		cb.RecordFailure()
+		assert.True(t, called)
+	})
+
+	t.Run("with context", func(t *testing.T) {
+		// Given
+		var called bool
+		ctx, _ := context.WithCancel(context.Background())
+		cb := circuitbreaker.Builder[any]().
+			WithFailureThreshold(1).
+			OnOpen(func(e circuitbreaker.StateChangedEvent) {
+				called = true
+				assert.Equal(t, ctx, e.Context())
+			}).
+			Build()
+
+		// When / Then
+		_, _ = failsafe.NewExecutor[any](cb).
+			WithContext(ctx).
+			GetWithExecution(testutil.GetFn[any](nil, testutil.ErrInvalidArgument))
+		assert.True(t, called)
+	})
 }
 
 func TestStateChangeListenerOnClose(t *testing.T) {
