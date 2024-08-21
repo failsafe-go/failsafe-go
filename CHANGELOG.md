@@ -1,5 +1,15 @@
 ## Upcoming Release
 
+## 0.6.8
+
+### Bug Fixes
+
+- Fixed #65 - Mixing failsafehttp.RetryPolicy with HedgePolicy causes contexts to be canceled early.
+
+### Improvements
+
+- Added `Context()` to `circuitbreaker.StateChangedEvent`.
+
 ## 0.6.7
 
 ### Improvements
