@@ -62,8 +62,7 @@ func TestTimedStats(t *testing.T) {
 	recordExecutions(stats, 50, func(i int) bool { // currentTime = 0
 		return i%5 == 0
 	})
-	assert.Equal(t, 0, stats.currentIndex)
-	assert.Equal(t, int64(0), stats.currentBucketStartTime)
+	assert.Equal(t, int64(0), stats.head)
 	assert.Equal(t, uint(10), stats.successCount())
 	assert.Equal(t, uint(20), stats.successRate())
 	assert.Equal(t, uint(40), stats.failureCount())
@@ -73,8 +72,7 @@ func TestTimedStats(t *testing.T) {
 	// Record into bucket 2
 	clock.CurrentTime = testutil.MillisToNanos(1000)
 	recordSuccesses(stats, 10)
-	assert.Equal(t, 1, stats.currentIndex)
-	assert.Equal(t, testutil.MillisToNanos(1000), stats.currentBucketStartTime)
+	assert.Equal(t, int64(1), stats.head)
 	assert.Equal(t, uint(20), stats.successCount())
 	assert.Equal(t, uint(33), stats.successRate())
 	assert.Equal(t, uint(40), stats.failureCount())
@@ -84,8 +82,7 @@ func TestTimedStats(t *testing.T) {
 	// Record into bucket 3
 	clock.CurrentTime = testutil.MillisToNanos(2500)
 	recordFailures(stats, 20)
-	assert.Equal(t, 2, stats.currentIndex)
-	assert.Equal(t, testutil.MillisToNanos(2000), stats.currentBucketStartTime)
+	assert.Equal(t, int64(2), stats.head)
 	assert.Equal(t, uint(20), stats.successCount())
 	assert.Equal(t, uint(25), stats.successRate())
 	assert.Equal(t, uint(60), stats.failureCount())
@@ -97,8 +94,7 @@ func TestTimedStats(t *testing.T) {
 	recordExecutions(stats, 25, func(i int) bool {
 		return i%5 == 0
 	})
-	assert.Equal(t, 3, stats.currentIndex)
-	assert.Equal(t, testutil.MillisToNanos(3000), stats.currentBucketStartTime)
+	assert.Equal(t, int64(3), stats.head)
 	assert.Equal(t, uint(25), stats.successCount())
 	assert.Equal(t, uint(24), stats.successRate())
 	assert.Equal(t, uint(80), stats.failureCount())
@@ -108,12 +104,11 @@ func TestTimedStats(t *testing.T) {
 	// Record into bucket 2, skipping bucket 1
 	clock.CurrentTime = testutil.MillisToNanos(5400)
 	recordSuccesses(stats, 8)
-	assert.Equal(t, 1, stats.currentIndex)
+	assert.Equal(t, int64(5), stats.head)
 	// Assert bucket 1 was skipped and reset based on its previous start time
 	bucket1 := stats.buckets[0]
 	assert.Equal(t, uint(0), bucket1.successes)
 	assert.Equal(t, uint(0), bucket1.failures)
-	assert.Equal(t, testutil.MillisToNanos(5000), stats.currentBucketStartTime)
 	assert.Equal(t, uint(13), stats.successCount())
 	assert.Equal(t, uint(25), stats.successRate())
 	assert.Equal(t, uint(40), stats.failureCount())
@@ -123,12 +118,11 @@ func TestTimedStats(t *testing.T) {
 	// Record into bucket 4, skipping bucket 3
 	clock.CurrentTime = testutil.MillisToNanos(7300)
 	recordFailures(stats, 5)
-	assert.Equal(t, 3, stats.currentIndex)
+	assert.Equal(t, int64(7), stats.head)
 	// Assert bucket 3 was skipped and reset based on its previous start time
 	bucket3 := stats.buckets[2]
 	assert.Equal(t, uint(0), bucket3.successes)
 	assert.Equal(t, uint(0), bucket3.failures)
-	assert.Equal(t, testutil.MillisToNanos(7000), stats.currentBucketStartTime)
 	assert.Equal(t, uint(8), stats.successCount())
 	assert.Equal(t, uint(62), stats.successRate())
 	assert.Equal(t, uint(5), stats.failureCount())
@@ -138,12 +132,11 @@ func TestTimedStats(t *testing.T) {
 	// Skip all buckets, starting at 1 again
 	clock.CurrentTime = testutil.MillisToNanos(22500)
 	stats.getCurrentBucket()
-	assert.Equal(t, 0, stats.currentIndex)
+	assert.Equal(t, int64(22), stats.head)
 	for _, b := range stats.buckets {
 		assert.Equal(t, uint(0), b.successes)
 		assert.Equal(t, uint(0), b.failures)
 	}
-	assert.Equal(t, testutil.MillisToNanos(22000), stats.currentBucketStartTime)
 	assert.Equal(t, uint(0), stats.successRate())
 	assert.Equal(t, uint(0), stats.failureRate())
 	assert.Equal(t, uint(0), stats.executionCount())
@@ -151,9 +144,8 @@ func TestTimedStats(t *testing.T) {
 	// Record into bucket 2
 	clock.CurrentTime = testutil.MillisToNanos(23100)
 	recordSuccesses(stats, 3)
-	assert.Equal(t, 1, stats.currentIndex)
+	assert.Equal(t, int64(23), stats.head)
 	assert.Equal(t, uint(3), stats.successCount())
-	assert.Equal(t, testutil.MillisToNanos(23000), stats.currentBucketStartTime)
 }
 
 func recordExecutions(stats stats, count int, successPredicate func(index int) bool) {
