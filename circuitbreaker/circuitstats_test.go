@@ -131,7 +131,7 @@ func TestTimedStats(t *testing.T) {
 
 	// Skip all buckets, starting at 1 again
 	clock.CurrentTime = testutil.MillisToNanos(22500)
-	stats.getCurrentBucket()
+	stats.currentBucket()
 	assert.Equal(t, int64(22), stats.head)
 	for _, b := range stats.buckets {
 		assert.Equal(t, uint(0), b.successes)

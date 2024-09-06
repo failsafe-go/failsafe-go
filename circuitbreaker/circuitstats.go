@@ -173,7 +173,7 @@ func newTimedStats(bucketCount int, thresholdingPeriod time.Duration, clock util
 	}
 }
 
-func (s *timedStats) getCurrentBucket() *stat {
+func (s *timedStats) currentBucket() *stat {
 	newHead := s.clock.CurrentUnixNano() / s.bucketNanos
 
 	if newHead > s.head {
@@ -218,12 +218,12 @@ func (s *timedStats) successRate() uint {
 }
 
 func (s *timedStats) recordFailure() {
-	s.getCurrentBucket().failures++
+	s.currentBucket().failures++
 	s.summary.failures++
 }
 
 func (s *timedStats) recordSuccess() {
-	s.getCurrentBucket().successes++
+	s.currentBucket().successes++
 	s.summary.successes++
 }
 
