@@ -3,7 +3,7 @@ module github.com/failsafe-go/failsafe-go
 go 1.21
 
 require (
-	github.com/bits-and-blooms/bitset v1.14.2
+	github.com/bits-and-blooms/bitset v1.14.3
 	github.com/stretchr/testify v1.9.0
 	google.golang.org/grpc v1.66.0
 	google.golang.org/protobuf v1.34.2
