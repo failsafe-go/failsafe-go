@@ -35,10 +35,6 @@ type config[R any] struct {
 
 var _ Builder[any] = &config[any]{}
 
-type timeout[R any] struct {
-	*config[R]
-}
-
 // New returns a new Timeout for execution result type R and the timeLimit. The Timeout will cancel executions if they
 // exceed a time limit. Any policies composed inside the timeout, such as retries, will also be canceled. If the
 // execution is configured with a Context, a child context will be created for the execution and canceled when the
@@ -67,6 +63,10 @@ func (c *config[R]) Build() Timeout[R] {
 	return &timeout[R]{
 		config: &fbCopy, // TODO copy base fields
 	}
+}
+
+type timeout[R any] struct {
+	*config[R]
 }
 
 func (t *timeout[R]) ToExecutor(_ R) any {
