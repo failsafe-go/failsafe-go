@@ -24,41 +24,7 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 			result := innerFn(exec)
 			result = e.PostExecute(execInternal, result)
 			permit.RecordSuccess()
-			//permit.Release()
 			return result
 		}
-		//return nil
-
-		//execInternal := exec.(policy.ExecutionInternal[R])
-		//result := innerFn(exec)
-		//result = e.PostExecute(execInternal, result)
-		//if !result.Success {
-		//	if canceled, cancelResult := execInternal.IsCanceledWithResult(); canceled {
-		//		return cancelResult
-		//	}
-		//
-		//	// Call fallback fn
-		//	fallbackResult, fallbackError := e.fn(execInternal.CopyWithResult(result))
-		//	if canceled, cancelResult := execInternal.IsCanceledWithResult(); canceled {
-		//		return cancelResult
-		//	}
-		//	if e.onFallbackExecuted != nil {
-		//		e.onFallbackExecuted(failsafe.ExecutionDoneEvent[R]{
-		//			ExecutionInfo: execInternal,
-		//			Result:        fallbackResult,
-		//			Error:         fallbackError,
-		//		})
-		//	}
-		//
-		//	success := !e.IsFailure(fallbackResult, fallbackError)
-		//	result = &common.PolicyResult[R]{
-		//		Result:     fallbackResult,
-		//		Error:      fallbackError,
-		//		Done:       true,
-		//		Success:    success,
-		//		SuccessAll: success,
-		//	}
-		//}
-		//return result
 	}
 }

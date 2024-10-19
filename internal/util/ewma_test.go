@@ -1,4 +1,4 @@
-package adaptivelimiter
+package util
 
 import (
 	"math"

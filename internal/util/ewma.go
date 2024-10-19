@@ -1,4 +1,4 @@
-package adaptivelimiter
+package util
 
 // MovingAverage is not concurrency safe.
 type MovingAverage interface {
