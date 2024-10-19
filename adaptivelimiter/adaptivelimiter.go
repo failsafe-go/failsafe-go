@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/internal/util"
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
@@ -156,8 +157,8 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 	return &adaptiveLimiter[R]{
 		config:  c,
 		mtx:     sync.Mutex{},
-		limit:   c.initialLimit,
-		longRtt: NewEWMA(c.longWindow, 10),
+		limit:   float64(c.initialLimit),
+		longRtt: util.NewEWMA(c.longWindow, 10),
 		window:  newAverageSampleWindow(),
 	}
 }
@@ -168,9 +169,9 @@ type adaptiveLimiter[R any] struct {
 	// Mutable state
 	mtx            sync.Mutex
 	inflight       uint
-	limit          uint
+	limit          float64
 	lastRTT        time.Duration
-	longRtt        MovingAverage
+	longRtt        util.MovingAverage
 	window         SampleWindow
 	nextUpdateTime time.Time
 }
@@ -197,7 +198,7 @@ func (l *adaptiveLimiter[R]) updateLimit(rtt time.Duration, inflight uint) uint 
 	l.lastRTT = rtt
 	shortRTT := float64(rtt)
 	longRTT := l.longRtt.Add(float64(rtt))
-	queueSize := float64(l.queueSizeFn(l.limit))
+	queueSize := float64(l.queueSizeFn(uint(l.limit)))
 
 	// If the long RTT is substantially larger than the short RTT then reduce the long RTT measurement.
 	// This can happen when latency returns to normal after a prolonged prior of excessive load. Reducing the
@@ -208,8 +209,8 @@ func (l *adaptiveLimiter[R]) updateLimit(rtt time.Duration, inflight uint) uint 
 	}
 
 	// Don't grow the limit if we are app limited
-	if inflight < l.limit/2 {
-		return l.limit
+	if float64(inflight) < l.limit/2 {
+		return uint(l.limit)
 	}
 
 	// Rtt could be higher than rtt_noload because of smoothing rtt noload updates
@@ -217,24 +218,24 @@ func (l *adaptiveLimiter[R]) updateLimit(rtt time.Duration, inflight uint) uint 
 	// allow it to be reduced by more than half to avoid aggressive load-shedding due to
 	// outliers.
 	gradient := max(0.5, min(1.0, l.rttTolerance*longRTT/shortRTT))
-	newLimit := float64(l.limit)*gradient + queueSize
-	newLimit = float64(l.limit)*(1-l.smoothing) + newLimit*l.smoothing
+	newLimit := l.limit*gradient + queueSize
+	newLimit = l.limit*(1-l.smoothing) + newLimit*l.smoothing
 	newLimit = max(float64(l.minLimit), min(float64(l.maxLimit), newLimit))
 
-	if uint(newLimit) != l.limit {
-		fmt.Println(fmt.Sprintf("new limit=%0.2f, shortRTT=%0.2f ms, longRTT=%0.2f ms, queueSize=%0.2f, gradient=%0.2f",
+	if newLimit != l.limit {
+		fmt.Println(fmt.Sprintf("%s new limit=%0.2f, shortRTT=%0.2f ms, longRTT=%0.2f ms, queueSize=%0.0f, gradient=%0.2f", time.Now().Format("2006/01/02 15:04:05"),
 			newLimit, shortRTT/1e6, longRTT/1e6, queueSize, gradient))
 	}
 
-	l.limit = uint(newLimit)
-	return l.limit
+	l.limit = newLimit
+	return uint(l.limit)
 }
 
 func (l *adaptiveLimiter[R]) AcquirePermit() (Permit, error) {
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
 
-	if l.inflight >= l.limit {
+	if l.inflight >= uint(l.limit) {
 		return nil, ErrExceeded
 	}
 	l.inflight++

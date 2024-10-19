@@ -35,12 +35,15 @@ func newAverageSampleWindow() *averageSampleWindow {
 
 // AddSample adds a new sample to the window and returns a new immutable instance
 func (w *averageSampleWindow) AddSample(rtt time.Duration, inflight uint, didDrop bool) SampleWindow {
-	if didDrop {
-		rtt = 0
+	minRTT := w.minRTT
+	sum := w.sum
+	if !didDrop {
+		minRTT = min(w.minRTT, rtt)
+		sum = w.sum + rtt
 	}
 	return &averageSampleWindow{
-		min(w.minRTT, rtt),
-		w.sum + rtt,
+		minRTT,
+		sum,
 		max(inflight, w.maxInFlight),
 		w.sampleCount + 1,
 		w.didDrop || didDrop,
