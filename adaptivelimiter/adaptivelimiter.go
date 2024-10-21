@@ -39,6 +39,8 @@ type AdaptiveLimiter[R any] interface {
 
 // LimitChangedEvent indicates a AdaptiveLimiter's limit has changed.
 type LimitChangedEvent struct {
+	OldLimit uint
+	NewLimit uint
 }
 
 /*
@@ -47,6 +49,7 @@ Builder builds AdaptiveLimiter instances.
 This type is not concurrency safe.
 */
 type Builder[R any] interface {
+	// TODO rename the last param minWindowSize?
 	WithWindow(minDuration time.Duration, maxDuration time.Duration, windowSize uint) Builder[R]
 
 	WithInitialLimit(initialLimit uint) Builder[R]
@@ -225,6 +228,13 @@ func (l *adaptiveLimiter[R]) updateLimit(rtt time.Duration, inflight uint) uint 
 	if newLimit != l.limit {
 		fmt.Println(fmt.Sprintf("%s new limit=%0.2f, shortRTT=%0.2f ms, longRTT=%0.2f ms, queueSize=%0.0f, gradient=%0.2f", time.Now().Format("2006/01/02 15:04:05"),
 			newLimit, shortRTT/1e6, longRTT/1e6, queueSize, gradient))
+	}
+
+	if uint(l.limit) != uint(newLimit) && l.limitChangedListener != nil {
+		l.limitChangedListener(LimitChangedEvent{
+			OldLimit: uint(l.limit),
+			NewLimit: uint(newLimit),
+		})
 	}
 
 	l.limit = newLimit
