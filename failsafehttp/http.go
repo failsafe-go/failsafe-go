@@ -1,6 +1,9 @@
 package failsafehttp
 
 import (
+	"bytes"
+	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/failsafe-go/failsafe-go"
@@ -31,11 +34,31 @@ func NewRoundTripperWithExecutor(innerRoundTripper http.RoundTripper, executor f
 	}
 }
 
-func (f *roundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	return f.executor.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
+func (r *roundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	bodyFunc, err := bodyReader(request.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.executor.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
 		ctx, cancel := util.MergeContexts(request.Context(), exec.Context())
 		defer cancel(nil)
-		return f.next.RoundTrip(request.WithContext(ctx))
+		req := request.WithContext(ctx)
+
+		// Get new body for each attempt
+		if bodyFunc != nil {
+			if body, err := bodyFunc(); err != nil {
+				return nil, err
+			} else {
+				if c, ok := body.(io.ReadCloser); ok {
+					req.Body = c
+				} else {
+					req.Body = io.NopCloser(body)
+				}
+			}
+		}
+
+		return r.next.RoundTrip(req)
 	})
 }
 
@@ -67,4 +90,48 @@ func (r *Request) Do() (*http.Response, error) {
 		defer cancel(nil)
 		return r.client.Do(r.request.WithContext(ctx))
 	})
+}
+
+// bodyReader returns a function that can repeatedly read the untypedBody of an http.Request.
+func bodyReader(untypedBody any) (func() (io.Reader, error), error) {
+	switch body := untypedBody.(type) {
+	case nil:
+		return nil, nil
+
+	case *bytes.Buffer:
+		return func() (io.Reader, error) {
+			return bytes.NewReader(body.Bytes()), nil
+		}, nil
+
+	// Match bytes.Reader first to avoid seeking via ReadSeeker match
+	case *bytes.Reader:
+		buf, err := io.ReadAll(body)
+		if err != nil {
+			return nil, err
+		}
+		return func() (io.Reader, error) {
+			return bytes.NewReader(buf), nil
+		}, nil
+
+	case io.ReadSeeker:
+		return func() (io.Reader, error) {
+			_, err := body.Seek(0, 0)
+			return io.NopCloser(body), err
+		}, nil
+
+	case io.Reader:
+		buf, err := io.ReadAll(body)
+		if err != nil {
+			return nil, err
+		}
+		return func() (io.Reader, error) {
+			if len(buf) == 0 {
+				return http.NoBody, nil
+			}
+			return bytes.NewReader(buf), nil
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("unsupported body type %T", untypedBody)
+	}
 }

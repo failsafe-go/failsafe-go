@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -24,6 +25,45 @@ import (
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
 	"github.com/failsafe-go/failsafe-go/timeout"
 )
+
+func TestBodyReader(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        any
+		expectedBody string
+		shouldError  bool
+	}{
+		{"with nil body", nil, "", false},
+		{"with *bytes.Buffer body", bytes.NewBufferString("buffer data"), "buffer data", false},
+		{"with *bytes.Reader body", bytes.NewReader([]byte("reader data")), "reader data", false},
+		{"with io.ReadSeeker body", strings.NewReader("readseeker data"), "readseeker data", false},
+		{"with io.Reader body", strings.NewReader("reader only data"), "reader only data", false},
+		{"with unsupported body type", 123, "", true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			bodyFunc, err := bodyReader(tc.input)
+			if tc.shouldError {
+				assert.Error(t, err)
+				return
+			}
+			if bodyFunc == nil {
+				assert.Nil(t, tc.input)
+				return
+			}
+
+			// Assert that the body can be read multiple times
+			for i := 0; i < 2; i++ {
+				body, err := bodyFunc()
+				assert.NoError(t, err)
+				bodyData, err := io.ReadAll(body)
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedBody, string(bodyData))
+			}
+		})
+	}
+}
 
 func TestSuccess(t *testing.T) {
 	// Given

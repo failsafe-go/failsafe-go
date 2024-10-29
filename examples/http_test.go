@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ import (
 //
 //   - a failsafe http.RoundTripper
 //   - a failsafe execution
+//   - a failsafehttp.Request
 func TestHttpWithRetryPolicy(t *testing.T) {
 	// Create a RetryPolicy that handles non-terminal responses
 	retryPolicy := failsafehttp.RetryPolicyBuilder().
@@ -39,7 +41,8 @@ func TestHttpWithRetryPolicy(t *testing.T) {
 		client := &http.Client{Transport: roundTripper}
 
 		fmt.Println("Sending ping")
-		resp, err := client.Get(server.URL)
+		req, _ := http.NewRequest(http.MethodGet, server.URL, strings.NewReader("ping"))
+		resp, err := client.Do(req)
 
 		readAndPrintResponse(resp, err)
 	})
@@ -53,10 +56,25 @@ func TestHttpWithRetryPolicy(t *testing.T) {
 		fmt.Println("Sending ping")
 		resp, err := failsafe.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
 			// Include the execution context in the request, so that cancellations are propagated
-			req, _ := http.NewRequestWithContext(exec.Context(), http.MethodGet, server.URL, nil)
+			req, _ := http.NewRequestWithContext(exec.Context(), http.MethodGet, server.URL, strings.NewReader("ping"))
 			client := &http.Client{}
 			return client.Do(req)
 		}, retryPolicy)
+
+		readAndPrintResponse(resp, err)
+	})
+
+	// Use the RetryPolicy with a failsafehttp.Request
+	t.Run("with failsafehttp.Request", func(t *testing.T) {
+		// Setup a test http server that returns 429 on the first two requests with a 1 second Retry-After header
+		server := flakyServer(2, 429, time.Second)
+		defer server.Close()
+		client := &http.Client{}
+
+		fmt.Println("Sending ping")
+		req, _ := http.NewRequest(http.MethodGet, server.URL, strings.NewReader("ping"))
+		failsafeReq := failsafehttp.NewRequest(req, client, retryPolicy)
+		resp, err := failsafeReq.Do()
 
 		readAndPrintResponse(resp, err)
 	})
@@ -188,6 +206,8 @@ func TestHttpWithTimeout(t *testing.T) {
 func flakyServer(failTimes int, responseCode int, retryAfterDelay time.Duration) *httptest.Server {
 	failures := atomic.Int32{}
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		body, _ := io.ReadAll(request.Body)
+		fmt.Println("Received request", string(body))
 		if failures.Add(1) <= int32(failTimes) {
 			if retryAfterDelay > 0 {
 				w.Header().Add("Retry-After", strconv.Itoa(int(retryAfterDelay.Seconds())))
