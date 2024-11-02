@@ -35,31 +35,7 @@ func NewRoundTripperWithExecutor(innerRoundTripper http.RoundTripper, executor f
 }
 
 func (r *roundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	bodyFunc, err := bodyReader(request.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	return r.executor.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
-		ctx, cancel := util.MergeContexts(request.Context(), exec.Context())
-		defer cancel(nil)
-		req := request.WithContext(ctx)
-
-		// Get new body for each attempt
-		if bodyFunc != nil {
-			if body, err := bodyFunc(); err != nil {
-				return nil, err
-			} else {
-				if c, ok := body.(io.ReadCloser); ok {
-					req.Body = c
-				} else {
-					req.Body = io.NopCloser(body)
-				}
-			}
-		}
-
-		return r.next.RoundTrip(req)
-	})
+	return doRequest(request, r.executor, r.next.RoundTrip)
 }
 
 type Request struct {
@@ -85,10 +61,34 @@ func NewRequestWithExecutor(request *http.Request, client *http.Client, executor
 }
 
 func (r *Request) Do() (*http.Response, error) {
-	return r.executor.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
-		ctx, cancel := util.MergeContexts(r.request.Context(), exec.Context())
+	return doRequest(r.request, r.executor, r.client.Do)
+}
+
+func doRequest(request *http.Request, executor failsafe.Executor[*http.Response], reqFn func(r *http.Request) (*http.Response, error)) (*http.Response, error) {
+	bodyFunc, err := bodyReader(request.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return executor.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
+		ctx, cancel := util.MergeContexts(request.Context(), exec.Context())
 		defer cancel(nil)
-		return r.client.Do(r.request.WithContext(ctx))
+		req := request.WithContext(ctx)
+
+		// Get new body for each attempt
+		if bodyFunc != nil {
+			if body, err := bodyFunc(); err != nil {
+				return nil, err
+			} else {
+				if c, ok := body.(io.ReadCloser); ok {
+					req.Body = c
+				} else {
+					req.Body = io.NopCloser(body)
+				}
+			}
+		}
+
+		return reqFn(req)
 	})
 }
 

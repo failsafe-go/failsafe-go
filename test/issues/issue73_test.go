@@ -26,30 +26,52 @@ func TestIssue73(t *testing.T) {
 		OnRetry(func(e failsafe.ExecutionEvent[*http.Response]) {
 			fmt.Println("retrying")
 		}).Build()
-	client := &http.Client{
-		Transport: failsafehttp.NewRoundTripper(nil, retryPolicy),
-	}
-	var requestsWithBody = atomic.Int32{}
 
-	// Start test server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+	t.Run("with RoundTripper", func(t *testing.T) {
+		client := &http.Client{
+			Transport: failsafehttp.NewRoundTripper(nil, retryPolicy),
+		}
+		server, requestsWithBody := createServer()
+		defer server.Close()
+
+		req, err := http.NewRequest(http.MethodGet, server.URL, strings.NewReader("ping"))
+		resp, err := client.Do(req)
+		var exceeded retrypolicy.ExceededError
+		if errors.As(err, &exceeded) {
+			resp = exceeded.LastResult.(*http.Response)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Println("received response", string(body))
+		resp.Body.Close()
+		assert.Equal(t, requestsWithBody.Load(), int32(3))
+	})
+
+	t.Run("with failsafehttp.Request", func(t *testing.T) {
+		server, requestsWithBody := createServer()
+		defer server.Close()
+
+		req, err := http.NewRequest(http.MethodGet, server.URL, strings.NewReader("ping"))
+		request := failsafehttp.NewRequest(req, &http.Client{}, retryPolicy)
+		resp, err := request.Do()
+		var exceeded retrypolicy.ExceededError
+		if errors.As(err, &exceeded) {
+			resp = exceeded.LastResult.(*http.Response)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Println("received response", string(body))
+		resp.Body.Close()
+		assert.Equal(t, requestsWithBody.Load(), int32(3))
+	})
+}
+
+func createServer() (*httptest.Server, *atomic.Int32) {
+	var requestsWithBody = atomic.Int32{}
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		req, _ := io.ReadAll(request.Body)
 		if string(req) == "ping" {
 			requestsWithBody.Add(1)
 		}
 		fmt.Println("received request", string(req))
 		fmt.Fprintf(w, "pong")
-	}))
-	defer server.Close()
-
-	req, err := http.NewRequest(http.MethodGet, server.URL, strings.NewReader("ping"))
-	resp, err := client.Do(req)
-	var exceeded retrypolicy.ExceededError
-	if errors.As(err, &exceeded) {
-		resp = exceeded.LastResult.(*http.Response)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	fmt.Println("received response", string(body))
-	resp.Body.Close()
-	assert.Equal(t, requestsWithBody.Load(), int32(3))
+	})), &requestsWithBody
 }
