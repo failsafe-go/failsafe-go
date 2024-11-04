@@ -35,6 +35,9 @@ type CircuitBreakerBuilder[R any] interface {
 	// OnHalfOpen calls the listener when the CircuitBreaker state changes to half-open.
 	OnHalfOpen(listener func(StateChangedEvent)) CircuitBreakerBuilder[R]
 
+	// TODO...
+	WithExecutionIgnorePeriod(delay time.Duration) CircuitBreakerBuilder[R]
+
 	// WithFailureThreshold configures count based failure thresholding by setting the number of consecutive failures that
 	// must occur when in a ClosedState in order to open the circuit.
 	//
@@ -94,6 +97,9 @@ type config[R any] struct {
 	openListener         func(StateChangedEvent)
 	halfOpenListener     func(StateChangedEvent)
 	closeListener        func(StateChangedEvent)
+
+	// General config
+	executionIgnorePeriod time.Duration
 
 	// Failure config
 	failureThreshold            uint
@@ -156,6 +162,11 @@ func (c *config[R]) HandleResult(result R) CircuitBreakerBuilder[R] {
 
 func (c *config[R]) HandleIf(predicate func(R, error) bool) CircuitBreakerBuilder[R] {
 	c.BaseFailurePolicy.HandleIf(predicate)
+	return c
+}
+
+func (c *config[R]) WithExecutionIgnorePeriod(ignorePeriod time.Duration) CircuitBreakerBuilder[R] {
+	c.executionIgnorePeriod = ignorePeriod
 	return c
 }
 

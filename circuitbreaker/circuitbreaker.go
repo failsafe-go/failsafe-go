@@ -105,6 +105,9 @@ type CircuitBreaker[R any] interface {
 
 	// RecordFailure records an execution failure.
 	RecordFailure()
+
+	// Reset closes the circuit breaker and resets it to its initial state.
+	Reset()
 }
 
 type Metrics interface {
@@ -163,8 +166,11 @@ func (e *StateChangedEvent) Context() context.Context {
 type circuitBreaker[R any] struct {
 	*config[R]
 	mtx sync.Mutex
+
 	// Guarded by mtx
-	state circuitState[R]
+	firstExecTime       int64
+	ingorePeriodElapsed bool
+	state               circuitState[R]
 }
 
 func (cb *circuitBreaker[R]) TryAcquirePermit() bool {
@@ -252,25 +258,33 @@ func (cb *circuitBreaker[R]) SuccessRate() uint {
 func (cb *circuitBreaker[R]) RecordFailure() {
 	cb.mtx.Lock()
 	defer cb.mtx.Unlock()
-	cb.recordFailure(nil)
+	if !cb.ignoringExecutions() {
+		cb.recordFailure(nil)
+	}
 }
 
 func (cb *circuitBreaker[R]) RecordError(err error) {
 	cb.mtx.Lock()
 	defer cb.mtx.Unlock()
-	cb.recordResult(*new(R), err)
+	if !cb.ignoringExecutions() {
+		cb.recordResult(*new(R), err)
+	}
 }
 
 func (cb *circuitBreaker[R]) RecordResult(result R) {
 	cb.mtx.Lock()
 	defer cb.mtx.Unlock()
-	cb.recordResult(result, nil)
+	if !cb.ignoringExecutions() {
+		cb.recordResult(result, nil)
+	}
 }
 
 func (cb *circuitBreaker[R]) RecordSuccess() {
 	cb.mtx.Lock()
 	defer cb.mtx.Unlock()
-	cb.recordSuccess()
+	if !cb.ignoringExecutions() {
+		cb.recordSuccess()
+	}
 }
 
 func (cb *circuitBreaker[R]) ToExecutor(_ R) any {
@@ -374,6 +388,22 @@ func (cb *circuitBreaker[R]) halfOpen() {
 }
 
 // Requires external locking.
+func (cb *circuitBreaker[R]) ignoringExecutions() bool {
+	if cb.ingorePeriodElapsed {
+		return false
+	}
+	if cb.config.executionIgnorePeriod == 0 {
+		cb.ingorePeriodElapsed = true
+		return false
+	}
+	if cb.firstExecTime == 0 {
+		cb.firstExecTime = cb.clock.CurrentUnixNano()
+	}
+
+	return cb.clock.CurrentUnixNano()-cb.firstExecTime < int64(cb.config.executionIgnorePeriod)
+}
+
+// Requires external locking.
 func (cb *circuitBreaker[R]) recordResult(result R, err error) {
 	if cb.IsFailure(result, err) {
 		cb.recordFailure(nil)
@@ -395,6 +425,10 @@ func (cb *circuitBreaker[R]) recordFailure(exec failsafe.Execution[R]) {
 }
 
 func (cb *circuitBreaker[R]) Reset() {
+	cb.mtx.Lock()
+	defer cb.mtx.Unlock()
 	cb.close()
 	cb.state.reset()
+	cb.firstExecTime = 0
+	cb.ingorePeriodElapsed = false
 }
