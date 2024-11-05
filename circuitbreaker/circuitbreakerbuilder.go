@@ -63,7 +63,7 @@ type CircuitBreakerBuilder[R any] interface {
 	// before the circuit will be opened.
 	//
 	// If WithSuccessThreshold is not configured, the failureExecutionThreshold will also be used when the circuit breaker is
-	// in a HalfOpenSttate state to determine whether to transition back to open or closed.
+	// in a HalfOpenState state to determine whether to transition back to open or closed.
 	WithFailureRateThreshold(failureRateThreshold uint, failureExecutionThreshold uint, failureThresholdingPeriod time.Duration) CircuitBreakerBuilder[R]
 
 	// WithDelay configures the delay to wait in OpenState before transitioning to HalfOpenState.
