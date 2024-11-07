@@ -47,7 +47,7 @@ methods return a boolean.
 The ReservePermit methods attempt to reserve permits and return an expected wait time before the permit can be used.
 This helps integrate with scenarios where you need to wait externally.
 
-This type is concurrency safe.
+R is the execution result type. This type is concurrency safe.
 */
 type RateLimiter[R any] interface {
 	failsafe.Policy[R]
@@ -116,7 +116,7 @@ type RateLimiter[R any] interface {
 /*
 RateLimiterBuilder builds RateLimiter instances.
 
-This type is not concurrency safe.
+R is the execution result type. This type is not concurrency safe.
 */
 type RateLimiterBuilder[R any] interface {
 	// WithMaxWaitTime configures the maxWaitTime to wait for permits to be available. If permits cannot be acquired before

@@ -15,11 +15,14 @@ var ErrExceeded = errors.New("timeout exceeded")
 // such as retries, will also be canceled. If the execution is configured with a Context, a child context will be created
 // for the execution and canceled when the Timeout is exceeded.
 //
-// This type is concurrency safe.
+// R is the execution result type. This type is concurrency safe.
 type Timeout[R any] interface {
 	failsafe.Policy[R]
 }
 
+// TimeoutBuilder builds Timeout instances.
+//
+// R is the execution result type. This type is not concurrency safe.
 type TimeoutBuilder[R any] interface {
 	// OnTimeoutExceeded registers the listener to be called when the timeout is exceeded.
 	OnTimeoutExceeded(listener func(event failsafe.ExecutionDoneEvent[R])) TimeoutBuilder[R]

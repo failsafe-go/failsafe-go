@@ -17,7 +17,7 @@ CircuitBreakerBuilder builds CircuitBreaker instances.
     HandleResultIf will not replace the default error handling condition.
   - If multiple handle conditions are specified, any condition that matches an execution result or error will trigger policy handling.
 
-This type is not concurrency safe.
+R is the execution result type. This type is not concurrency safe.
 */
 type CircuitBreakerBuilder[R any] interface {
 	failsafe.FailurePolicyBuilder[CircuitBreakerBuilder[R], R]

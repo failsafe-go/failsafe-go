@@ -58,7 +58,7 @@ A circuit breaker can be count based or time based:
     of the failureThresholdingPeriod. As time progresses, statistics for old time slices are gradually discarded, which
     smoothes the calculation of success and failure rates.
 
-This type is concurrency safe.
+R is the execution result type. This type is concurrency safe.
 */
 type CircuitBreaker[R any] interface {
 	failsafe.Policy[R]

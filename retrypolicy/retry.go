@@ -44,7 +44,7 @@ func (e ExceededError) Unwrap() error {
 // RetryPolicy is a policy that defines when retries should be performed. See RetryPolicyBuilder for configuration
 // options.
 //
-// This type is concurrency safe.
+// R is the execution result type. This type is concurrency safe.
 type RetryPolicy[R any] interface {
 	failsafe.Policy[R]
 }
@@ -66,7 +66,7 @@ RetryPolicyBuilder builds RetryPolicy instances.
 
 This class extends failsafe.FailurePolicyBuilder and failsafe.DelayablePolicyBuilder which offer additional configuration.
 
-This type is not concurrency safe.
+R is the execution result type. This type is not concurrency safe.
 */
 type RetryPolicyBuilder[R any] interface {
 	failsafe.FailurePolicyBuilder[RetryPolicyBuilder[R], R]

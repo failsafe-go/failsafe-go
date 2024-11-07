@@ -14,7 +14,7 @@ var ErrFull = errors.New("bulkhead full")
 
 // Bulkhead is a policy restricts concurrent executions as a way of preventing system overload.
 //
-// This type is concurrency safe.
+// R is the execution result type. This type is concurrency safe.
 type Bulkhead[R any] interface {
 	failsafe.Policy[R]
 
@@ -44,7 +44,7 @@ type Bulkhead[R any] interface {
 
 // BulkheadBuilder builds Bulkhead instances.
 //
-// This type is not concurrency safe.
+// R is the execution result type. This type is not concurrency safe.
 type BulkheadBuilder[R any] interface {
 	// WithMaxWaitTime configures the maxWaitTime to wait for permits to be available.
 	WithMaxWaitTime(maxWaitTime time.Duration) BulkheadBuilder[R]

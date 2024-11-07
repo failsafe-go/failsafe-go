@@ -17,14 +17,14 @@ import (
 // If the execution is configured with a Context, a child context will be created for each attempt and outstanding
 // contexts are canceled when the HedgePolicy is exceeded.
 //
-// This type is concurrency safe.
+// R is the execution result type. This type is concurrency safe.
 type HedgePolicy[R any] interface {
 	failsafe.Policy[R]
 }
 
 // HedgePolicyBuilder builds HedgePolicy instances.
 //
-// This type is not concurrency safe.
+// R is the execution result type. This type is not concurrency safe.
 type HedgePolicyBuilder[R any] interface {
 	// CancelOnResult specifies that any outstanding hedges should be canceled if the execution result matches the result using
 	// reflect.DeepEqual.

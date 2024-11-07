@@ -7,7 +7,7 @@ import (
 
 // Fallback is a Policy that handles failures using a fallback function, result, or error.
 //
-// This type is concurrency safe.
+// R is the execution result type. This type is concurrency safe.
 type Fallback[R any] interface {
 	failsafe.Policy[R]
 }
@@ -21,7 +21,7 @@ FallbackBuilder builds Fallback instances.
   - If multiple handle conditions are specified, any condition that matches an execution result or error will trigger
     policy handling.
 
-This type is not concurrency safe.
+R is the execution result type. This type is not concurrency safe.
 */
 type FallbackBuilder[R any] interface {
 	failsafe.FailurePolicyBuilder[FallbackBuilder[R], R]
