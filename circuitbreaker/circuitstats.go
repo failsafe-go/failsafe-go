@@ -63,29 +63,21 @@ func (c *countingStats) setNext(value bool) int {
 	} else {
 		if c.bitSet.Test(c.head) {
 			previousValue = 1
+			c.successes--
 		} else {
 			previousValue = 0
+			c.failures--
 		}
+	}
+
+	if value {
+		c.successes++
+	} else {
+		c.failures++
 	}
 
 	c.bitSet.SetTo(c.head, value)
 	c.head = (c.head + 1) % c.size
-
-	if value {
-		if previousValue != 1 {
-			c.successes++
-		}
-		if previousValue == 0 {
-			c.failures--
-		}
-	} else {
-		if previousValue != 0 {
-			c.failures++
-		}
-		if previousValue == 1 {
-			c.successes--
-		}
-	}
 
 	return previousValue
 }

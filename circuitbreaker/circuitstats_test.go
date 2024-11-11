@@ -45,6 +45,14 @@ func TestCountingStats(t *testing.T) {
 	assert.Equal(t, uint(0), stats.failureCount())
 	assert.Equal(t, uint(0), stats.failureRate())
 	assert.Equal(t, uint(100), stats.executionCount())
+
+	recordExecutions(stats, 30, func(i int) bool { return i%3 == 0 })
+
+	assert.Equal(t, uint(80), stats.successCount())
+	assert.Equal(t, uint(80), stats.successRate())
+	assert.Equal(t, uint(20), stats.failureCount())
+	assert.Equal(t, uint(20), stats.failureRate())
+	assert.Equal(t, uint(100), stats.executionCount())
 }
 
 func TestTimedStats(t *testing.T) {
