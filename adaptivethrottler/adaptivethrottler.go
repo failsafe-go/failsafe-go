@@ -139,10 +139,10 @@ func (t *adaptiveThrottler[R]) ThrottleProbability() float32 {
 }
 
 func (t *adaptiveThrottler[R]) ToExecutor(_ R) any {
-	be := &executor[R]{
+	ate := &executor[R]{
 		BaseExecutor:      &policy.BaseExecutor[R]{},
 		adaptiveThrottler: t,
 	}
-	be.Executor = be
-	return be
+	ate.Executor = ate
+	return ate
 }

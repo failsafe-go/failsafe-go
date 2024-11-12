@@ -1,4 +1,4 @@
-package adaptivelimiter
+package latencylimiter
 
 import (
 	"errors"
@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
-	"github.com/failsafe-go/failsafe-go/internal/util"
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
@@ -23,7 +22,7 @@ type Permit interface {
 	Release()
 }
 
-type AdaptiveLimiter[R any] interface {
+type LatencyLimiter[R any] interface {
 	failsafe.Policy[R]
 
 	// AcquirePermit attempts to acquire a permit to perform an execution against within the AdaptiveLimiter and returns
@@ -50,7 +49,7 @@ This type is not concurrency safe.
 */
 type Builder[R any] interface {
 	// TODO rename the last param minWindowSize?
-	WithWindow(minDuration time.Duration, maxDuration time.Duration, windowSize uint) Builder[R]
+	//	WithWindow(minDuration time.Duration, maxDuration time.Duration, windowSize uint) Builder[R]
 
 	WithInitialLimit(initialLimit uint) Builder[R]
 
@@ -58,60 +57,64 @@ type Builder[R any] interface {
 
 	WithMaxLimit(maxLimit uint) Builder[R]
 
-	WithQueueSizeFunc(fn func(limit uint) (queueSize uint)) Builder[R]
+	WithLatencyThreshold(latencyThreshold time.Duration) Builder[R]
+
+	//	WithQueueSizeFunc(fn func(limit uint) (queueSize uint)) Builder[R]
 
 	// TODO call this RTT increase factor threshold?
-	WithRTTolerance(rttTolerance float64) Builder[R]
+	// WithRTTolerance(rttTolerance float64) Builder[R]
 
-	WithSmoothing(smoothing float64) Builder[R]
+	// WithSmoothing(smoothing float64) Builder[R]
 
-	WithLongWindow(longWindow uint) Builder[R]
+	// WithLongWindow(longWindow uint) Builder[R]
 
 	OnLimitChanged(listener func(event LimitChangedEvent)) Builder[R]
 
 	// Build returns a new AdaptiveLimiter using the builder's configuration.
-	Build() AdaptiveLimiter[R]
+	Build() LatencyLimiter[R]
 }
 
 type config[R any] struct {
-	minWindow  time.Duration
-	maxWindow  time.Duration
-	windowSize uint
+	// minWindow  time.Duration
+	// maxWindow  time.Duration
+	// windowSize uint
 
 	initialLimit uint
 	minLimit     uint
 	maxLimit     uint
-	smoothing    float64
-	queueSizeFn  func(uint) uint
-	longWindow   uint
-	rttTolerance float64
+	// smoothing    float64
+	// queueSizeFn  func(uint) uint
+	// longWindow   uint
+	// rttTolerance float64
 
 	limitChangedListener func(LimitChangedEvent)
+
+	latencyThreshold time.Duration
 }
 
 var _ Builder[any] = &config[any]{}
 
 func NewBuilder[R any]() Builder[R] {
 	return &config[R]{
-		minWindow:    time.Second,
-		maxWindow:    time.Second,
-		windowSize:   10,
+		//	minWindow:    time.Second,
+		//	maxWindow:    time.Second,
+		//	windowSize:   10,
 		initialLimit: 20,
 		minLimit:     1,
 		maxLimit:     200,
-		smoothing:    0.2,
-		queueSizeFn:  func(uint) uint { return 4 },
-		longWindow:   600,
-		rttTolerance: 1.5,
+		// smoothing:    0.2,
+		// queueSizeFn:  func(uint) uint { return 4 },
+		// longWindow:   600,
+		// rttTolerance: 1.5,
 	}
 }
 
-func (c *config[R]) WithWindow(minDuration time.Duration, maxDuration time.Duration, windowSize uint) Builder[R] {
-	c.minWindow = minDuration
-	c.maxWindow = maxDuration
-	c.windowSize = windowSize
-	return c
-}
+// func (c *config[R]) WithWindow(minDuration time.Duration, maxDuration time.Duration, windowSize uint) Builder[R] {
+// 	c.minWindow = minDuration
+// 	c.maxWindow = maxDuration
+// 	c.windowSize = windowSize
+// 	return c
+// }
 
 func (c *config[R]) WithInitialLimit(initialLimit uint) Builder[R] {
 	c.initialLimit = initialLimit
@@ -128,65 +131,71 @@ func (c *config[R]) WithMaxLimit(maxLimit uint) Builder[R] {
 	return c
 }
 
-func (c *config[R]) WithQueueSizeFunc(fn func(limit uint) (queueSize uint)) Builder[R] {
-	c.queueSizeFn = fn
+func (c *config[R]) WithLatencyThreshold(latencyThreshold time.Duration) Builder[R] {
+	c.latencyThreshold = latencyThreshold
 	return c
 }
 
-func (c *config[R]) WithRTTolerance(rttTolerance float64) Builder[R] {
-	if rttTolerance < 1 {
-		c.rttTolerance = 1
-	}
-	c.rttTolerance = rttTolerance
-	return c
-}
+//
+// func (c *config[R]) WithQueueSizeFunc(fn func(limit uint) (queueSize uint)) Builder[R] {
+// 	c.queueSizeFn = fn
+// 	return c
+// }
+//
+// func (c *config[R]) WithRTTolerance(rttTolerance float64) Builder[R] {
+// 	if rttTolerance < 1 {
+// 		c.rttTolerance = 1
+// 	}
+// 	c.rttTolerance = rttTolerance
+// 	return c
+// }
 
-func (c *config[R]) WithSmoothing(smoothing float64) Builder[R] {
-	c.smoothing = smoothing
-	return c
-}
+// func (c *config[R]) WithSmoothing(smoothing float64) Builder[R] {
+// 	c.smoothing = smoothing
+// 	return c
+// }
 
-func (c *config[R]) WithLongWindow(longWindow uint) Builder[R] {
-	c.longWindow = longWindow
-	return c
-}
+// func (c *config[R]) WithLongWindow(longWindow uint) Builder[R] {
+// 	c.longWindow = longWindow
+// 	return c
+// }
 
 func (c *config[R]) OnLimitChanged(listener func(event LimitChangedEvent)) Builder[R] {
 	c.limitChangedListener = listener
 	return c
 }
 
-func (c *config[R]) Build() AdaptiveLimiter[R] {
-	return &adaptiveLimiter[R]{
-		config:  c,
-		mtx:     sync.Mutex{},
-		limit:   float64(c.initialLimit),
-		longRtt: util.NewEWMA(c.longWindow, 10),
-		window:  newAverageSampleWindow(),
+func (c *config[R]) Build() LatencyLimiter[R] {
+	return &latencyLimiter[R]{
+		config: c,
+		mtx:    sync.Mutex{},
+		limit:  float64(c.initialLimit),
+		// longRtt: util.NewEWMA(c.longWindow, 10),
+		//	window:  newAverageSampleWindow(),
 
-		stableThreshold: 3,
-		growthStep:      5,
+		//	stableThreshold: 3,
+		//	growthStep:      5,
 	}
 }
 
-type adaptiveLimiter[R any] struct {
+type latencyLimiter[R any] struct {
 	*config[R]
 
 	// Mutable state
-	mtx            sync.Mutex
-	inflight       uint
-	limit          float64
-	lastRTT        time.Duration
-	longRtt        util.MovingAverage
-	window         SampleWindow
-	nextUpdateTime time.Time
+	mtx      sync.Mutex
+	inflight uint
+	limit    float64
+	//	lastRTT        time.Duration
+	// longRtt        util.MovingAverage
+	//	window         SampleWindow
+	// nextUpdateTime time.Time
 
-	stablePeriods   int // Number of consecutive periods with stable latency
-	stableThreshold int // Number of stable periods needed before a growth spurt
-	growthStep      int // Amount to increase limit in each spurt
+	//	stablePeriods   int // Number of consecutive periods with stable latency
+	//	stableThreshold int // Number of stable periods needed before a growth spurt
+	//	growthStep      int // Amount to increase limit in each spurt
 }
 
-func (l *adaptiveLimiter[R]) recordSample(startTime time.Time, inflight uint, didDrop bool) {
+func (l *latencyLimiter[R]) recordSample(startTime time.Time, inflight uint, didDrop bool) {
 	endTime := time.Now()
 	rtt := endTime.Sub(startTime)
 	l.window = l.window.AddSample(rtt, inflight, didDrop)
@@ -204,7 +213,7 @@ func (l *adaptiveLimiter[R]) recordSample(startTime time.Time, inflight uint, di
 	}
 }
 
-func (l *adaptiveLimiter[R]) updateLimit(rtt time.Duration, inflight uint) uint {
+func (l *latencyLimiter[R]) updateLimit(rtt time.Duration, inflight uint) uint {
 	l.lastRTT = rtt
 	shortRTT := float64(rtt)
 	longRTT := l.longRtt.Add(float64(rtt))
@@ -259,7 +268,7 @@ func (l *adaptiveLimiter[R]) updateLimit(rtt time.Duration, inflight uint) uint 
 	return uint(l.limit)
 }
 
-func (l *adaptiveLimiter[R]) AcquirePermit() (Permit, error) {
+func (l *latencyLimiter[R]) AcquirePermit() (Permit, error) {
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
 
@@ -275,40 +284,40 @@ func (l *adaptiveLimiter[R]) AcquirePermit() (Permit, error) {
 	}, nil
 }
 
-func (l *adaptiveLimiter[R]) TryAcquirePermit() (Permit, bool) {
+func (l *latencyLimiter[R]) TryAcquirePermit() (Permit, bool) {
 	p, err := l.AcquirePermit()
 	return p, err == nil
 }
 
-// func (l *adaptiveLimiter[R]) lastRTT(units time.Duration) int64 {
+// func (l *latencyLimiter[R]) lastRTT(units time.Duration) int64 {
 // 	return int64(units) * l.lastRTT / int64(time.Nanosecond)
 // }
 //
-// func (l *adaptiveLimiter[R]) longRTT(units time.Duration) int64 {
+// func (l *latencyLimiter[R]) longRTT(units time.Duration) int64 {
 // 	return int64(units) * int64(l.longRtt.Value()) / int64(time.Nanosecond)
 // }
 //
-// func (l *adaptiveLimiter[R]) Limit() int {
+// func (l *latencyLimiter[R]) Limit() int {
 // 	l.mtx.Lock()
 // 	defer l.mtx.Unlock()
 // 	return l.limit
 // }
 
-func (l *adaptiveLimiter[R]) ToExecutor(_ R) any {
-	ale := &executor[R]{
-		BaseExecutor:    &policy.BaseExecutor[R]{},
-		adaptiveLimiter: l,
+func (l *latencyLimiter[R]) ToExecutor(_ R) any {
+	lle := &executor[R]{
+		BaseExecutor:   &policy.BaseExecutor[R]{},
+		latencyLimiter: l,
 	}
-	ale.Executor = ale
-	return ale
+	lle.Executor = lle
+	return lle
 }
 
-// func (l *adaptiveLimiter[R]) String() string {
+// func (l *latencyLimiter[R]) String() string {
 // 	return fmt.Sprintf("AdaptiveLimiter [limit=%d]", l.limit)
 // }
 
 type permit[R any] struct {
-	limiter         *adaptiveLimiter[R]
+	limiter         *latencyLimiter[R]
 	currentInflight uint
 	startTime       time.Time
 }
