@@ -36,7 +36,7 @@ func (e *ewma) Add(value float64) float64 {
 		e.sum += value
 		e.value = e.sum / float64(e.count)
 	default:
-		e.value = smooth(e.value, value, e.smoothingFactor)
+		e.value = Smooth(e.value, value, e.smoothingFactor)
 	}
 	return e.value
 }
@@ -53,8 +53,8 @@ func (e *ewma) Set(value float64) {
 	}
 }
 
-// smooth returns a value that is decreased by some portion of the oldValue, and increased by some portion of the
+// Smooth returns a value that is decreased by some portion of the oldValue, and increased by some portion of the
 // newValue, based on the factor.
-func smooth(oldValue, newValue, factor float64) float64 {
+func Smooth(oldValue, newValue, factor float64) float64 {
 	return oldValue*(1-factor) + newValue*factor
 }
