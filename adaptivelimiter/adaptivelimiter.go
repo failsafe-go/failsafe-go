@@ -3,6 +3,7 @@ package adaptivelimiter
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -62,6 +63,10 @@ type Builder[R any] interface {
 
 	WithSmoothing(smoothing float64) Builder[R]
 
+	WithCovarianceWindow(covarianceWindowSize uint) Builder[R]
+
+	WithLogger(logger *slog.Logger) Builder[R]
+
 	OnLimitChanged(listener func(event LimitChangedEvent)) Builder[R]
 
 	// Build returns a new AdaptiveLimiter using the builder's configuration.
@@ -69,10 +74,12 @@ type Builder[R any] interface {
 }
 
 type config[R any] struct {
+	logger            *slog.Logger
 	minWindowDuration time.Duration
 	maxWindowDuration time.Duration
 	minWindowSamples  uint
 	longWindow        uint
+	covarianceWindow  uint
 
 	initialLimit uint
 	minLimit     float64
@@ -90,6 +97,7 @@ func NewBuilder[R any]() Builder[R] {
 		maxWindowDuration: time.Second,
 		minWindowSamples:  10,
 		longWindow:        600,
+		covarianceWindow:  20,
 
 		initialLimit: 20,
 		minLimit:     1,
@@ -98,10 +106,10 @@ func NewBuilder[R any]() Builder[R] {
 	}
 }
 
-func (c *config[R]) WithShortWindow(minDuration time.Duration, maxDuration time.Duration, minSamples uint) Builder[R] {
+func (c *config[R]) WithShortWindow(minDuration time.Duration, maxDuration time.Duration, minWindowSize uint) Builder[R] {
 	c.minWindowDuration = minDuration
 	c.maxWindowDuration = maxDuration
-	c.minWindowSamples = minSamples
+	c.minWindowSamples = minWindowSize
 	return c
 }
 
@@ -130,6 +138,16 @@ func (c *config[R]) WithSmoothing(smoothing float64) Builder[R] {
 	return c
 }
 
+func (c *config[R]) WithCovarianceWindow(covarianceWindowSize uint) Builder[R] {
+	c.covarianceWindow = covarianceWindowSize
+	return c
+}
+
+func (c *config[R]) WithLogger(logger *slog.Logger) Builder[R] {
+	c.logger = logger
+	return c
+}
+
 func (c *config[R]) OnLimitChanged(listener func(event LimitChangedEvent)) Builder[R] {
 	c.limitChangedListener = listener
 	return c
@@ -142,7 +160,7 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 		limit:      float64(c.initialLimit),
 		window:     newAverageSampleWindow(),
 		longRTT:    util.NewEWMA(c.longWindow, 10),
-		covariance: newCovarianceWindow(20),
+		covariance: newCovarianceWindow(c.covarianceWindow),
 	}
 }
 
@@ -153,11 +171,11 @@ type adaptiveLimiter[R any] struct {
 	inflight atomic.Int32
 
 	mtx            sync.Mutex
-	window         *averageSampleWindow // Guarded by mtx
-	longRTT        util.MovingAverage   // Guarded by mtx
-	limit          float64              // Guarded by mtx
-	nextUpdateTime time.Time            // Guarded by mtx
-	covariance     *covarianceWindow    // Guarded by mtx
+	window         *averageSampleWindow
+	longRTT        util.MovingAverage
+	limit          float64
+	nextUpdateTime time.Time
+	covariance     *covarianceWindow
 }
 
 func (l *adaptiveLimiter[R]) recordSample(startTime time.Time, inflight uint, didDrop bool) {
@@ -181,51 +199,44 @@ func (l *adaptiveLimiter[R]) updateLimit(rtt time.Duration, inflight uint) uint 
 	shortRTT := float64(rtt)
 	longRTT := l.longRTT.Add(float64(rtt))
 
-	// If the long RTT is substantially larger than the short RTT then reduce the long RTT measurement.
-	// This can happen when latency returns to normal after a prolonged prior of excessive load.  Reducing the
-	// long RTT without waiting for the exponential smoothing helps bring the system back to steady state.
-	// if (longRTT / shortRTT) > 2 {
-	// 	l.longRTT.Add(longRTT * .9)
-	// 	fmt.Println("lowered long RTT by .9")
-	// }
-
 	// Compute the gradient as the rate of change between the long term and short term latencies
 	gradient := longRTT / shortRTT
 
-	// Use covariance to adjust gradient
-	// This is necessary to avoid situations where the gradient and limit rise indefinitely
-	// Covariance describes how well increases to recent limits correlate to increases in recent latencies
-	initialGradient := gradient
+	// Adjust the gradient based on any covariance between concurrency and latency.
+	// Covariance indicates whether increases in recent limits correlate to increases in recent latencies.
+	// This is necessary to avoid situations where the gradient and limit rise indefinitely.
 	covariance := l.covariance.Add(float64(inflight), shortRTT)
 	if covariance > 0 {
-		// Decrease gradient if concurrency correlates with higher latency
+		// Decrease if concurrency correlates with higher latency
 		gradient = gradient * 0.9
 		covariance = 1
 	} else if covariance < 0 {
-		// Increase gradient if concurrency does not correlate with higher latency
+		// Increase if concurrency does not correlate with higher latency
 		gradient = gradient * 1.1
 		covariance = -1
 	}
 
+	// Cap the gradient
 	gradient = max(0.5, min(1.5, gradient))
+
+	// Adjust, smooth, and cap the limit based on the gradient
 	newLimit := l.limit * gradient
 	newLimit = util.Smooth(l.limit, newLimit, l.smoothing)
 	newLimit = max(l.minLimit, min(l.maxLimit, newLimit))
 
+	// Cap increases to limit relative to concurrency
 	if newLimit > float64(inflight)*10 {
-		fmt.Println(fmt.Sprintf("%s old limit=%0.2f, inflight=%d, shortRTT=%0.2f ms, longRTT=%0.2f ms, gradient=%0.2f",
-			time.Now().Format("2006/01/02 15:04:05"), l.limit, inflight, shortRTT/1e6, longRTT/1e6, gradient))
 		return uint(l.limit)
 	}
-
-	fmt.Println(fmt.Sprintf("%s new limit=%0.2f, inflight=%d, shortRTT=%0.2f ms, longRTT=%0.2f ms, covariance=%d, initialGradient=%0.2f, gradient=%0.2f", time.Now().Format("2006/01/02 15:04:05"),
-		newLimit, inflight, shortRTT/1e6, longRTT/1e6, int(covariance), initialGradient, gradient))
 
 	if uint(l.limit) != uint(newLimit) && l.limitChangedListener != nil {
 		l.limitChangedListener(LimitChangedEvent{
 			OldLimit: uint(l.limit),
 			NewLimit: uint(newLimit),
 		})
+	}
+	if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
+		l.logger.Debug(fmt.Sprintf("new limit=%d, inflight=%d, shortRTT=%0.2f, longRTT=%0.2f, covariance=%d, gradient=%0.2f", int(newLimit), inflight, shortRTT/1e6, longRTT/1e6, int(covariance), gradient))
 	}
 
 	l.limit = newLimit
@@ -252,12 +263,12 @@ func (l *adaptiveLimiter[R]) TryAcquirePermit() (Permit, bool) {
 }
 
 func (l *adaptiveLimiter[R]) ToExecutor(_ R) any {
-	ale := &executor[R]{
+	e := &executor[R]{
 		BaseExecutor:    &policy.BaseExecutor[R]{},
 		adaptiveLimiter: l,
 	}
-	ale.Executor = ale
-	return ale
+	e.Executor = e
+	return e
 }
 
 type permit[R any] struct {

@@ -58,10 +58,10 @@ func (w *averageSampleWindow) String() string {
 }
 
 type covarianceWindow struct {
-	windowSize int
+	windowSize uint
 
 	// Mutable state
-	sampleCount int
+	sampleCount uint
 	sumX        float64
 	sumY        float64
 	sumXY       float64
@@ -69,10 +69,10 @@ type covarianceWindow struct {
 	sumY2       float64
 	xSamples    []float64
 	ySamples    []float64
-	index       int
+	index       uint
 }
 
-func newCovarianceWindow(windowSize int) *covarianceWindow {
+func newCovarianceWindow(windowSize uint) *covarianceWindow {
 	return &covarianceWindow{
 		windowSize: windowSize,
 		xSamples:   make([]float64, windowSize),
