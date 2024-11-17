@@ -162,44 +162,44 @@ func (e *StateChangedEvent) Context() context.Context {
 
 type circuitBreaker[R any] struct {
 	*config[R]
-	mtx sync.Mutex
-	// Guarded by mtx
+	mu sync.Mutex
+	// Guarded by mu
 	state circuitState[R]
 }
 
 func (cb *circuitBreaker[R]) TryAcquirePermit() bool {
-	cb.mtx.Lock()
-	defer cb.mtx.Unlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 	return cb.tryAcquirePermit()
 }
 
 func (cb *circuitBreaker[R]) Open() {
-	cb.mtx.Lock()
-	defer cb.mtx.Unlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 	cb.open(nil)
 }
 
 func (cb *circuitBreaker[R]) HalfOpen() {
-	cb.mtx.Lock()
-	defer cb.mtx.Unlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 	cb.halfOpen()
 }
 
 func (cb *circuitBreaker[R]) Close() {
-	cb.mtx.Lock()
-	defer cb.mtx.Unlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 	cb.close()
 }
 
 func (cb *circuitBreaker[R]) State() State {
-	cb.mtx.Lock()
-	defer cb.mtx.Unlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 	return cb.state.state()
 }
 
 func (cb *circuitBreaker[R]) RemainingDelay() time.Duration {
-	cb.mtx.Lock()
-	defer cb.mtx.Unlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 	return cb.state.remainingDelay()
 }
 
@@ -220,56 +220,56 @@ func (cb *circuitBreaker[R]) IsClosed() bool {
 }
 
 func (cb *circuitBreaker[R]) Executions() uint {
-	cb.mtx.Lock()
-	defer cb.mtx.Unlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 	return cb.state.executionCount()
 }
 
 func (cb *circuitBreaker[R]) Failures() uint {
-	cb.mtx.Lock()
-	defer cb.mtx.Unlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 	return cb.state.failureCount()
 }
 
 func (cb *circuitBreaker[R]) FailureRate() uint {
-	cb.mtx.Lock()
-	defer cb.mtx.Unlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 	return cb.state.failureRate()
 }
 
 func (cb *circuitBreaker[R]) Successes() uint {
-	cb.mtx.Lock()
-	defer cb.mtx.Unlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 	return cb.state.successCount()
 }
 
 func (cb *circuitBreaker[R]) SuccessRate() uint {
-	cb.mtx.Lock()
-	defer cb.mtx.Unlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 	return cb.state.successRate()
 }
 
 func (cb *circuitBreaker[R]) RecordFailure() {
-	cb.mtx.Lock()
-	defer cb.mtx.Unlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 	cb.recordFailure(nil)
 }
 
 func (cb *circuitBreaker[R]) RecordError(err error) {
-	cb.mtx.Lock()
-	defer cb.mtx.Unlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 	cb.recordResult(*new(R), err)
 }
 
 func (cb *circuitBreaker[R]) RecordResult(result R) {
-	cb.mtx.Lock()
-	defer cb.mtx.Unlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 	cb.recordResult(result, nil)
 }
 
 func (cb *circuitBreaker[R]) RecordSuccess() {
-	cb.mtx.Lock()
-	defer cb.mtx.Unlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 	cb.recordSuccess()
 }
 
