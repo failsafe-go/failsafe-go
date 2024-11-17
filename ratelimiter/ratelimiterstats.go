@@ -20,17 +20,17 @@ type stats interface {
 type smoothStats[R any] struct {
 	*config[R]
 	stopwatch util.Stopwatch
-	mtx       sync.Mutex
+	mu        sync.Mutex
 
 	// The amount of time, relative to the start time, that the next permit will be free.
 	// Will be a multiple of the config.interval.
-	// Guarded by mtx
+	// Guarded by mu
 	nextFreePermitTime time.Duration
 }
 
 func (s *smoothStats[R]) acquirePermits(requestedPermits int, maxWaitTime time.Duration) time.Duration {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	currentTime := s.stopwatch.ElapsedTime()
 	requestedPermitTime := s.interval * time.Duration(requestedPermits)
@@ -55,8 +55,8 @@ func (s *smoothStats[R]) acquirePermits(requestedPermits int, maxWaitTime time.D
 }
 
 func (s *smoothStats[R]) reset() {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.stopwatch.Reset()
 	s.nextFreePermitTime = 0
 }
@@ -68,17 +68,17 @@ func (s *smoothStats[R]) reset() {
 type burstyStats[R any] struct {
 	*config[R]
 	stopwatch util.Stopwatch
-	mtx       sync.Mutex
+	mu        sync.Mutex
 
 	// Available permits. Can be negative during a deficit.
-	// Guarded by mtx
+	// Guarded by mu
 	availablePermits int
 	currentPeriod    int
 }
 
 func (s *burstyStats[R]) acquirePermits(requestedPermits int, maxWaitTime time.Duration) time.Duration {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	currentTime := s.stopwatch.ElapsedTime()
 	newCurrentPeriod := int(currentTime / s.period)
@@ -120,8 +120,8 @@ func (s *burstyStats[R]) acquirePermits(requestedPermits int, maxWaitTime time.D
 }
 
 func (s *burstyStats[R]) reset() {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.stopwatch.Reset()
 	s.availablePermits = s.periodPermits
 	s.currentPeriod = 0
