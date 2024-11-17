@@ -1,89 +1,70 @@
 package adaptivelimiter
 
 import (
-	"fmt"
 	"math"
 	"time"
 )
 
-type averageSampleWindow struct {
-	minRTT      time.Duration
-	sum         time.Duration
-	maxInFlight uint
-	sampleCount uint
-	didDrop     bool
+type sampleWindow struct {
+	minRTT  time.Duration
+	rttSum  time.Duration
+	count   uint
+	didDrop bool
 }
 
-func newAverageSampleWindow() *averageSampleWindow {
-	return &averageSampleWindow{
-		minRTT:      math.MaxInt64,
-		sum:         0,
-		maxInFlight: 0,
-		sampleCount: 0,
-		didDrop:     false,
+func newSampleWindow() *sampleWindow {
+	return &sampleWindow{
+		minRTT: math.MaxInt64,
 	}
 }
 
-// AddSample adds a new sample to the window and returns a new immutable instance
-func (w *averageSampleWindow) AddSample(rtt time.Duration, inflight uint, didDrop bool) *averageSampleWindow {
+// AddSample adds a new sample to the window and returns a new immutable instance.
+func (w *sampleWindow) AddSample(rtt time.Duration, didDrop bool) *sampleWindow {
 	minRTT := w.minRTT
-	sum := w.sum
+	rttSum := w.rttSum
 	if !didDrop {
 		minRTT = min(w.minRTT, rtt)
-		sum = w.sum + rtt
+		rttSum = w.rttSum + rtt
 	}
-	return &averageSampleWindow{
-		minRTT,
-		sum,
-		max(inflight, w.maxInFlight),
-		w.sampleCount + 1,
-		w.didDrop || didDrop,
+	return &sampleWindow{
+		minRTT:  minRTT,
+		rttSum:  rttSum,
+		count:   w.count + 1,
+		didDrop: w.didDrop || didDrop,
 	}
 }
 
-func (w *averageSampleWindow) AverageRTT() time.Duration {
-	if w.sampleCount == 0 {
+// AverageRTT returns the average RTT of all samples that have been added to the window.
+func (w *sampleWindow) AverageRTT() time.Duration {
+	if w.count == 0 {
 		return 0
 	}
-	return w.sum / time.Duration(w.sampleCount)
-}
-
-func (w *averageSampleWindow) String() string {
-	return fmt.Sprintf("averageSampleWindow [minRTT=%.3f, avgRtt=%.3f, maxInFlight=%d, sampleCount=%d, didDrop=%v]",
-		float64(w.minRTT.Milliseconds()),
-		float64(w.AverageRTT().Milliseconds()),
-		w.maxInFlight,
-		w.sampleCount,
-		w.didDrop)
+	return w.rttSum / time.Duration(w.count)
 }
 
 type covarianceWindow struct {
-	windowSize uint
-
-	// Mutable state
-	sampleCount uint
-	sumX        float64
-	sumY        float64
-	sumXY       float64
-	sumX2       float64
-	sumY2       float64
-	xSamples    []float64
-	ySamples    []float64
-	index       uint
+	size     int
+	index    int
+	sumX     float64
+	sumY     float64
+	sumXY    float64
+	sumX2    float64
+	sumY2    float64
+	xSamples []float64
+	ySamples []float64
 }
 
 func newCovarianceWindow(windowSize uint) *covarianceWindow {
 	return &covarianceWindow{
-		windowSize: windowSize,
-		xSamples:   make([]float64, windowSize),
-		ySamples:   make([]float64, windowSize),
+		xSamples: make([]float64, windowSize),
+		ySamples: make([]float64, windowSize),
 	}
 }
 
 // Add adds the x and y values to the covariance window and returns the current covariance.
 func (c *covarianceWindow) Add(x, y float64) float64 {
-	if c.sampleCount < c.windowSize {
-		c.sampleCount++
+	if c.size < len(c.xSamples) {
+		c.size++
 	} else {
 		oldX := c.xSamples[c.index]
 		oldY := c.ySamples[c.index]
@@ -102,10 +83,10 @@ func (c *covarianceWindow) Add(x, y float64) float64 {
 	c.sumX2 += x * x
 	c.sumY2 += y * y
 
-	c.index = (c.index + 1) % c.windowSize
+	c.index = (c.index + 1) % len(c.xSamples)
 
-	if c.sampleCount < 2 {
+	if c.size < 2 {
 		return 0
 	}
-	return (c.sumXY - (c.sumX * c.sumY / float64(c.sampleCount))) / float64(c.sampleCount)
+	return (c.sumXY - (c.sumX * c.sumY / float64(c.size))) / float64(c.size)
 }

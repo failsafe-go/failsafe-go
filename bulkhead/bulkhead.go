@@ -18,7 +18,7 @@ var ErrFull = errors.New("bulkhead full")
 type Bulkhead[R any] interface {
 	failsafe.Policy[R]
 
-	// AcquirePermit attempts to acquire a permit to perform an execution against within the Bulkhead, waiting until one is
+	// AcquirePermit attempts to acquire a permit to perform an execution within the Bulkhead, waiting until one is
 	// available or the execution is canceled. Returns context.Canceled if the ctx is canceled. Callers should call
 	// ReleasePermit to release a successfully acquired permit back to the Bulkhead.
 	//

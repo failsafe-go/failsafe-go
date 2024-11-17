@@ -70,7 +70,7 @@ type burstyStats[R any] struct {
 	stopwatch util.Stopwatch
 	mu        sync.Mutex
 
-	// Available permits. Can be negative during a deficit.
+	// AvailablePermits permits. Can be negative during a deficit.
 	// Guarded by mu
 	availablePermits int
 	currentPeriod    int

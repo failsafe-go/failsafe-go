@@ -22,10 +22,7 @@ type Stats interface {
 
 // countingStats is a Stats implementation that counts execution results using a BitSet.
 type countingStats struct {
-	bitSet *bitset.BitSet
-	size   uint
-
-	// Index to write next entry to
+	bitSet       *bitset.BitSet
 	head         uint
 	occupiedBits uint
 	successes    uint
@@ -35,7 +32,6 @@ type countingStats struct {
 func NewCountingStats(size uint) Stats {
 	return &countingStats{
 		bitSet: bitset.New(size),
-		size:   size,
 	}
 }
 
@@ -46,7 +42,7 @@ value is true if positive/success, false if negative/failure
 */
 func (c *countingStats) setNext(value bool) int {
 	previousValue := -1
-	if c.occupiedBits < c.size {
+	if c.occupiedBits < c.bitSet.Len() {
 		c.occupiedBits++
 	} else {
 		if c.bitSet.Test(c.head) {
@@ -65,7 +61,7 @@ func (c *countingStats) setNext(value bool) int {
 	}
 
 	c.bitSet.SetTo(c.head, value)
-	c.head = (c.head + 1) % c.size
+	c.head = (c.head + 1) % c.bitSet.Len()
 
 	return previousValue
 }

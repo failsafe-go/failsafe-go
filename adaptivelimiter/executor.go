@@ -17,7 +17,7 @@ var _ policy.Executor[any] = &executor[any]{}
 
 func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
-		if permit, err := e.AcquirePermit(); err != nil {
+		if permit, err := e.AcquirePermit(exec.Context()); err != nil {
 			return internal.FailureResult[R](err)
 		} else {
 			execInternal := exec.(policy.ExecutionInternal[R])
