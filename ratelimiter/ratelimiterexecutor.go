@@ -19,11 +19,10 @@ var _ policy.Executor[any] = &executor[any]{}
 
 func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
-		execInternal := exec.(policy.ExecutionInternal[R])
-		if err := e.acquirePermitsWithMaxWait(execInternal.Context(), exec, 1, e.maxWaitTime); err != nil {
+		if err := e.acquirePermitsWithMaxWait(exec.Context(), exec, 1, e.maxWaitTime); err != nil {
 			if e.onRateLimitExceeded != nil && errors.Is(err, ErrExceeded) {
 				e.onRateLimitExceeded(failsafe.ExecutionEvent[R]{
-					ExecutionAttempt: execInternal,
+					ExecutionAttempt: exec,
 				})
 			}
 			return internal.FailureResult[R](err)

@@ -18,11 +18,10 @@ type executor[R any] struct {
 var _ policy.Executor[any] = &executor[any]{}
 
 func (e *executor[R]) PreExecute(exec policy.ExecutionInternal[R]) *common.PolicyResult[R] {
-	execInternal := exec.(policy.ExecutionInternal[R])
-	if err := e.AcquirePermitWithMaxWait(execInternal.Context(), e.maxWaitTime); err != nil {
+	if err := e.AcquirePermitWithMaxWait(exec.Context(), e.maxWaitTime); err != nil {
 		if e.onFull != nil && errors.Is(err, ErrFull) {
 			e.onFull(failsafe.ExecutionEvent[R]{
-				ExecutionAttempt: execInternal,
+				ExecutionAttempt: exec,
 			})
 		}
 		return internal.FailureResult[R](err)
