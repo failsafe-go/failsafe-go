@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package util
 
 import (
@@ -73,17 +76,6 @@ func (s *DynamicSemaphore) Acquire(ctx context.Context) error {
 	}
 }
 
-func (s *DynamicSemaphore) TryAcquire() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.cur < s.size {
-		s.cur++
-		return true
-	}
-	return false
-}
-
 // Release releases the semaphore. It will panic if release is called on an
 // empty semphore.
 func (s *DynamicSemaphore) Release() {
@@ -108,4 +100,16 @@ func (s *DynamicSemaphore) Release() {
 	// And trigger it's chan before we release the lock
 	close(next.Value.(chan struct{}))
 	// Note we _don't_ decrement inflight since the slot was yielded directly.
+}
+
+func (s *DynamicSemaphore) Size() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return int(s.size)
+}
+
+func (s *DynamicSemaphore) Inflight() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return int(s.cur)
 }

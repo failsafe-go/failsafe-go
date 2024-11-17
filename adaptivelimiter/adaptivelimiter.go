@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
@@ -163,8 +162,9 @@ func (c *config[R]) OnLimitChanged(listener func(event LimitChangedEvent)) Build
 
 func (c *config[R]) Build() AdaptiveLimiter[R] {
 	return &adaptiveLimiter[R]{
-		config:     c,
-		limit:      float64(c.initialLimit),
+		config:    c,
+		semaphore: util.NewDynamicSemaphore(int64(c.initialLimit)),
+		// limit:      float64(c.initialLimit),
 		window:     newSampleWindow(),
 		longRTT:    util.NewEWMA(c.longWindow, 10),
 		covariance: newCovarianceWindow(c.covarianceWindow),
@@ -176,12 +176,10 @@ type adaptiveLimiter[R any] struct {
 
 	// Mutable state
 	semaphore      *util.DynamicSemaphore
-	inflight       atomic.Int32
 	mtx            sync.Mutex         // Guarded by mtx
 	window         *sampleWindow      // Guarded by mtx
-	longRTT        util.MovingAverage // Guarded by mtx
-	limit          float64            // Guarded by mtx
 	nextUpdateTime time.Time          // Guarded by mtx
+	longRTT        util.MovingAverage // Guarded by mtx
 	covariance     *covarianceWindow  // Guarded by mtx
 }
 
@@ -193,9 +191,9 @@ func (l *adaptiveLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) 
 		return nil, err
 	}
 	return &permit[R]{
-		limiter:         l,
-		currentInflight: uint(l.inflight.Add(1)),
-		startTime:       time.Now(),
+		limiter: l,
+		// currentInflight: uint(l.inflight.Add(1)),
+		startTime: time.Now(),
 	}, nil
 }
 
@@ -204,25 +202,27 @@ func (l *adaptiveLimiter[R]) TryAcquirePermit() (Permit, bool) {
 		return nil, false
 	}
 	return &permit[R]{
-		limiter:         l,
-		currentInflight: uint(l.inflight.Add(1)),
-		startTime:       time.Now(),
+		limiter: l,
+		//	currentInflight: uint(l.inflight.Add(1)),
+		startTime: time.Now(),
 	}, true
 }
 
 func (l *adaptiveLimiter[R]) release() {
-	l.inflight.Add(-1)
+	//	l.inflight.Add(-1)
 	l.semaphore.Release()
 }
 
 func (l *adaptiveLimiter[R]) Limit() int {
-	l.mtx.Lock()
-	defer l.mtx.Unlock()
-	return int(l.limit)
+	// l.mtx.Lock()
+	// defer l.mtx.Unlock()
+	// return int(l.limit)
+	return l.semaphore.Size()
 }
 
 func (l *adaptiveLimiter[R]) Inflight() int {
-	return int(l.inflight.Load())
+	// return int(l.inflight.Load())
+	return l.semaphore.Inflight()
 }
 
 func (l *adaptiveLimiter[R]) recordSample(startTime time.Time, inflight uint, didDrop bool) {
@@ -242,7 +242,8 @@ func (l *adaptiveLimiter[R]) recordSample(startTime time.Time, inflight uint, di
 	}
 }
 
-func (l *adaptiveLimiter[R]) updateLimit(rtt time.Duration, inflight uint) uint {
+func (l *adaptiveLimiter[R]) updateLimit(rtt time.Duration, inflight uint) {
+	limit := float64(l.semaphore.Size())
 	shortRTT := float64(rtt)
 	longRTT := l.longRTT.Add(float64(rtt))
 
@@ -267,28 +268,28 @@ func (l *adaptiveLimiter[R]) updateLimit(rtt time.Duration, inflight uint) uint 
 	gradient = max(0.5, min(1.5, gradient))
 
 	// Adjust, smooth, and clamp the limit based on the gradient
-	newLimit := l.limit * gradient
-	newLimit = util.Smooth(l.limit, newLimit, l.smoothing)
+	newLimit := limit * gradient
+	newLimit = util.Smooth(limit, newLimit, l.smoothing)
 	newLimit = max(l.minLimit, min(l.maxLimit, newLimit))
 
 	// Clamp increases to limit relative to concurrency
 	if newLimit > float64(inflight)*10 {
-		return uint(l.limit)
-	}
-
-	if uint(l.limit) != uint(newLimit) && l.limitChangedListener != nil {
-		l.limitChangedListener(LimitChangedEvent{
-			OldLimit: uint(l.limit),
-			NewLimit: uint(newLimit),
-		})
+		return
 	}
 
 	if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
 		l.logger.Debug(fmt.Sprintf("new limit=%d, inflight=%d, shortRTT=%0.2f, longRTT=%0.2f, covariance=%d, gradient=%0.2f", int(newLimit), inflight, shortRTT/1e6, longRTT/1e6, int(covariance), gradient))
 	}
 
-	l.limit = newLimit
-	return uint(l.limit)
+	if uint(limit) != uint(newLimit) {
+		if l.limitChangedListener != nil {
+			l.limitChangedListener(LimitChangedEvent{
+				OldLimit: uint(limit),
+				NewLimit: uint(newLimit),
+			})
+		}
+		l.semaphore.SetSize(int64(newLimit))
+	}
 }
 
 func (l *adaptiveLimiter[R]) ToExecutor(_ R) any {
