@@ -159,6 +159,7 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 	return &adaptiveLimiter[R]{
 		config:     c,
 		semaphore:  util.NewDynamicSemaphore(int64(c.initialLimit)),
+		limit:      float64(c.initialLimit),
 		window:     newSampleWindow(),
 		longRTT:    util.NewEWMA(c.longWindow, 10),
 		covariance: newCovarianceWindow(c.covarianceWindow),
@@ -173,6 +174,7 @@ type adaptiveLimiter[R any] struct {
 	mu        sync.Mutex
 
 	// Guarded by mu
+	limit          float64
 	window         *sampleWindow
 	nextUpdateTime time.Time
 	longRTT        util.MovingAverage
@@ -205,7 +207,9 @@ func (l *adaptiveLimiter[R]) TryAcquirePermit() (Permit, bool) {
 }
 
 func (l *adaptiveLimiter[R]) Limit() int {
-	return l.semaphore.Size()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return int(l.limit)
 }
 
 func (l *adaptiveLimiter[R]) Inflight() int {
@@ -233,7 +237,6 @@ func (l *adaptiveLimiter[R]) record(startTime time.Time, inflight int, dropped b
 }
 
 func (l *adaptiveLimiter[R]) updateLimit(rtt time.Duration, inflight int) {
-	limit := float64(l.semaphore.Size())
 	shortRTT := float64(rtt)
 	longRTT := l.longRTT.Add(float64(rtt))
 
@@ -258,8 +261,8 @@ func (l *adaptiveLimiter[R]) updateLimit(rtt time.Duration, inflight int) {
 	gradient = max(0.5, min(1.5, gradient))
 
 	// Adjust, smooth, and clamp the limit based on the gradient
-	newLimit := limit * gradient
-	newLimit = util.Smooth(limit, newLimit, l.smoothing)
+	newLimit := l.limit * gradient
+	newLimit = util.Smooth(l.limit, newLimit, l.smoothing)
 	newLimit = max(l.minLimit, min(l.maxLimit, newLimit))
 
 	// Clamp increases to limit relative to concurrency
@@ -268,18 +271,19 @@ func (l *adaptiveLimiter[R]) updateLimit(rtt time.Duration, inflight int) {
 	}
 
 	if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
-		l.logger.Debug(fmt.Sprintf("new limit=%d, inflight=%d, shortRTT=%0.2f, longRTT=%0.2f, covariance=%d, gradient=%0.2f", int(newLimit), inflight, shortRTT/1e6, longRTT/1e6, int(covariance), gradient))
+		l.logger.Debug(fmt.Sprintf("newLimit=%0.2f, oldLimit=%0.2f, inflight=%d, shortRTT=%0.2f, longRTT=%0.2f, covariance=%d, gradient=%0.2f", newLimit, l.limit, inflight, shortRTT/1e6, longRTT/1e6, int(covariance), gradient))
 	}
 
-	if uint(limit) != uint(newLimit) {
+	if uint(l.limit) != uint(newLimit) {
 		if l.limitChangedListener != nil {
 			l.limitChangedListener(LimitChangedEvent{
-				OldLimit: uint(limit),
+				OldLimit: uint(l.limit),
 				NewLimit: uint(newLimit),
 			})
 		}
-		l.semaphore.SetSize(int64(newLimit))
 	}
+	l.semaphore.SetSize(int64(newLimit))
+	l.limit = newLimit
 }
 
 func (l *adaptiveLimiter[R]) ToExecutor(_ R) any {
