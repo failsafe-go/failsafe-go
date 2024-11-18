@@ -86,7 +86,7 @@ func TestDynamicSemaphoreAcquire(t *testing.T) {
 	// Should fail to consume another [free: 0]
 	checkAcquire(t, sem, false)
 
-	// Release 2
+	// Drop 2
 	sem.Release()
 	sem.Release()
 
@@ -113,7 +113,7 @@ func TestDynamicSemaphoreAcquire(t *testing.T) {
 	// Should fail to consume another [free: 0]
 	checkAcquire(t, sem, false)
 
-	// Release one [free: 0] (3 slots used are release, size only 3)
+	// Drop one [free: 0] (3 slots used are release, size only 3)
 	sem.Release()
 
 	// Should fail to consume another [free: 0]

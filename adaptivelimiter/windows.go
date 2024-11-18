@@ -6,10 +6,9 @@ import (
 )
 
 type sampleWindow struct {
-	minRTT  time.Duration
-	rttSum  time.Duration
-	count   uint
-	didDrop bool
+	minRTT time.Duration
+	rttSum time.Duration
+	count  uint
 }
 
 func newSampleWindow() *sampleWindow {
@@ -19,18 +18,11 @@ func newSampleWindow() *sampleWindow {
 }
 
 // AddSample adds a new sample to the window and returns a new immutable instance.
-func (w *sampleWindow) AddSample(rtt time.Duration, didDrop bool) *sampleWindow {
-	minRTT := w.minRTT
-	rttSum := w.rttSum
-	if !didDrop {
-		minRTT = min(w.minRTT, rtt)
-		rttSum = w.rttSum + rtt
-	}
+func (w *sampleWindow) AddSample(rtt time.Duration) *sampleWindow {
 	return &sampleWindow{
-		minRTT:  minRTT,
-		rttSum:  rttSum,
-		count:   w.count + 1,
-		didDrop: w.didDrop || didDrop,
+		minRTT: min(w.minRTT, rtt),
+		rttSum: w.rttSum + rtt,
+		count:  w.count + 1,
 	}
 }
 

@@ -4,8 +4,10 @@ package util
 type MovingAverage interface {
 	// Add adds a value to the series and updates the moving average.
 	Add(float64) float64
+
 	// Value gets the current value of the moving average.
 	Value() float64
+
 	// Set sets a value for the moving average.
 	Set(float64)
 }
@@ -28,15 +30,15 @@ type ewma struct {
 	sum             float64
 }
 
-// Add decays via (current sample * smoothingFactor) + (previous value * (1 - smoothingFactor)
-func (e *ewma) Add(value float64) float64 {
+// Add decays the EWMA value via (oldValue * (1 - smoothingFactor)) + (newValue * smoothingFactor)
+func (e *ewma) Add(newValue float64) float64 {
 	switch {
 	case e.count < e.warmupSamples:
 		e.count++
-		e.sum += value
+		e.sum += newValue
 		e.value = e.sum / float64(e.count)
 	default:
-		e.value = Smooth(e.value, value, e.smoothingFactor)
+		e.value = Smooth(e.value, newValue, e.smoothingFactor)
 	}
 	return e.value
 }
@@ -51,10 +53,4 @@ func (e *ewma) Set(value float64) {
 	if e.count < e.warmupSamples {
 		e.count = e.warmupSamples
 	}
-}
-
-// Smooth returns a value that is decreased by some portion of the oldValue, and increased by some portion of the
-// newValue, based on the factor.
-func Smooth(oldValue, newValue, factor float64) float64 {
-	return oldValue*(1-factor) + newValue*factor
 }

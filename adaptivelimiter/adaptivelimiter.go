@@ -16,34 +16,29 @@ import (
 // ErrExceeded is returned when an execution exceeds the current limit.
 var ErrExceeded = errors.New("limit exceeded")
 
+// AdaptiveLimiter is a concurrency limiter that adjusts its limit up or down based on latency trends:
+//  - When recent latencies are trending up relative to longer term latencies, the concurrency limit is decreased.
+//  - When recent latencies are trending down relative to longer term latencies, the concurrency limit is increased.
+//
+// To accomplish this, recent average latencies are tracked and regularly compared to a weighted moving average of
+// longer term latencies. Limit increases are additionally controlled to ensure they don't increase latency.
+//
+// An AdaptiveLimiter will converge on a concurrency limit that represents the capacity of the machine it's running on,
+// and avoids having executions queue up. Since running a limit without allowing for queueing is too strict in some
+// cases, and may cause unexpected rejections, it's recommended to wrap an AdaptiveLimiter with a BlockingLimiter, which
+// will additionally allow for some executions to block, without being rejected, when the AdaptiveLimiter is at
+// capacity.
+//
+// R is the execution result type. This type is concurrency safe.
 type AdaptiveLimiter[R any] interface {
 	failsafe.Policy[R]
-
-	// AcquirePermit attempts to acquire a permit to perform an execution via the AdaptiveLimiter, waiting until one is
-	// available or the execution is canceled. Returns context.Canceled if the ctx is canceled.
-	// Callers should call RecordSuccess, RecordFailure, or Release to release a successfully acquired permit back to the AdaptiveLimiter.
-	// ctx may be nil.
-	AcquirePermit(context.Context) (Permit, error)
-
-	// TryAcquirePermit attempts to acquire a permit to perform an execution via the AdaptiveLimiter,
-	// returning whether the permit was acquired or not.
-	// Callers should call RecordSuccess, RecordFailure, or Release to release a successfully acquired permit back to the AdaptiveLimiter.
-	TryAcquirePermit() (Permit, bool)
+	Limiter
 
 	// Limit returns the concurrent execution limit, as calculated by the adaptive limiter.
 	Limit() int
 
 	// Inflight returns the current number of inflight executions.
 	Inflight() int
-}
-
-type Permit interface {
-	RecordSuccess()
-
-	RecordFailure()
-
-	// Release releases an execution permit back to the AdaptiveLimiter.
-	Release()
 }
 
 /*
@@ -162,9 +157,8 @@ func (c *config[R]) OnLimitChanged(listener func(event LimitChangedEvent)) Build
 
 func (c *config[R]) Build() AdaptiveLimiter[R] {
 	return &adaptiveLimiter[R]{
-		config:    c,
-		semaphore: util.NewDynamicSemaphore(int64(c.initialLimit)),
-		// limit:      float64(c.initialLimit),
+		config:     c,
+		semaphore:  util.NewDynamicSemaphore(int64(c.initialLimit)),
 		window:     newSampleWindow(),
 		longRTT:    util.NewEWMA(c.longWindow, 10),
 		covariance: newCovarianceWindow(c.covarianceWindow),
@@ -175,12 +169,14 @@ type adaptiveLimiter[R any] struct {
 	*config[R]
 
 	// Mutable state
-	semaphore      *util.DynamicSemaphore
-	mtx            sync.Mutex         // Guarded by mtx
-	window         *sampleWindow      // Guarded by mtx
-	nextUpdateTime time.Time          // Guarded by mtx
-	longRTT        util.MovingAverage // Guarded by mtx
-	covariance     *covarianceWindow  // Guarded by mtx
+	semaphore *util.DynamicSemaphore
+	mu        sync.Mutex
+
+	// Guarded by mu
+	window         *sampleWindow
+	nextUpdateTime time.Time
+	longRTT        util.MovingAverage
+	covariance     *covarianceWindow
 }
 
 func (l *adaptiveLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
@@ -191,9 +187,9 @@ func (l *adaptiveLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) 
 		return nil, err
 	}
 	return &permit[R]{
-		limiter: l,
-		// currentInflight: uint(l.inflight.Add(1)),
-		startTime: time.Now(),
+		limiter:         l,
+		startTime:       time.Now(),
+		currentInflight: l.semaphore.Inflight(),
 	}, nil
 }
 
@@ -202,47 +198,41 @@ func (l *adaptiveLimiter[R]) TryAcquirePermit() (Permit, bool) {
 		return nil, false
 	}
 	return &permit[R]{
-		limiter: l,
-		//	currentInflight: uint(l.inflight.Add(1)),
-		startTime: time.Now(),
+		limiter:         l,
+		startTime:       time.Now(),
+		currentInflight: l.semaphore.Inflight(),
 	}, true
 }
 
-func (l *adaptiveLimiter[R]) release() {
-	//	l.inflight.Add(-1)
-	l.semaphore.Release()
-}
-
 func (l *adaptiveLimiter[R]) Limit() int {
-	// l.mtx.Lock()
-	// defer l.mtx.Unlock()
-	// return int(l.limit)
 	return l.semaphore.Size()
 }
 
 func (l *adaptiveLimiter[R]) Inflight() int {
-	// return int(l.inflight.Load())
 	return l.semaphore.Inflight()
 }
 
-func (l *adaptiveLimiter[R]) recordSample(startTime time.Time, inflight uint, didDrop bool) {
-	l.mtx.Lock()
-	defer l.mtx.Unlock()
+// Records the timing of a completed execution, possibly updating the concurrency limit.
+func (l *adaptiveLimiter[R]) record(startTime time.Time, inflight int, dropped bool) {
+	l.semaphore.Release()
+	l.mu.Lock()
+	defer l.mu.Unlock()
 
 	now := time.Now()
 	rtt := now.Sub(startTime)
-	l.window = l.window.AddSample(rtt, didDrop)
+	if !dropped {
+		l.window = l.window.AddSample(rtt)
+	}
 
 	if now.After(l.nextUpdateTime) && l.window.count >= l.minWindowSamples {
-		l.updateLimit(rtt, inflight)
-
+		l.updateLimit(l.window.AverageRTT(), inflight)
 		l.window = newSampleWindow()
 		minWindowTime := max(l.window.minRTT*2, l.minWindowDuration)
 		l.nextUpdateTime = now.Add(min(minWindowTime, l.maxWindowDuration))
 	}
 }
 
-func (l *adaptiveLimiter[R]) updateLimit(rtt time.Duration, inflight uint) {
+func (l *adaptiveLimiter[R]) updateLimit(rtt time.Duration, inflight int) {
 	limit := float64(l.semaphore.Size())
 	shortRTT := float64(rtt)
 	longRTT := l.longRTT.Add(float64(rtt))
@@ -304,19 +294,13 @@ func (l *adaptiveLimiter[R]) ToExecutor(_ R) any {
 type permit[R any] struct {
 	limiter         *adaptiveLimiter[R]
 	startTime       time.Time
-	currentInflight uint
+	currentInflight int
 }
 
-func (p *permit[R]) RecordSuccess() {
-	p.limiter.release()
-	p.limiter.recordSample(p.startTime, p.currentInflight, false)
+func (p *permit[R]) Record() {
+	p.limiter.record(p.startTime, p.currentInflight, false)
 }
 
-func (p *permit[R]) RecordFailure() {
-	p.limiter.release()
-	p.limiter.recordSample(p.startTime, p.currentInflight, true)
-}
-
-func (p *permit[R]) Release() {
-	p.limiter.release()
+func (p *permit[R]) Drop() {
+	p.limiter.record(p.startTime, p.currentInflight, true)
 }

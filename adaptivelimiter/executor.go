@@ -23,7 +23,7 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 			execInternal := exec.(policy.ExecutionInternal[R])
 			result := innerFn(exec)
 			result = e.PostExecute(execInternal, result)
-			permit.RecordSuccess()
+			permit.Record()
 			return result
 		}
 	}

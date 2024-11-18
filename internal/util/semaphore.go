@@ -31,11 +31,10 @@ func NewDynamicSemaphore(n int64) *DynamicSemaphore {
 // SetSize dynamically updates the number of available slots. If there are more
 // than n slots currently acquired, no further acquires will succeed until
 // sufficient have been released to take the total outstanding below n again.
-func (s *DynamicSemaphore) SetSize(n int64) error {
+func (s *DynamicSemaphore) SetSize(n int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.size = n
-	return nil
 }
 
 // Acquire attempts to acquire one "slot" in the semaphore, blocking only until
@@ -74,6 +73,19 @@ func (s *DynamicSemaphore) Acquire(ctx context.Context) error {
 	case <-ready:
 		return nil
 	}
+}
+
+// TryAcquire attempts to acquire one "slot" in the semaphore without blocking.
+// Returns true if successful, else false if no slots are immediately available.
+func (s *DynamicSemaphore) TryAcquire() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.cur < s.size {
+		s.cur++
+		return true
+	}
+	return false
 }
 
 // Release releases the semaphore. It will panic if release is called on an

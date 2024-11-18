@@ -105,15 +105,16 @@ func (c *config[R]) Build() AdaptiveThrottler[R] {
 
 type adaptiveThrottler[R any] struct {
 	*config[R]
+	mu sync.Mutex
 
-	mtx                 sync.Mutex
-	util.Stats                  // Guarded by mtx
-	throttleProbability float32 // Guarded by mtx
+	// Guarded by mu
+	util.Stats
+	throttleProbability float32
 }
 
 func (t *adaptiveThrottler[R]) AcquirePermit() error {
-	t.mtx.Lock()
-	defer t.mtx.Unlock()
+	t.mu.Lock()
+	defer t.mu.Unlock()
 
 	requests := float32(t.ExecutionCount())
 	accepts := float32(t.SuccessCount())
@@ -133,8 +134,8 @@ func (t *adaptiveThrottler[R]) TryAcquirePermit() bool {
 }
 
 func (t *adaptiveThrottler[R]) ThrottleProbability() float32 {
-	t.mtx.Lock()
-	defer t.mtx.Unlock()
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	return t.throttleProbability
 }
 
