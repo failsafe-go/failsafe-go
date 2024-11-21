@@ -109,12 +109,6 @@ func NewBuilderWithDelayFunc[R any](delayFunc failsafe.DelayFunc[R]) Builder[R] 
 	}
 }
 
-type hedgePolicy[R any] struct {
-	*config[R]
-}
-
-var _ HedgePolicy[any] = &hedgePolicy[any]{}
-
 func (c *config[R]) CancelOnResult(result R) Builder[R] {
 	c.BaseAbortablePolicy.AbortOnResult(result)
 	return c
@@ -157,6 +151,12 @@ func (c *config[R]) Build() HedgePolicy[R] {
 		config: &hCopy, // TODO copy base fields
 	}
 }
+
+type hedgePolicy[R any] struct {
+	*config[R]
+}
+
+var _ HedgePolicy[any] = &hedgePolicy[any]{}
 
 func (h *hedgePolicy[R]) ToExecutor(_ R) any {
 	he := &executor[R]{

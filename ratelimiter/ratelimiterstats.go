@@ -22,9 +22,9 @@ type smoothStats[R any] struct {
 	stopwatch util.Stopwatch
 	mu        sync.Mutex
 
+	// Guarded by mu
 	// The amount of time, relative to the start time, that the next permit will be free.
 	// Will be a multiple of the config.interval.
-	// Guarded by mu
 	nextFreePermitTime time.Duration
 }
 

@@ -67,10 +67,6 @@ type config[R any] struct {
 
 var _ Builder[any] = &config[any]{}
 
-type cachePolicy[R any] struct {
-	*config[R]
-}
-
 // New returns a new CachePolicy. The resulting CachePolicy will only be used with executions that provide a Context
 // containing a CacheKey value.
 func New[R any](cache Cache[R]) CachePolicy[R] {
@@ -113,6 +109,10 @@ func (c *config[R]) Build() CachePolicy[R] {
 	return &cachePolicy[R]{
 		config: c, // TODO copy base fields
 	}
+}
+
+type cachePolicy[R any] struct {
+	*config[R]
 }
 
 func (c *cachePolicy[R]) ToExecutor(_ R) any {
