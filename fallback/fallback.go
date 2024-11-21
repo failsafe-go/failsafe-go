@@ -42,10 +42,6 @@ type config[R any] struct {
 
 var _ Builder[any] = &config[any]{}
 
-type fallback[R any] struct {
-	*config[R]
-}
-
 // NewWithResult returns a Fallback for execution result type R that returns the result when an execution fails.
 func NewWithResult[R any](result R) Fallback[R] {
 	return NewBuilderWithResult[R](result).Build()
@@ -126,6 +122,10 @@ func (c *config[R]) Build() Fallback[R] {
 	return &fallback[R]{
 		config: &fbCopy, // TODO copy base fields
 	}
+}
+
+type fallback[R any] struct {
+	*config[R]
 }
 
 func (fb *fallback[R]) ToExecutor(_ R) any {

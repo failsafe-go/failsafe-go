@@ -194,13 +194,6 @@ func NewBuilder[R any]() Builder[R] {
 	}
 }
 
-func (c *config[R]) Build() RetryPolicy[R] {
-	rpCopy := *c
-	return &retryPolicy[R]{
-		config: &rpCopy, // TODO copy base fields
-	}
-}
-
 func (c *config[R]) AbortOnResult(result R) Builder[R] {
 	c.BaseAbortablePolicy.AbortOnResult(result)
 	return c
@@ -342,6 +335,13 @@ func (c *config[R]) OnRetriesExceeded(listener func(failsafe.ExecutionEvent[R]))
 
 func (c *config[R]) allowsRetries() bool {
 	return c.maxRetries == -1 || c.maxRetries > 0
+}
+
+func (c *config[R]) Build() RetryPolicy[R] {
+	rpCopy := *c
+	return &retryPolicy[R]{
+		config: &rpCopy, // TODO copy base fields
+	}
 }
 
 func (rp *retryPolicy[R]) ToExecutor(_ R) any {

@@ -18,7 +18,7 @@ var ErrFull = errors.New("bulkhead full")
 type Bulkhead[R any] interface {
 	failsafe.Policy[R]
 
-	// AcquirePermit attempts to acquire a permit to perform an execution against within the Bulkhead, waiting until one is
+	// AcquirePermit attempts to acquire a permit to perform an execution within the Bulkhead, waiting until one is
 	// available or the execution is canceled. Returns context.Canceled if the ctx is canceled. Callers should call
 	// ReleasePermit to release a successfully acquired permit back to the Bulkhead.
 	//
@@ -33,13 +33,13 @@ type Bulkhead[R any] interface {
 	// ctx may be nil.
 	AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) error
 
-	// ReleasePermit releases an execution permit back to the Bulkhead.
-	ReleasePermit()
-
 	// TryAcquirePermit tries to acquire a permit to perform an execution within the Bulkhead, returning immediately without
 	// waiting. Returns true if the permit was acquired, else false. Callers should call ReleasePermit to release a
 	// successfully acquired permit back to the Bulkhead.
 	TryAcquirePermit() bool
+
+	// ReleasePermit releases an execution permit back to the Bulkhead.
+	ReleasePermit()
 }
 
 // Builder builds Bulkhead instances.
@@ -62,6 +62,20 @@ type config[R any] struct {
 	onFull         func(failsafe.ExecutionEvent[R])
 }
 
+var _ Builder[any] = &config[any]{}
+
+// New returns a new Bulkhead for execution result type R and the maxConcurrency.
+func New[R any](maxConcurrency uint) Bulkhead[R] {
+	return NewBuilder[R](maxConcurrency).Build()
+}
+
+// NewBuilder returns a Builder for execution result type R which builds Timeouts for the timeoutDelay.
+func NewBuilder[R any](maxConcurrency uint) Builder[R] {
+	return &config[R]{
+		maxConcurrency: maxConcurrency,
+	}
+}
+
 func (c *config[R]) WithMaxWaitTime(maxWaitTime time.Duration) Builder[R] {
 	c.maxWaitTime = maxWaitTime
 	return c
@@ -76,20 +90,6 @@ func (c *config[R]) Build() Bulkhead[R] {
 	return &bulkhead[R]{
 		config:    c, // TODO copy base fields
 		semaphore: make(chan struct{}, c.maxConcurrency),
-	}
-}
-
-var _ Builder[any] = &config[any]{}
-
-// New returns a new Bulkhead for execution result type R and the maxConcurrency.
-func New[R any](maxConcurrency uint) Bulkhead[R] {
-	return NewBuilder[R](maxConcurrency).Build()
-}
-
-// NewBuilder returns a Builder for execution result type R which builds Timeouts for the timeoutDelay.
-func NewBuilder[R any](maxConcurrency uint) Builder[R] {
-	return &config[R]{
-		maxConcurrency: maxConcurrency,
 	}
 }
 
