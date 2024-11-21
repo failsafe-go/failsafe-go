@@ -163,6 +163,7 @@ func (e *StateChangedEvent) Context() context.Context {
 type circuitBreaker[R any] struct {
 	*config[R]
 	mu sync.Mutex
+
 	// Guarded by mu
 	state circuitState[R]
 }
