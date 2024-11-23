@@ -86,7 +86,9 @@ type Builder[R any] interface {
 
 	WithCovarianceWindow(covarianceWindowSize uint) Builder[R]
 
-	WithSmoothing(smoothing float64) Builder[R]
+	WithSmoothing(smoothingFactor float32) Builder[R]
+
+	// TODO WithMaxMultiple(maxLimitMultiple ) // max
 
 	WithMaxLatency(maxLatency time.Duration) Builder[R]
 
@@ -112,10 +114,10 @@ type config[R any] struct {
 	longWindow        uint
 	covarianceWindow  uint
 
-	initialLimit uint
-	minLimit     float64
-	maxLimit     float64
-	smoothing    float64
+	initialLimit    uint
+	minLimit        float64
+	maxLimit        float64
+	smoothingFactor float64
 
 	maxLatency           time.Duration
 	limitChangedListener func(LimitChangedEvent)
@@ -133,7 +135,7 @@ func NewBuilder[R any]() Builder[R] {
 		initialLimit:      20,
 		minLimit:          1,
 		maxLimit:          200,
-		smoothing:         0.2,
+		smoothingFactor:   0.2,
 	}
 }
 
@@ -161,8 +163,8 @@ func (c *config[R]) WithCovarianceWindow(covarianceWindowSize uint) Builder[R] {
 	return c
 }
 
-func (c *config[R]) WithSmoothing(smoothing float64) Builder[R] {
-	c.smoothing = smoothing
+func (c *config[R]) WithSmoothing(smoothingFactor float32) Builder[R] {
+	c.smoothingFactor = float64(smoothingFactor)
 	return c
 }
 
@@ -187,9 +189,12 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 		config:     c,
 		semaphore:  util.NewDynamicSemaphore(int64(c.initialLimit)),
 		limit:      float64(c.initialLimit),
-		window:     newSampleWindow(),
+		shortRTT:   newRTTWindow(),
 		longRTT:    util.NewEWMA(c.longWindow, warmupSamples),
 		covariance: newCovarianceWindow(c.covarianceWindow),
+
+		rttSamples:      newVariationWindow(8), // make([]float64, 8),
+		inflightSamples: newVariationWindow(8), // make([]float64, 8),
 	}
 	if c.maxLatency != 0 {
 		result = &blockingLimiter[R]{
@@ -209,11 +214,13 @@ type adaptiveLimiter[R any] struct {
 	mu        sync.Mutex
 
 	// Guarded by mu
-	limit          float64            // The current concurrency limit
-	window         *sampleWindow      // Tracks short term average latency
-	nextUpdateTime time.Time          // Tracks when the limit can next be updated
-	longRTT        util.MovingAverage // Tracks long term average latency
-	covariance     *covarianceWindow  // Tracks the correlation between concurrency latency
+	limit           float64            // The current concurrency limit
+	shortRTT        *rttWindow         // Tracks short term average latency
+	longRTT         util.MovingAverage // Tracks long term average latency
+	nextUpdateTime  time.Time          // Tracks when the limit can next be updated
+	rttSamples      *variationWindow
+	inflightSamples *variationWindow
+	covariance      *covarianceWindow // Tracks the correlation between concurrency latency
 }
 
 func (l *adaptiveLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
@@ -255,7 +262,7 @@ func (l *adaptiveLimiter[R]) Blocked() int {
 	return 0
 }
 
-// Records the round-trip time of a completed execution, updating the concurrency limit if the short window is full.
+// Records the round-trip time of a completed execution, updating the concurrency limit if the short shortRTT is full.
 func (l *adaptiveLimiter[R]) record(startTime time.Time, inflight int, dropped bool) {
 	l.semaphore.Release()
 	l.mu.Lock()
@@ -264,44 +271,69 @@ func (l *adaptiveLimiter[R]) record(startTime time.Time, inflight int, dropped b
 	now := time.Now()
 	rtt := now.Sub(startTime)
 	if !dropped {
-		l.window = l.window.AddSample(rtt)
+		l.shortRTT = l.shortRTT.add(rtt)
 	}
 
-	if now.After(l.nextUpdateTime) && l.window.count >= l.minWindowSamples {
-		l.updateLimit(l.window.AverageRTT(), inflight)
-		l.window = newSampleWindow()
-		minWindowTime := max(l.window.minRTT*2, l.minWindowDuration)
+	if now.After(l.nextUpdateTime) && l.shortRTT.count >= l.minWindowSamples {
+		l.updateLimit(l.shortRTT.average(), inflight)
+		l.shortRTT = newRTTWindow()
+		minWindowTime := max(l.shortRTT.minRTT*2, l.minWindowDuration)
 		l.nextUpdateTime = now.Add(min(minWindowTime, l.maxWindowDuration))
 	}
 }
 
+// Stability check prevents unnecessary decreases during steady state
+// Covariance prevents upward drift during overload
 func (l *adaptiveLimiter[R]) updateLimit(rtt time.Duration, inflight int) {
+	// Update short and long term latency
 	shortRTT := float64(rtt)
 	longRTT := l.longRTT.Add(float64(rtt))
 
-	// Compute the gradient as the rate of change between the long term and short term latencies
+	// Calculate stability metrics
+	rttStability := l.rttSamples.add(shortRTT)
+	inflightStability := l.inflightSamples.add(float64(inflight))
+
+	// Calculate latency gradient
 	gradient := longRTT / shortRTT
+	originalGradient := gradient
+
+	// If system is stable and gradient would decrease limit, maintain current limit
+	isStable := rttStability < 0.05 && inflightStability < 0.05
+	if isStable && gradient < 1.0 {
+		if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
+			l.logger.Debug("metrics stable, maintaining limit",
+				"rttStability", fmt.Sprintf("%.3f", rttStability),
+				"inflightStability", fmt.Sprintf("%.3f", inflightStability),
+				"originalGradient", fmt.Sprintf("%.3f", originalGradient))
+		}
+		return
+	}
+
+	// Apply covariance adjustment for unstable periods
+	covariance := 0.0
 
 	// Adjust the gradient based on any covariance between concurrency and latency.
 	// Covariance indicates whether increases in recent limits correlate to increases in recent latencies.
 	// This is necessary to avoid situations where the gradient and limit rise indefinitely.
-	covariance := l.covariance.Add(float64(inflight), shortRTT)
-	if covariance > 0 {
-		// Decrease if concurrency correlates with higher latency
-		gradient = gradient * 0.9
-		covariance = 1
-	} else if covariance < 0 {
-		// Increase if concurrency does not correlate with higher latency
-		gradient = gradient * 1.1
-		covariance = -1
+	// Get correlation between limit and latency
+
+	// TODO should we move this above the isStable check?
+	correlation := l.covariance.add(float64(inflight), shortRTT)
+
+	// Only adjust if there's a significant correlation
+	if correlation != 0 {
+		// Use a gentler adjustment factor
+		adjustment := 1.0 - (correlation * 0.05) // Max ±5% adjustment instead of ±10%
+		gradient *= adjustment
 	}
+	covariance = correlation
 
 	// Clamp the gradient
 	gradient = max(0.5, min(1.5, gradient))
 
 	// Adjust, smooth, and clamp the limit based on the gradient
 	newLimit := l.limit * gradient
-	newLimit = util.Smooth(l.limit, newLimit, l.smoothing)
+	newLimit = util.Smooth(l.limit, newLimit, l.smoothingFactor)
 	newLimit = max(l.minLimit, min(l.maxLimit, newLimit))
 
 	// Clamp increases to limit relative to concurrency
@@ -310,7 +342,8 @@ func (l *adaptiveLimiter[R]) updateLimit(rtt time.Duration, inflight int) {
 	}
 
 	if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
-		l.logger.Debug(fmt.Sprintf("newLimit=%0.2f, oldLimit=%0.2f, inflight=%d, shortRTT=%0.2f, longRTT=%0.2f, covariance=%d, gradient=%0.2f", newLimit, l.limit, inflight, shortRTT/1e6, longRTT/1e6, int(covariance), gradient))
+		l.logger.Debug(fmt.Sprintf("newLimit=%0.2f, oldLimit=%0.2f, inflight=%d, shortRTT=%0.2f, longRTT=%0.2f, covariance=%0.2f, originalGradient=%0.2f, gradient=%0.2f",
+			newLimit, l.limit, inflight, shortRTT/1e6, longRTT/1e6, covariance, originalGradient, gradient))
 	}
 
 	if uint(l.limit) != uint(newLimit) {
