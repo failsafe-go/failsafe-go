@@ -78,17 +78,17 @@ Builder builds AdaptiveLimiter instances.
 This type is not concurrency safe.
 */
 type Builder[R any] interface {
-	WithShortWindow(minDuration time.Duration, maxDuration time.Duration, minWindowSize uint) Builder[R]
+	WithShortWindow(minDuration time.Duration, maxDuration time.Duration, minSamples uint) Builder[R]
 
-	WithLongWindow(longWindowSize uint) Builder[R]
+	WithLongWindow(size uint) Builder[R]
+
+	WithCovarianceWindow(size uint) Builder[R]
 
 	WithLimits(minLimit uint, maxLimit uint, initialLimit uint) Builder[R]
 
-	WithCovarianceWindow(covarianceWindowSize uint) Builder[R]
+	WithMaxLimitFactor(maxLimitFactor float32) Builder[R]
 
 	WithSmoothing(smoothingFactor float32) Builder[R]
-
-	// TODO WithMaxMultiple(maxLimitMultiple ) // max
 
 	WithMaxLatency(maxLatency time.Duration) Builder[R]
 
@@ -107,16 +107,17 @@ type LimitChangedEvent struct {
 }
 
 type config[R any] struct {
-	logger            *slog.Logger
-	minWindowDuration time.Duration
-	maxWindowDuration time.Duration
-	minWindowSamples  uint
-	longWindow        uint
-	covarianceWindow  uint
+	logger                 *slog.Logger
+	shortWindowMinDuration time.Duration
+	shortWindowMaxDuration time.Duration
+	shortWindowMinSamples  uint
+	longWindowSize         uint
+	covarianceWindowSize   uint
 
-	initialLimit    uint
 	minLimit        float64
 	maxLimit        float64
+	initialLimit    uint
+	maxLimitFactor  float64
 	smoothingFactor float64
 
 	maxLatency           time.Duration
@@ -127,27 +128,33 @@ var _ Builder[any] = &config[any]{}
 
 func NewBuilder[R any]() Builder[R] {
 	return &config[R]{
-		minWindowDuration: time.Second,
-		maxWindowDuration: time.Second,
-		minWindowSamples:  1,
-		longWindow:        60,
-		covarianceWindow:  20,
-		initialLimit:      20,
-		minLimit:          1,
-		maxLimit:          200,
-		smoothingFactor:   0.2,
+		shortWindowMinDuration: time.Second,
+		shortWindowMaxDuration: time.Second,
+		shortWindowMinSamples:  1,
+		longWindowSize:         60,
+		covarianceWindowSize:   20,
+		minLimit:               1,
+		maxLimit:               200,
+		initialLimit:           20,
+		maxLimitFactor:         5.0,
+		smoothingFactor:        0.2,
 	}
 }
 
-func (c *config[R]) WithShortWindow(minDuration time.Duration, maxDuration time.Duration, minWindowSize uint) Builder[R] {
-	c.minWindowDuration = minDuration
-	c.maxWindowDuration = maxDuration
-	c.minWindowSamples = minWindowSize
+func (c *config[R]) WithShortWindow(minDuration time.Duration, maxDuration time.Duration, minSamples uint) Builder[R] {
+	c.shortWindowMinDuration = minDuration
+	c.shortWindowMaxDuration = maxDuration
+	c.shortWindowMinSamples = minSamples
 	return c
 }
 
-func (c *config[R]) WithLongWindow(longWindowSize uint) Builder[R] {
-	c.longWindow = longWindowSize
+func (c *config[R]) WithLongWindow(size uint) Builder[R] {
+	c.longWindowSize = size
+	return c
+}
+
+func (c *config[R]) WithCovarianceWindow(size uint) Builder[R] {
+	c.covarianceWindowSize = size
 	return c
 }
 
@@ -158,8 +165,8 @@ func (c *config[R]) WithLimits(minLimit uint, maxLimit uint, initialLimit uint) 
 	return c
 }
 
-func (c *config[R]) WithCovarianceWindow(covarianceWindowSize uint) Builder[R] {
-	c.covarianceWindow = covarianceWindowSize
+func (c *config[R]) WithMaxLimitFactor(maxLimitFactor float32) Builder[R] {
+	c.maxLimitFactor = float64(maxLimitFactor)
 	return c
 }
 
@@ -184,26 +191,22 @@ func (c *config[R]) OnLimitChanged(listener func(event LimitChangedEvent)) Build
 }
 
 func (c *config[R]) Build() AdaptiveLimiter[R] {
-	var result AdaptiveLimiter[R]
 	adaptive := &adaptiveLimiter[R]{
-		config:     c,
-		semaphore:  util.NewDynamicSemaphore(int64(c.initialLimit)),
-		limit:      float64(c.initialLimit),
-		shortRTT:   newRTTWindow(),
-		longRTT:    util.NewEWMA(c.longWindow, warmupSamples),
-		covariance: newCovarianceWindow(c.covarianceWindow),
-
-		rttSamples:      newVariationWindow(8), // make([]float64, 8),
-		inflightSamples: newVariationWindow(8), // make([]float64, 8),
+		config:          c,
+		semaphore:       util.NewDynamicSemaphore(int64(c.initialLimit)),
+		limit:           float64(c.initialLimit),
+		shortRTT:        newRTTWindow(),
+		longRTT:         util.NewEWMA(c.longWindowSize, warmupSamples),
+		rttSamples:      newVariationWindow(8),
+		inflightSamples: newVariationWindow(8),
+		covariance:      newCovarianceWindow(c.covarianceWindowSize),
 	}
 	if c.maxLatency != 0 {
-		result = &blockingLimiter[R]{
+		return &blockingLimiter[R]{
 			adaptiveLimiter: adaptive,
 		}
-	} else {
-		result = adaptive
 	}
-	return result
+	return adaptive
 }
 
 type adaptiveLimiter[R any] struct {
@@ -271,14 +274,14 @@ func (l *adaptiveLimiter[R]) record(startTime time.Time, inflight int, dropped b
 	now := time.Now()
 	rtt := now.Sub(startTime)
 	if !dropped {
-		l.shortRTT = l.shortRTT.add(rtt)
+		l.shortRTT.add(rtt)
 	}
 
-	if now.After(l.nextUpdateTime) && l.shortRTT.count >= l.minWindowSamples {
+	if now.After(l.nextUpdateTime) && l.shortRTT.size >= l.shortWindowMinSamples {
 		l.updateLimit(l.shortRTT.average(), inflight)
 		l.shortRTT = newRTTWindow()
-		minWindowTime := max(l.shortRTT.minRTT*2, l.minWindowDuration)
-		l.nextUpdateTime = now.Add(min(minWindowTime, l.maxWindowDuration))
+		minWindowTime := max(l.shortRTT.minRTT*2, l.shortWindowMinDuration)
+		l.nextUpdateTime = now.Add(min(minWindowTime, l.shortWindowMaxDuration))
 	}
 }
 
@@ -290,43 +293,34 @@ func (l *adaptiveLimiter[R]) updateLimit(rtt time.Duration, inflight int) {
 	longRTT := l.longRTT.Add(float64(rtt))
 
 	// Calculate stability metrics
-	rttStability := l.rttSamples.add(shortRTT)
-	inflightStability := l.inflightSamples.add(float64(inflight))
+	rttVariation := l.rttSamples.add(shortRTT)
+	inflightVariation := l.inflightSamples.add(float64(inflight))
 
 	// Calculate latency gradient
 	gradient := longRTT / shortRTT
-	originalGradient := gradient
 
 	// If system is stable and gradient would decrease limit, maintain current limit
-	isStable := rttStability < 0.05 && inflightStability < 0.05
+	isStable := rttVariation < 0.05 && inflightVariation < 0.05
 	if isStable && gradient < 1.0 {
 		if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
-			l.logger.Debug("metrics stable, maintaining limit",
-				"rttStability", fmt.Sprintf("%.3f", rttStability),
-				"inflightStability", fmt.Sprintf("%.3f", inflightStability),
-				"originalGradient", fmt.Sprintf("%.3f", originalGradient))
+			l.logger.Debug("stable rtt and inflight",
+				"rttVariation", fmt.Sprintf("%.3f", rttVariation),
+				"inflightVariation", fmt.Sprintf("%.3f", inflightVariation),
+				"gradient", fmt.Sprintf("%.3f", gradient))
 		}
 		return
 	}
-
-	// Apply covariance adjustment for unstable periods
-	covariance := 0.0
 
 	// Adjust the gradient based on any covariance between concurrency and latency.
 	// Covariance indicates whether increases in recent limits correlate to increases in recent latencies.
 	// This is necessary to avoid situations where the gradient and limit rise indefinitely.
 	// Get correlation between limit and latency
-
-	// TODO should we move this above the isStable check?
 	correlation := l.covariance.add(float64(inflight), shortRTT)
-
-	// Only adjust if there's a significant correlation
 	if correlation != 0 {
 		// Use a gentler adjustment factor
 		adjustment := 1.0 - (correlation * 0.05) // Max ±5% adjustment instead of ±10%
 		gradient *= adjustment
 	}
-	covariance = correlation
 
 	// Clamp the gradient
 	gradient = max(0.5, min(1.5, gradient))
@@ -336,14 +330,22 @@ func (l *adaptiveLimiter[R]) updateLimit(rtt time.Duration, inflight int) {
 	newLimit = util.Smooth(l.limit, newLimit, l.smoothingFactor)
 	newLimit = max(l.minLimit, min(l.maxLimit, newLimit))
 
-	// Clamp increases to limit relative to concurrency
-	if newLimit > float64(inflight)*10 {
+	// Don't increase the limit beyond the max limit factor
+	if newLimit > float64(inflight)*l.maxLimitFactor {
 		return
 	}
 
 	if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
-		l.logger.Debug(fmt.Sprintf("newLimit=%0.2f, oldLimit=%0.2f, inflight=%d, shortRTT=%0.2f, longRTT=%0.2f, covariance=%0.2f, originalGradient=%0.2f, gradient=%0.2f",
-			newLimit, l.limit, inflight, shortRTT/1e6, longRTT/1e6, covariance, originalGradient, gradient))
+		if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
+			l.logger.Debug("updated limit",
+				"newLimit", fmt.Sprintf("%.2f", newLimit),
+				"oldLimit", fmt.Sprintf("%.2f", l.limit),
+				"inflight", inflight,
+				"shortRTT", fmt.Sprintf("%.2f", shortRTT/1e6),
+				"longRTT", fmt.Sprintf("%.2f", longRTT/1e6),
+				"gradient", fmt.Sprintf("%.2f", gradient),
+				"correlation", fmt.Sprintf("%.2f", correlation))
+		}
 	}
 
 	if uint(l.limit) != uint(newLimit) {

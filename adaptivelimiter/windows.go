@@ -8,7 +8,7 @@ import (
 type rttWindow struct {
 	minRTT time.Duration
 	rttSum time.Duration
-	count  uint
+	size   uint
 }
 
 func newRTTWindow() *rttWindow {
@@ -17,21 +17,67 @@ func newRTTWindow() *rttWindow {
 	}
 }
 
-// add adds a new sample to the shortRTT and returns a new immutable instance.
-func (w *rttWindow) add(rtt time.Duration) *rttWindow {
-	return &rttWindow{
-		minRTT: min(w.minRTT, rtt),
-		rttSum: w.rttSum + rtt,
-		count:  w.count + 1,
+func (w *rttWindow) add(rtt time.Duration) {
+	w.minRTT = min(w.minRTT, rtt)
+	w.rttSum += rtt
+	w.size++
+}
+
+func (w *rttWindow) average() time.Duration {
+	if w.size == 0 {
+		return 0
+	}
+	return w.rttSum / time.Duration(w.size)
+}
+
+type variationWindow struct {
+	samples    []float64
+	size       int
+	index      int
+	sum        float64
+	sumSquares float64
+}
+
+func newVariationWindow(capacity int) *variationWindow {
+	return &variationWindow{
+		samples: make([]float64, capacity),
 	}
 }
 
-// average returns the average RTT of all samples that have been added to the shortRTT.
-func (w *rttWindow) average() time.Duration {
-	if w.count == 0 {
-		return 0
+// add adds the value to the window if it's non-zero and returns the coefficient of variation (relative standard
+// deviation) for the samples in the window.
+// Returns 1 if there are < 2 samples, the variance is < 0, or the mean is 0.
+func (w *variationWindow) add(value float64) float64 {
+	if value != 0 {
+		if w.size < len(w.samples) {
+			w.size++
+		} else {
+			// Remove old value
+			old := w.samples[w.index]
+			w.sum -= old
+			w.sumSquares -= old * old
+		}
+
+		// Add new value
+		w.samples[w.index] = value
+		w.sum += value
+		w.sumSquares += value * value
+
+		w.index = (w.index + 1) % len(w.samples)
 	}
-	return w.rttSum / time.Duration(w.count)
+
+	// Require at least 2 values
+	if w.size < 2 {
+		return 1.0
+	}
+
+	mean := w.sum / float64(w.size)
+	variance := (w.sumSquares / float64(w.size)) - (mean * mean)
+	if variance < 0 || mean == 0 {
+		return 1.0
+	}
+
+	return math.Sqrt(variance) / mean
 }
 
 type covarianceWindow struct {
@@ -46,54 +92,54 @@ type covarianceWindow struct {
 	sumY2    float64
 }
 
-func newCovarianceWindow(windowSize uint) *covarianceWindow {
+func newCovarianceWindow(capacity uint) *covarianceWindow {
 	return &covarianceWindow{
-		xSamples: make([]float64, windowSize),
-		ySamples: make([]float64, windowSize),
+		xSamples: make([]float64, capacity),
+		ySamples: make([]float64, capacity),
 	}
 }
 
-// adds the x and y values to the covariance window and returns the current correlation coefficient.
-// Returns a value between .5 and 1 when a correlation between the increasing x and y values is present.
+// add adds the values to the window and returns the current correlation coefficient.
+// Returns a value between .5 and 1 when a correlation between increasing x and y values is present.
 // Returns a value between -1 and -.5 when a correlation between increasing x and decreasing y values is present.
 // Returns 0 if < 2 samples, low variation (< .01) or weak correlation (< .5).
-func (c *covarianceWindow) add(x, y float64) float64 {
-	if c.size < len(c.xSamples) {
-		c.size++
+func (w *covarianceWindow) add(x, y float64) float64 {
+	if w.size < len(w.xSamples) {
+		w.size++
 	} else {
-		oldX := c.xSamples[c.index]
-		oldY := c.ySamples[c.index]
-		c.sumX -= oldX
-		c.sumY -= oldY
-		c.sumXY -= oldX * oldY
-		c.sumX2 -= oldX * oldX
-		c.sumY2 -= oldY * oldY
+		// Remove old values
+		oldX := w.xSamples[w.index]
+		oldY := w.ySamples[w.index]
+		w.sumX -= oldX
+		w.sumY -= oldY
+		w.sumXY -= oldX * oldY
+		w.sumX2 -= oldX * oldX
+		w.sumY2 -= oldY * oldY
 	}
 
-	c.xSamples[c.index] = x
-	c.ySamples[c.index] = y
-	c.sumX += x
-	c.sumY += y
-	c.sumXY += x * y
-	c.sumX2 += x * x
-	c.sumY2 += y * y
+	// Add new values
+	w.xSamples[w.index] = x
+	w.ySamples[w.index] = y
+	w.sumX += x
+	w.sumY += y
+	w.sumXY += x * y
+	w.sumX2 += x * x
+	w.sumY2 += y * y
 
-	c.index = (c.index + 1) % len(c.xSamples)
+	w.index = (w.index + 1) % len(w.xSamples)
 
-	if c.size < 2 {
+	// Require at least 2 values
+	if w.size < 2 {
 		return 0
 	}
 
-	// Calculate means
-	meanX := c.sumX / float64(c.size)
-	meanY := c.sumY / float64(c.size)
+	// Calculate means and variances
+	meanX := w.sumX / float64(w.size)
+	meanY := w.sumY / float64(w.size)
+	varX := (w.sumX2 / float64(w.size)) - (meanX * meanX)
+	varY := (w.sumY2 / float64(w.size)) - (meanY * meanY)
 
-	// Calculate variances
-	varX := (c.sumX2 / float64(c.size)) - (meanX * meanX)
-	varY := (c.sumY2 / float64(c.size)) - (meanY * meanY)
-
-	// Calculate coefficient of variation (relative variance)
-	// This gives us variance as a percentage of the mean
+	// Calculate coefficient of variation (relative variance), which gives us variance as a percentage of the mean
 	cvX := math.Sqrt(varX) / math.Abs(meanX)
 	cvY := math.Sqrt(varY) / math.Abs(meanY)
 
@@ -104,7 +150,7 @@ func (c *covarianceWindow) add(x, y float64) float64 {
 	}
 
 	// Calculate correlation coefficient
-	covariance := (c.sumXY / float64(c.size)) - (meanX * meanY)
+	covariance := (w.sumXY / float64(w.size)) - (meanX * meanY)
 	correlation := covariance / math.Sqrt(varX*varY)
 
 	// Ignore weak correlations
@@ -113,52 +159,4 @@ func (c *covarianceWindow) add(x, y float64) float64 {
 	}
 
 	return correlation
-}
-
-type variationWindow struct {
-	samples      []float64
-	index        int
-	sum          float64
-	sumSquares   float64
-	nonZeroCount float64 // Count of non-zero samples in shortRTT
-}
-
-func newVariationWindow(windowSize int) *variationWindow {
-	return &variationWindow{
-		samples: make([]float64, windowSize),
-	}
-}
-
-// add returns the coefficient of variation (relative standard deviation)
-// for a shortRTT of samples. Lower values indicate more stability.
-func (s *variationWindow) add(value float64) float64 {
-	// Remove old sample contribution if non-zero
-	if old := s.samples[s.index]; old != 0 {
-		s.sum -= old
-		s.sumSquares -= old * old
-		s.nonZeroCount--
-	}
-
-	// add new sample contribution if non-zero
-	s.samples[s.index] = value
-	if value != 0 {
-		s.sum += value
-		s.sumSquares += value * value
-		s.nonZeroCount++
-	}
-
-	s.index = (s.index + 1) % len(s.samples)
-
-	// Need at least 2 non-zero samples for meaningful calculation
-	if s.nonZeroCount < 2 {
-		return 1.0
-	}
-
-	mean := s.sum / s.nonZeroCount
-	variance := (s.sumSquares / s.nonZeroCount) - (mean * mean)
-	if variance < 0 || mean == 0 {
-		return 1.0
-	}
-
-	return math.Sqrt(variance) / mean
 }
