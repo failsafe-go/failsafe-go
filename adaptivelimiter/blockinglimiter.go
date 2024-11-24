@@ -3,6 +3,8 @@ package adaptivelimiter
 import (
 	"context"
 	"time"
+
+	"github.com/failsafe-go/failsafe-go/policy"
 )
 
 // blockingLimiter wraps an AdaptiveLimiter and blocks some portion of requests when the AdaptiveLimiter is at its
@@ -55,7 +57,7 @@ func (l *blockingLimiter[R]) estimateLatency() time.Duration {
 	totalRequests := l.blockedCount + 1
 
 	// Calculate complete batches needed
-	concurrency := l.Limit()
+	concurrency := int(l.limit)
 	fullBatches := totalRequests / concurrency
 
 	// If we have any remaining requests, count it as a full batch
@@ -70,4 +72,13 @@ func (l *blockingLimiter[R]) Blocked() int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.blockedCount
+}
+
+func (l *blockingLimiter[R]) ToExecutor(_ R) any {
+	e := &blockingExecutor[R]{
+		BaseExecutor:    &policy.BaseExecutor[R]{},
+		blockingLimiter: l,
+	}
+	e.Executor = e
+	return e
 }
