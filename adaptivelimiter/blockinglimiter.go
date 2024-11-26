@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/failsafe-go/failsafe-go/internal/util"
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
@@ -13,7 +14,8 @@ type blockingLimiter[R any] struct {
 	*adaptiveLimiter[R]
 
 	// Guarded by mu
-	blockedCount int
+	blockedCount   int
+	processingTime util.MovingAverage
 }
 
 func (l *blockingLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
@@ -45,10 +47,39 @@ func (l *blockingLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) 
 	return permit, nil
 }
 
+func (l *blockingLimiter[R]) wrapPermit(permit Permit) Permit {
+	start := time.Now()
+	return &wrappedPermit{
+		Permit: permit,
+		onDone: func() {
+			l.mu.Lock()
+			defer l.mu.Unlock()
+			processingDuration := time.Since(start)
+			l.processingTime.Add(float64(processingDuration))
+		},
+	}
+}
+
+type wrappedPermit struct {
+	Permit
+	onDone func()
+}
+
+func (p *wrappedPermit) Record() {
+	p.Permit.Record()
+	p.onDone()
+}
+
+func (p *wrappedPermit) Drop() {
+	p.Permit.Drop()
+	// p.onDone()
+}
+
 // estimateLatency estimates the latency for a new request by considering the delegate's limit, how many batches of
 // blocked requests it would take before a new request is serviced, and the average processing time per request.
 func (l *blockingLimiter[R]) estimateLatency() time.Duration {
-	avgProcessing := time.Duration(l.longRTT.Value())
+	// avgProcessing := time.Duration(l.longRTT.Value())
+	avgProcessing := time.Duration(l.processingTime.Value())
 	if avgProcessing == 0 {
 		avgProcessing = l.maxLatency / warmupSamples
 	}

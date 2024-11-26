@@ -224,6 +224,7 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 	if c.maxLatency != 0 {
 		return &blockingLimiter[R]{
 			adaptiveLimiter: adaptive,
+			processingTime:  util.NewEWMA(100, 10),
 		}
 	}
 	return adaptive
