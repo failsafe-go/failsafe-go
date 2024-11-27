@@ -73,7 +73,7 @@ func TestCache(t *testing.T) {
 				clear(cache)
 			}
 
-			// Add item to cache
+			// add item to cache
 			testutil.Test[string](t).
 				WithExecutor(tc.executor).
 				Setup(setup).

@@ -118,6 +118,12 @@ func RandomDelayFactor[T number](delay T, jitterFactor float32, random float32) 
 	return T(float32(delay) * randomFactor)
 }
 
+// Smooth returns a value that is decreased by some portion of the oldValue, and increased by some portion of the
+// newValue, based on the factor.
+func Smooth(oldValue, newValue, factor float64) float64 {
+	return oldValue*(1-factor) + newValue*factor
+}
+
 type Clock interface {
 	CurrentUnixNano() int64
 }
