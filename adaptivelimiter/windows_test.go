@@ -170,7 +170,7 @@ func TestCovarianceWindow(t *testing.T) {
 			}
 
 			assert.InDelta(t, tc.expectedCorrelation, correlation, 0.0001)
-			assert.Equal(t, tc.expectedSize, w.size)
+			assert.Equal(t, tc.expectedSize, w.xSamples.size)
 		})
 	}
 }
@@ -186,5 +186,5 @@ func TestCovarianceWindowSliding(t *testing.T) {
 	assert.InDelta(t, 1.0, corr, 0.0001)
 	corr = w.add(4.0, 40.0)
 	assert.InDelta(t, 1.0, corr, 0.0001)
-	assert.Equal(t, 3, w.size)
+	assert.Equal(t, 3, w.xSamples.size)
 }

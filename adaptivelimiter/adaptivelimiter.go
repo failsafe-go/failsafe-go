@@ -18,22 +18,22 @@ var ErrExceeded = errors.New("limit exceeded")
 
 const warmupSamples = 10
 
-// AdaptiveLimiter is a concurrency limiter that adjusts its limit up or down based on latency trends:
-//  - When recent latencies are trending up relative to longer term latencies, the concurrency limit is decreased.
-//  - When recent latencies are trending down relative to longer term latencies, the concurrency limit is increased.
+// AdaptiveLimiter is a concurrency limiter that adjusts its limit up or down based on execution time trends:
+//  - When recent execution times are trending up relative to longer term execution times, the concurrency limit is decreased.
+//  - When recent execution times are trending down relative to longer term execution times, the concurrency limit is increased.
 //
-// To accomplish this, recent average latencies are tracked and regularly compared to a weighted moving average of
-// longer term latencies. Limit increases are additionally controlled to ensure they don't increase latency. Any
+// To accomplish this, short-term average execution times are tracked and regularly compared to a weighted moving average of
+// longer-term execution times. Limit increases are additionally controlled to ensure they don't increase execution times. Any
 // executions in excess of the limit will be rejected with ErrExceeded.
 //
 // By default, an AdaptiveLimiter will converge on a concurrency limit that represents the capacity of the machine it's
-// running on, and avoids having executions queue up. Since running a limit without allowing for queueing is too strict
-// in some cases and may cause unexpected rejections, optional blocking of requests when the limiter is full can be
-// enabled by configuring a maxLatency.
+// running on, and avoids having executions block. Since enforcing a limit without allowing for blocking is too strict in
+// some cases and may cause unexpected rejections, optional blocking of executions when the limiter is full can be
+// enabled by configuring a maxExecutionTime.
 //
-// When blocking is enabled and the limiter is full, requests block up to the configures maxLatency based on an
-// estimated latency for incoming requests. Estimated latency considers the current number of blocked requests, the
-// current limit, and the long-term average request processing time.
+// When blocking is enabled and the limiter is full, execution block up to the configures maxExecutionTime based on an
+// estimated execution time for incoming requests. Estimated execution time considers the current number of blocked
+// requests, the current limit, and the long-term average execution time.
 //
 // R is the execution result type. This type is concurrency safe.
 type AdaptiveLimiter[R any] interface {
@@ -83,15 +83,10 @@ type Builder[R any] interface {
 	// The default values are 1s, 1s, and 1.
 	WithShortWindow(minDuration time.Duration, maxDuration time.Duration, minSamples uint) Builder[R]
 
-	// WithLongWindow configures the number of short-term latency measurements that will be stored in an exponentially
-	// weighted moving average window, representing the long-term baseline latency of the system.
+	// WithLongWindow configures the number of short-term execution measurements that will be stored in an exponentially
+	// weighted moving average window, representing the long-term baseline execution time.
 	// The default value is 60.
 	WithLongWindow(size uint) Builder[R]
-
-	// WithCorrelationWindow configures how many recent limit and latency measurements are stored to detect whether increases
-	// in limits correlate with increases in latency, which will cause the limit to be adjusted down.
-	// The default value is 20.
-	WithCorrelationWindow(size uint) Builder[R]
 
 	// WithLimits configures min, max, and initial limits.
 	// The default values are 1, 1, and 20.
@@ -105,10 +100,21 @@ type Builder[R any] interface {
 	// The default value is .1, which means each limit change only contributes 10% to the new limit.
 	WithSmoothing(smoothingFactor float32) Builder[R]
 
-	// WithMaxLatency enables blocking of executions when the limiter is full, up to some max average latency.
-	// This allows short execution spikes to be absorbed without strictly rejecting requests.
-	// This is disabled by default, which means no requests will block when the limiter is full.
-	WithMaxLatency(maxLatency time.Duration) Builder[R]
+	// WithMaxExecutionTime enables blocking of executions when the limiter is full, up to some max average execution time,
+	// which includes the time spent while executions are blocked waiting for a permit. Enabling this allows short execution
+	// spikes to be absorbed without strictly rejecting executions when the limiter is full.
+	// This is disabled by default, which means no executions will block when the limiter is full.
+	WithMaxExecutionTime(maxExecutionTime time.Duration) Builder[R]
+
+	// WithVariationWindow configures the size of the window used to calculate coefficient of variation for execution time
+	// measurements, which helps determine when execution times are stable.
+	// The default value is 8.
+	WithVariationWindow(size uint) Builder[R]
+
+	// WithCorrelationWindow configures how many recent limit and execution time measurements are stored to detect whether increases
+	// in limits correlate with increases in execution times, which will cause the limit to be adjusted down.
+	// The default value is 20.
+	WithCorrelationWindow(size uint) Builder[R]
 
 	// WithLogger configures a logger which provides debug logging of limit adjustments.
 	WithLogger(logger *slog.Logger) Builder[R]
@@ -133,6 +139,7 @@ type config[R any] struct {
 	shortWindowMinSamples  uint
 	longWindowSize         uint
 	correlationWindowSize  uint
+	variationWindow        uint
 
 	minLimit        float64
 	maxLimit        float64
@@ -140,7 +147,7 @@ type config[R any] struct {
 	maxLimitFactor  float64
 	smoothingFactor float64
 
-	maxLatency           time.Duration
+	maxExecutionTime     time.Duration
 	limitChangedListener func(LimitChangedEvent)
 }
 
@@ -153,6 +160,7 @@ func NewBuilder[R any]() Builder[R] {
 		shortWindowMinSamples:  1,
 		longWindowSize:         60,
 		correlationWindowSize:  20,
+		variationWindow:        8,
 		minLimit:               1,
 		maxLimit:               200,
 		initialLimit:           20,
@@ -173,11 +181,6 @@ func (c *config[R]) WithLongWindow(size uint) Builder[R] {
 	return c
 }
 
-func (c *config[R]) WithCorrelationWindow(size uint) Builder[R] {
-	c.correlationWindowSize = size
-	return c
-}
-
 func (c *config[R]) WithLimits(minLimit uint, maxLimit uint, initialLimit uint) Builder[R] {
 	c.minLimit = float64(minLimit)
 	c.maxLimit = float64(maxLimit)
@@ -195,8 +198,18 @@ func (c *config[R]) WithSmoothing(smoothingFactor float32) Builder[R] {
 	return c
 }
 
-func (c *config[R]) WithMaxLatency(maxLatency time.Duration) Builder[R] {
-	c.maxLatency = maxLatency
+func (c *config[R]) WithMaxExecutionTime(maxExecutionTime time.Duration) Builder[R] {
+	c.maxExecutionTime = maxExecutionTime
+	return c
+}
+
+func (c *config[R]) WithCorrelationWindow(size uint) Builder[R] {
+	c.correlationWindowSize = size
+	return c
+}
+
+func (c *config[R]) WithVariationWindow(size uint) Builder[R] {
+	c.variationWindow = size
 	return c
 }
 
@@ -212,15 +225,15 @@ func (c *config[R]) OnLimitChanged(listener func(event LimitChangedEvent)) Build
 
 func (c *config[R]) Build() AdaptiveLimiter[R] {
 	adaptive := &adaptiveLimiter[R]{
-		config:       c,
-		semaphore:    util.NewDynamicSemaphore(int64(c.initialLimit)),
-		limit:        float64(c.initialLimit),
-		shortRTT:     newRTTWindow(),
-		longRTT:      util.NewEWMA(c.longWindowSize, warmupSamples),
-		rttVariation: newVariationWindow(8),
-		covariance:   newCovarianceWindow(c.correlationWindowSize),
+		config:            c,
+		semaphore:         util.NewDynamicSemaphore(int64(c.initialLimit)),
+		limit:             float64(c.initialLimit),
+		shortRTT:          newRTTWindow(),
+		longRTT:           util.NewEWMA(c.longWindowSize, warmupSamples),
+		rttVariation:      newVariationWindow(8),
+		correlationWindow: newCovarianceWindow(c.correlationWindowSize),
 	}
-	if c.maxLatency != 0 {
+	if c.maxExecutionTime != 0 {
 		return &blockingLimiter[R]{
 			adaptiveLimiter: adaptive,
 		}
@@ -236,12 +249,12 @@ type adaptiveLimiter[R any] struct {
 	mu        sync.Mutex
 
 	// Guarded by mu
-	limit          float64            // The current concurrency limit
-	shortRTT       *rttWindow         // Tracks short term average latency
-	longRTT        util.MovingAverage // Tracks long term average latency
-	nextUpdateTime time.Time          // Tracks when the limit can next be updated
-	rttVariation   *variationWindow
-	covariance     *covarianceWindow // Tracks the correlation between concurrency latency
+	limit             float64            // The current concurrency limit
+	shortRTT          *rttWindow         // Tracks short term average execution time (round trip time)
+	longRTT           util.MovingAverage // Tracks long term average execution time
+	nextUpdateTime    time.Time          // Tracks when the limit can next be updated
+	rttVariation      *variationWindow   // Tracks the variation of execution times
+	correlationWindow *correlationWindow // Tracks the correlation between concurrency and execution times
 }
 
 func (l *adaptiveLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
@@ -283,7 +296,7 @@ func (l *adaptiveLimiter[R]) Blocked() int {
 	return 0
 }
 
-// Records the latency of a completed execution, updating the concurrency limit if the short shortRTT window is full.
+// Records the duration of a completed execution, updating the concurrency limit if the short shortRTT window is full.
 func (l *adaptiveLimiter[R]) record(startTime time.Time, inflight int, dropped bool) {
 	l.semaphore.Release()
 	l.mu.Lock()
@@ -307,13 +320,13 @@ func (l *adaptiveLimiter[R]) record(startTime time.Time, inflight int, dropped b
 // A stability check prevents unnecessary decreases during steady state.
 // A correlation adjustment prevents upward drift during overload.
 func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
-	// Update long term latency and calculate the initial gradient
+	// Update long term RTT and calculate the initial gradient
 	longRTT := l.longRTT.Add(shortRTT)
 	gradient := longRTT / shortRTT
 
 	// Calculate RTT variation and correlation with inflight
 	rttVariation := l.rttVariation.add(shortRTT)
-	correlation := l.covariance.add(float64(inflight), shortRTT)
+	correlation := l.correlationWindow.add(float64(inflight), shortRTT)
 
 	// If RTT is stable and gradient would decrease limit, maintain the current limit
 	if rttVariation < 0.05 && gradient < 1.0 {
@@ -321,8 +334,8 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 		return
 	}
 
-	// Adjust the gradient based on any correlation between increases in concurrency and latency by tracking their covariance.
-	// This is necessary to guard against situations where the limit rises too far while latency is destabilized.
+	// Adjust the gradient based on any correlation between increases in concurrency and RTT by tracking their correlationWindow.
+	// This is necessary to guard against situations where the limit rises too far while RTT is unstable.
 	if correlation != 0 {
 		// Adjust by up to 5%
 		adjustment := 1.0 - (correlation * 0.05)
