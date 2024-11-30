@@ -23,6 +23,7 @@ type Tester[R any] struct {
 	T       *testing.T
 	SetupFn func()
 	ContextFn
+	Policies []failsafe.Policy[R]
 	Executor failsafe.Executor[R]
 	run      WhenRun[R]
 	get      WhenGet[R]
@@ -54,7 +55,7 @@ func (t *Tester[R]) Reset(stats ...Resetable) *Tester[R] {
 }
 
 func (t *Tester[R]) With(policies ...failsafe.Policy[R]) *Tester[R] {
-	t.Executor = failsafe.NewExecutor[R](policies...)
+	t.Policies = policies
 	return t
 }
 
@@ -91,6 +92,9 @@ func (t *Tester[R]) AssertFailureAs(expectedAttempts int, expectedExecutions int
 
 func (t *Tester[R]) assertResult(expectedAttempts int, expectedExecutions int, expectedResult R, expectedError error, expectedSuccess bool, errorAs bool, then ...func()) {
 	t.T.Helper()
+	if t.Executor == nil {
+		t.Executor = failsafe.NewExecutor[R](t.Policies...)
+	}
 	test := func(async bool) {
 		executorFn, assertFn := PrepareTest(t.T, t.SetupFn, t.ContextFn, t.Executor)
 
