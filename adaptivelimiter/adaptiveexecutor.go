@@ -7,7 +7,7 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// blockingExecutor is a policy.Executor that handles failures according to an adaptiveLimiter.
+// adaptiveExecutor is a policy.Executor that handles failures according to an adaptiveLimiter.
 type adaptiveExecutor[R any] struct {
 	*policy.BaseExecutor[R]
 	*adaptiveLimiter[R]
