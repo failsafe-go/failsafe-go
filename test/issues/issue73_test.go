@@ -19,7 +19,7 @@ import (
 
 // See https://github.com/failsafe-go/failsafe-go/issues/73
 func TestIssue73(t *testing.T) {
-	retryPolicy := failsafehttp.RetryPolicyBuilder().
+	retryPolicy := failsafehttp.NewRetryPolicyBuilder().
 		HandleIf(func(response *http.Response, err error) bool {
 			return true
 		}).
