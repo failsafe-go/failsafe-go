@@ -6,7 +6,7 @@ require (
 	github.com/bits-and-blooms/bitset v1.14.3
 	github.com/stretchr/testify v1.9.0
 	google.golang.org/grpc v1.67.1
-	google.golang.org/protobuf v1.35.1
+	google.golang.org/protobuf v1.35.2
 )
 
 require (
