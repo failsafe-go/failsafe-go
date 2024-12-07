@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -123,4 +124,80 @@ func TestDynamicSemaphoreAcquire(t *testing.T) {
 
 	// Should be able to consume another [free: 1]
 	checkAcquire(t, sem, true)
+}
+
+func TestDynamicSemaphore_TryAcquire(t *testing.T) {
+	tests := []struct {
+		name     string
+		size     int64
+		acquires int
+		expected bool
+	}{
+		{
+			name:     "when empty",
+			size:     2,
+			acquires: 0,
+			expected: true,
+		},
+		{
+			name:     "when partially filled",
+			size:     2,
+			acquires: 1,
+			expected: true,
+		},
+		{
+			name:     "when full",
+			size:     2,
+			acquires: 2,
+			expected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewDynamicSemaphore(tc.size)
+			for i := 0; i < tc.acquires; i++ {
+				s.TryAcquire()
+			}
+			assert.Equal(t, tc.expected, s.TryAcquire())
+		})
+	}
+}
+
+func TestDynamicSemaphore_IsFull(t *testing.T) {
+	tests := []struct {
+		name     string
+		size     int64
+		acquires int
+		expected bool
+	}{
+		{
+			name:     "when empty",
+			size:     2,
+			acquires: 0,
+			expected: false,
+		},
+		{
+			name:     "when partially filled",
+			size:     2,
+			acquires: 1,
+			expected: false,
+		},
+		{
+			name:     "when full",
+			size:     2,
+			acquires: 2,
+			expected: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewDynamicSemaphore(tc.size)
+			for i := 0; i < tc.acquires; i++ {
+				s.TryAcquire()
+			}
+			assert.Equal(t, tc.expected, s.IsFull())
+		})
+	}
 }

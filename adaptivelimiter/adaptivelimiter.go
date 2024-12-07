@@ -50,6 +50,9 @@ type AdaptiveLimiter[R any] interface {
 	// to the limiter.
 	TryAcquirePermit() (Permit, bool)
 
+	// CanAcquirePermit returns whether it's currently possible to acquire a permit, which may include blocking.
+	CanAcquirePermit() bool
+
 	// Limit returns the concurrent execution limit, as calculated by the adaptive limiter.
 	Limit() int
 
@@ -280,6 +283,10 @@ func (l *adaptiveLimiter[R]) TryAcquirePermit() (Permit, bool) {
 		startTime:       time.Now(),
 		currentInflight: l.semaphore.Inflight(),
 	}, true
+}
+
+func (l *adaptiveLimiter[R]) CanAcquirePermit() bool {
+	return !l.semaphore.IsFull()
 }
 
 func (l *adaptiveLimiter[R]) Limit() int {

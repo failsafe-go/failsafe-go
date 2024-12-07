@@ -114,6 +114,12 @@ func (s *DynamicSemaphore) Release() {
 	// Note we _don't_ decrement inflight since the slot was yielded directly.
 }
 
+func (s *DynamicSemaphore) IsFull() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cur == s.size
+}
+
 func (s *DynamicSemaphore) Inflight() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()

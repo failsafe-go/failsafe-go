@@ -22,10 +22,9 @@ func (l *blockingLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) 
 		return permit, nil
 	}
 
-	// Estimate if the blocking limiter is full
+	// Estimate if the blocking limiter is at capacity
 	l.mu.Lock()
-	estimatedLatency := l.estimateLatency()
-	if estimatedLatency > l.maxExecutionTime {
+	if l.estimateLatency() > l.maxExecutionTime {
 		l.mu.Unlock()
 		return nil, ErrExceeded
 	}
@@ -43,6 +42,17 @@ func (l *blockingLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) 
 	}
 
 	return permit, nil
+}
+
+func (l *blockingLimiter[R]) CanAcquirePermit() bool {
+	if l.semaphore.IsFull() {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+
+		// Estimate if the blocking limiter is at capacity
+		return l.estimateLatency() <= l.maxExecutionTime
+	}
+	return true
 }
 
 // estimateLatency estimates the latency for a new request by considering the delegate's limit, how many batches of
