@@ -50,7 +50,7 @@ type AdaptiveLimiter[R any] interface {
 	// to the limiter.
 	TryAcquirePermit() (Permit, bool)
 
-	// CanAcquirePermit returns whether it's currently possible to acquire a permit, which may include blocking.
+	// CanAcquirePermit returns whether it's currently possible to acquire a permit.
 	CanAcquirePermit() bool
 
 	// Limit returns the concurrent execution limit, as calculated by the adaptive limiter.
