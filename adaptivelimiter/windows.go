@@ -13,7 +13,7 @@ type rttWindow struct {
 
 func newRTTWindow() *rttWindow {
 	return &rttWindow{
-		minRTT: math.MaxInt64,
+		minRTT: 24 * time.Hour,
 	}
 }
 

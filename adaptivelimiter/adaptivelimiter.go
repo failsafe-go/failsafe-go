@@ -233,6 +233,7 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 		limit:             float64(c.initialLimit),
 		shortRTT:          newRTTWindow(),
 		longRTT:           util.NewEWMA(c.longWindowSize, warmupSamples),
+		nextUpdateTime:    time.Now(),
 		rttVariation:      newVariationWindow(8),
 		correlationWindow: newCovarianceWindow(c.correlationWindowSize),
 	}
@@ -317,8 +318,9 @@ func (l *adaptiveLimiter[R]) record(startTime time.Time, inflight int, dropped b
 
 	if now.After(l.nextUpdateTime) && l.shortRTT.size >= l.shortWindowMinSamples {
 		l.updateLimit(float64(l.shortRTT.average()), inflight)
+		minRTT := l.shortRTT.minRTT
 		l.shortRTT = newRTTWindow()
-		minWindowTime := max(l.shortRTT.minRTT*2, l.shortWindowMinDuration)
+		minWindowTime := max(minRTT*2, l.shortWindowMinDuration)
 		l.nextUpdateTime = now.Add(min(minWindowTime, l.shortWindowMaxDuration))
 	}
 }
