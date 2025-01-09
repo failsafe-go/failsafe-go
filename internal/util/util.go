@@ -2,6 +2,7 @@ package util
 
 import (
 	"context"
+	"math"
 	"reflect"
 	"time"
 )
@@ -122,6 +123,23 @@ func RandomDelayFactor[T number](delay T, jitterFactor float32, random float32) 
 // newValue, based on the factor.
 func Smooth(oldValue, newValue, factor float64) float64 {
 	return oldValue*(1-factor) + newValue*factor
+}
+
+var log10RootLookup []int
+
+func Log10RootFunction(baseline int) func(limit int) int {
+	return func(limit int) int {
+		if limit < len(log10RootLookup) {
+			return baseline + log10RootLookup[limit]
+		}
+		return baseline + int(math.Log10(float64(limit)))
+	}
+}
+
+func init() {
+	for i := 0; i < 1000; i++ {
+		log10RootLookup = append(log10RootLookup, int(max(1, float64(int(math.Log10(float64(i)))))))
+	}
 }
 
 type Clock interface {
