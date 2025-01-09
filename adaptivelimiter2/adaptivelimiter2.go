@@ -2,7 +2,6 @@ package adaptivelimiter2
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -17,7 +16,7 @@ import (
 )
 
 // ErrExceeded is returned when an execution exceeds the current limit.
-var ErrExceeded = errors.New("limit exceeded")
+// var ErrExceeded = errors.New("limit exceeded")
 
 const warmupSamples = 10
 
@@ -389,6 +388,7 @@ func (l *adaptiveLimiter2[R]) updateLimit(shortRTT float64, inflight int) {
 		// 	return
 		// }
 	} else if rttCorr > .7 && (throughputVariation < .1 || throughputCorr < 0) { // else if throughputCorr != 0 && throughputCorr < 0 { // Moderate overload
+		// TODO check that throughputCorr < 0 && rttVariation < .1
 		// Sustained overload, throughput degrading - decrease aggressively
 		direction = "decreasing thru"
 		decrease = true
@@ -635,16 +635,6 @@ func (w *correlationWindow) add(x, y float64) (correlation, cvX, cvY float64) {
 
 	covariance := (w.sumXY / float64(size)) - (meanX * meanY)
 	correlation = covariance / (math.Sqrt(varX) * math.Sqrt(varY))
-
-	// fmt.Printf("Correlation calculation: ")
-	// fmt.Printf("  x=%.2f y=%.2f ", x, y)
-	// fmt.Printf("  meanX=%.2f meanY=%.2f ", meanX, meanY)
-	// fmt.Printf("  varX=%.2f varY=%.2f ", varX, varY)
-	// fmt.Printf("  stdX=%.2f stdY=%.2f ", math.Sqrt(varX), math.Sqrt(varY))
-	// fmt.Printf("  sumXY=%.2f ", w.sumXY)
-	// fmt.Printf("  size=%d ", size)
-	// fmt.Printf("  covariance=%.2f ", covariance)
-	// fmt.Printf("  correlation=%.2f\n", correlation)
 
 	return correlation, cvX, cvY
 }

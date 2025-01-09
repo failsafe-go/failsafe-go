@@ -2,6 +2,7 @@ package adaptivelimiter2
 
 import (
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/adaptivelimiter"
 	"github.com/failsafe-go/failsafe-go/common"
 	"github.com/failsafe-go/failsafe-go/internal"
 	"github.com/failsafe-go/failsafe-go/policy"
@@ -18,7 +19,7 @@ var _ policy.Executor[any] = &adaptiveExecutor[any]{}
 func (e *adaptiveExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		if permit, ok := e.TryAcquirePermit(); !ok {
-			return internal.FailureResult[R](ErrExceeded)
+			return internal.FailureResult[R](adaptivelimiter.ErrExceeded)
 		} else {
 			execInternal := exec.(policy.ExecutionInternal[R])
 			result := innerFn(exec)

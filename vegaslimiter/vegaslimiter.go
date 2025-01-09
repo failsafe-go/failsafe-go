@@ -2,7 +2,6 @@ package vegaslimiter
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -17,7 +16,7 @@ import (
 )
 
 // ErrExceeded is returned when an execution exceeds the current limit.
-var ErrExceeded = errors.New("limit exceeded")
+// var ErrExceeded = errors.New("limit exceeded")
 
 const warmupSamples = 10
 

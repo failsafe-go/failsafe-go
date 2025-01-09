@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/failsafe-go/failsafe-go/adaptivelimiter"
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
@@ -26,7 +27,7 @@ func (l *blockingLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) 
 	l.mu.Lock()
 	if l.estimateLatency() > l.maxExecutionTime {
 		l.mu.Unlock()
-		return nil, ErrExceeded
+		return nil, adaptivelimiter.ErrExceeded
 	}
 
 	// Acquire a permit, blocking if needed
