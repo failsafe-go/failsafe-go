@@ -240,10 +240,9 @@ func (c *config[R]) OnLimitChanged(listener func(event LimitChangedEvent)) Build
 
 func (c *config[R]) Build() AdaptiveLimiter2[R] {
 	adaptive := &adaptiveLimiter2[R]{
-		config:    c,
-		semaphore: util.NewDynamicSemaphore(int64(c.initialLimit)),
-		limit:     float64(c.initialLimit),
-		// shortRTT:         newRTTWindow(),
+		config:                c,
+		semaphore:             util.NewDynamicSemaphore(int64(c.initialLimit)),
+		limit:                 float64(c.initialLimit),
 		shortRTT:              &td{TDigest: tdigest.NewWithCompression(100)},
 		longRTT:               util.NewEWMA(c.longWindowSize, warmupSamples),
 		nextUpdateTime:        time.Now(),
@@ -348,63 +347,51 @@ func (l *adaptiveLimiter2[R]) record(startTime time.Time, inflight int, dropped 
 // A stability check prevents unnecessary decreases during steady state.
 // A correlation adjustment prevents upward drift during overload.
 func (l *adaptiveLimiter2[R]) updateLimit(shortRTT float64, inflight int) {
-	// if l.remainingAdjustments == 0 {
-	// 	l.targetRTT = shortRTT
-	// 	l.remainingAdjustments = 20
-	// }
-	// l.remainingAdjustments--
-
 	// Update long term RTT and calculate the initial gradient
 	longRTT := l.longRTT.Add(shortRTT)
-	// longRTT := l.targetRTT
 	gradient := longRTT / shortRTT
 	queueSize := int(math.Ceil(float64(inflight) * (1 - gradient)))
 
 	// Calculate RTT variation and correlation with inflight
-	rttVariation := l.rttVariation.add(shortRTT)
-
+	rttVariation := l.rttVariation.add(shortRTT / 1e6)
 	rttCorr, _, _ := l.rttCorrelation.add(float64(inflight), shortRTT/1e6)
 	throughput := float64(inflight) / (shortRTT / 1e6)
 	throughputCorr, _, throughputVariation := l.throughputCorrelation.add(float64(inflight), throughput)
-	// throughputStalled := throughputVariation < .05 || throughputCorr < 0
-	// throughputVariation := l.throughputCorrelation.xSamples
+	inflightSlope := l.throughputCorrelation.xSamples.calculateSlope()
+	throughputSlope := l.throughputCorrelation.ySamples.calculateSlope()
 
 	alpha := l.alphaFunc(int(l.limit))
 	beta := l.betaFunc(int(l.limit))
 	newLimit := l.limit
 	direction := "leaving"
 
-	// Clamp the gradient
-	gradient = max(0.5, min(1.5, gradient))
-
 	decrease := false
 
-	if queueSize > beta { // severe overload
-		direction = "decreasing beta"
+	if queueSize > beta {
+		// This condition handles severe overload where recent RTT significantly exceeds the baseline
+		direction = "decreasing queue"
 		decrease = true
-		// If gradient would decrease limit and either the adjustment is small or RTT is stable, maintain the current limit
-		// if rttVariation < 0.05 {
-		// 	l.logLimit("limit stable", l.limit, "holding", queueSize, inflight, shortRTT, longRTT, throughput, rttVariation, rttCorr, throughputCorr, gradient)
-		// 	return
-		// }
-	} else if rttCorr > .7 && (throughputVariation < .1 || throughputCorr < 0) { // else if throughputCorr != 0 && throughputCorr < 0 { // Moderate overload
-		// TODO check that throughputCorr < 0 && rttVariation < .1
-		// Sustained overload, throughput degrading - decrease aggressively
-		direction = "decreasing thru"
+	} else if throughputCorr < 0 && throughputSlope < 0 {
+		// This condition handles moderate overload where throughput decreases relative to inflight
+		direction = "decreasing thruCorr"
 		decrease = true
-		// } else if rttCorr > 0.7 {
-		// 	// Early overload, latency increasing - decrease normally
-		// 	direction = "decreasing rtt"
-		// 	decrease = true
+		// l.throughputCorrelation.xSamples.debugSlope()
+	} else if rttCorr > .7 && throughputVariation < .1 {
+		// This condition handles ongoing moderate overload where throughput may have stabilized, but RTT is still degrading relative to inflight
+		direction = "decreasing rttCorr"
+		decrease = true
+		// l.throughputCorrelation.xSamples.debugSlope()
 	} else if queueSize < alpha {
 		direction = "increasing"
 		newLimit = l.limit + float64(l.increaseFunc(int(l.limit)))
 	}
 
 	if decrease {
-		// Adjust, smooth, and clamp the limit based on the gradient
-		//	newLimit = l.limit * gradient
-		//	newLimit = util.Smooth(float64(l.limit), newLimit, l.smoothingFactor)
+		// Consider the limit stable if RTT is stable and we were recently decreasing inflight
+		if rttVariation < 0.05 && inflightSlope < 0 {
+			l.logLimit("limit stable", l.limit, "holding", queueSize, beta, inflight, inflightSlope, shortRTT, longRTT, throughput, rttVariation, rttCorr, throughputSlope, throughputVariation, throughputCorr, gradient)
+			return
+		}
 		newLimit = l.limit - float64(l.decreaseFunc(int(l.limit)))
 	}
 
@@ -412,13 +399,13 @@ func (l *adaptiveLimiter2[R]) updateLimit(shortRTT float64, inflight int) {
 	newLimit = max(l.minLimit, min(l.maxLimit, newLimit))
 
 	// Don't increase the limit beyond the max limit factor
-	if float64(newLimit) > float64(inflight)*l.maxLimitFactor {
+	if newLimit > float64(inflight)*l.maxLimitFactor {
 		direction = "maxed"
-		l.logLimit("limit maxed", l.limit, direction, queueSize, beta, inflight, shortRTT, longRTT, throughput, rttVariation, rttCorr, throughputVariation, throughputCorr, gradient)
-		return
+		l.logLimit("limit maxed", l.limit, direction, queueSize, beta, inflight, inflightSlope, shortRTT, longRTT, throughput, rttVariation, rttCorr, throughputSlope, throughputVariation, throughputCorr, gradient)
+		newLimit = l.limit - float64(l.decreaseFunc(int(l.limit)))
+	} else {
+		l.logLimit("limit updated", newLimit, direction, queueSize, beta, inflight, inflightSlope, shortRTT, longRTT, throughput, rttVariation, rttCorr, throughputSlope, throughputVariation, throughputCorr, gradient)
 	}
-
-	l.logLimit("limit updated", newLimit, direction, queueSize, beta, inflight, shortRTT, longRTT, throughput, rttVariation, rttCorr, throughputVariation, throughputCorr, gradient)
 
 	if uint(l.limit) != uint(newLimit) {
 		if l.limitChangedListener != nil {
@@ -433,7 +420,7 @@ func (l *adaptiveLimiter2[R]) updateLimit(shortRTT float64, inflight int) {
 	l.limit = newLimit
 }
 
-func (l *adaptiveLimiter2[R]) logLimit(msg string, limit float64, direction string, queueSize, beta, inflight int, shortRTT, longRTT float64, throughput float64, rttVariation, rttCorr float64, throughputVariation, throughputCorr float64, gradient float64) {
+func (l *adaptiveLimiter2[R]) logLimit(msg string, limit float64, direction string, queueSize, beta, inflight int, inflightSlope, shortRTT, longRTT float64, throughput float64, rttVariation, rttCorr float64, throughputSlope, throughputVariation, throughputCorr float64, gradient float64) {
 	if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
 		l.logger.Debug(msg,
 			"limit", fmt.Sprintf("%.2f", limit),
@@ -442,13 +429,15 @@ func (l *adaptiveLimiter2[R]) logLimit(msg string, limit float64, direction stri
 			"queueSize", fmt.Sprintf("%d", queueSize),
 			//	"beta", fmt.Sprintf("%d", beta),
 			"inflight", inflight,
+			"inflightSlope", fmt.Sprintf("%.2f", inflightSlope/1e6),
 			"shortRTT", fmt.Sprintf("%.2f", shortRTT/1e6),
 			"longRTT", fmt.Sprintf("%.2f", longRTT/1e6),
 			"rttVar", fmt.Sprintf("%.3f", rttVariation),
 			"rttCorr", fmt.Sprintf("%.2f", rttCorr),
-			"throughput", fmt.Sprintf("%.2f", throughput),
-			"throughputVar", fmt.Sprintf("%.2f", throughput),
-			"throughputCorr", fmt.Sprintf("%.2f", throughputCorr),
+			"thrpt", fmt.Sprintf("%.2f", throughput),
+			"thrptSlope", fmt.Sprintf("%.2f", throughputSlope),
+			"thrptVar", fmt.Sprintf("%.2f", throughput),
+			"thrptCorr", fmt.Sprintf("%.2f", throughputCorr),
 			"gradient", fmt.Sprintf("%.2f", gradient))
 	}
 }
@@ -474,167 +463,4 @@ func (p *recordingPermit[R]) Record() {
 
 func (p *recordingPermit[R]) Drop() {
 	p.limiter.record(p.startTime, p.currentInflight, true)
-}
-
-type rttWindow struct {
-	minRTT time.Duration
-	rttSum time.Duration
-	size   uint
-}
-
-func newRTTWindow() *rttWindow {
-	return &rttWindow{
-		minRTT: 24 * time.Hour,
-	}
-}
-
-func (w *rttWindow) add(rtt time.Duration) {
-	w.minRTT = min(w.minRTT, rtt)
-	w.rttSum += rtt
-	w.size++
-}
-
-func (w *rttWindow) average() time.Duration {
-	if w.size == 0 {
-		return 0
-	}
-	return w.rttSum / time.Duration(w.size)
-}
-
-type td struct {
-	minRTT time.Duration
-	size   uint
-	*tdigest.TDigest
-}
-
-func (td *td) add(rtt time.Duration) {
-	td.Add(float64(rtt), 1)
-	td.minRTT = min(td.minRTT, rtt)
-	td.size++
-}
-
-func (td *td) reset() {
-	td.Reset()
-	td.minRTT = 0
-	td.size = 0
-}
-
-type rollingSum struct {
-	samples    []float64
-	size       int
-	index      int
-	sum        float64
-	sumSquares float64
-}
-
-// add adds the value to the window if it's non-zero, updates the sum and sumSquares, and returns the mean, variance,
-// and coefficient of variation for the samples in the window, along with the old value, and whether the window was full.
-// Returns NaN for the cv if there are < 2 samples, the variance is < 0, or the mean is 0.
-func (w *rollingSum) addToSum(value float64) (mean, variance, cv, oldValue float64, full bool) {
-	if value != 0 {
-		if w.size < len(w.samples) {
-			w.size++
-		} else {
-			// Remove old value
-			oldValue = w.samples[w.index]
-			w.sum -= oldValue
-			w.sumSquares -= oldValue * oldValue
-			full = true
-		}
-
-		// Add new value
-		w.samples[w.index] = value
-		w.sum += value
-		w.sumSquares += value * value
-
-		w.index = (w.index + 1) % len(w.samples)
-	}
-
-	// Require at least 2 values to return a result
-	if w.size < 2 {
-		return math.NaN(), math.NaN(), math.NaN(), oldValue, full
-	}
-
-	mean = w.sum / float64(w.size)
-	variance = (w.sumSquares / float64(w.size)) - (mean * mean)
-	if variance < 0 || mean == 0 {
-		return math.NaN(), math.NaN(), math.NaN(), oldValue, full
-	}
-
-	// Calculate coefficient of variation (relative variance), which gives us variance as a percentage of the mean
-	cv = math.Sqrt(variance) / mean
-	return mean, variance, cv, oldValue, full
-}
-
-type variationWindow struct {
-	*rollingSum
-}
-
-func newVariationWindow(capacity uint) *variationWindow {
-	return &variationWindow{
-		rollingSum: &rollingSum{samples: make([]float64, capacity)},
-	}
-}
-
-// add adds the value to the window if it's non-zero and returns the coefficient of variation for the samples in the window.
-// Returns 1 if there are < 2 samples, the variance is < 0, or the mean is 0.
-func (w *variationWindow) add(value float64) float64 {
-	_, _, cv, _, _ := w.addToSum(value)
-	if math.IsNaN(cv) {
-		return 1.0
-	}
-	return cv
-}
-
-type correlationWindow struct {
-	warmupSamples uint8
-	xSamples      *rollingSum
-	ySamples      *rollingSum
-	sumXY         float64
-}
-
-func newCorrelationWindow(capacity uint, warmupSamples uint8) *correlationWindow {
-	return &correlationWindow{
-		warmupSamples: warmupSamples,
-		xSamples:      &rollingSum{samples: make([]float64, capacity)},
-		ySamples:      &rollingSum{samples: make([]float64, capacity)},
-	}
-}
-
-// add adds the values to the window and returns the current correlation coefficient.
-// Returns a value between 0 and 1 when a correlation between increasing x and y values is present.
-// Returns a value between -1 and 0 when a correlation between increasing x and decreasing y values is present.
-// Returns 0 if < warmup or low variation (< .01)
-func (w *correlationWindow) add(x, y float64) (correlation, cvX, cvY float64) {
-	meanX, varX, cvX, oldX, full := w.xSamples.addToSum(x)
-	meanY, varY, cvY, oldY, _ := w.ySamples.addToSum(y)
-	size := w.xSamples.size
-
-	if full {
-		// Remove old value
-		w.sumXY -= oldX * oldY
-	}
-
-	// Add new value
-	w.sumXY += x * y
-
-	if math.IsNaN(cvX) || math.IsNaN(cvY) {
-		return 0, 0, 0
-	}
-
-	// Ignore weak correlations
-	if w.xSamples.size < int(w.warmupSamples) {
-		return 0, 0, 0
-	}
-
-	// Ignore measurements that vary by less than 1%
-	minCV := 0.01
-	if cvX < minCV || cvY < minCV {
-		return 0, cvX, cvY
-	}
-
-	covariance := (w.sumXY / float64(size)) - (meanX * meanY)
-	correlation = covariance / (math.Sqrt(varX) * math.Sqrt(varY))
-
-	return correlation, cvX, cvY
 }
