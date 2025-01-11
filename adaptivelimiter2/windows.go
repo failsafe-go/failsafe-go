@@ -51,6 +51,8 @@ type rollingSum struct {
 func (r *rollingSum) addToSum(value float64) (oldValue float64, full bool) {
 	if value != 0 {
 		if r.size == len(r.samples) {
+			full = true
+
 			// Remove oldest value
 			oldValue = r.samples[r.index]
 			r.sumY -= oldValue
@@ -131,7 +133,7 @@ type correlationWindow struct {
 	warmupSamples uint8
 	xSamples      *rollingSum
 	ySamples      *rollingSum
-	sumXY         float64
+	corrSumXY     float64
 }
 
 func newCorrelationWindow(capacity uint, warmupSamples uint8) *correlationWindow {
@@ -154,17 +156,17 @@ func (w *correlationWindow) add(x, y float64) (correlation, cvX, cvY float64) {
 
 	if full {
 		// Remove old value
-		w.sumXY -= oldX * oldY
+		w.corrSumXY -= oldX * oldY
 	}
 
 	// Add new value
-	w.sumXY += x * y
+	w.corrSumXY += x * y
 
 	if math.IsNaN(cvX) || math.IsNaN(cvY) {
 		return 0, 0, 0
 	}
 
-	// Ignore warmup
+	// Ignore weak correlations
 	if w.xSamples.size < int(w.warmupSamples) {
 		return 0, 0, 0
 	}
@@ -175,7 +177,8 @@ func (w *correlationWindow) add(x, y float64) (correlation, cvX, cvY float64) {
 		return 0, cvX, cvY
 	}
 
-	covariance := (w.sumXY / float64(w.xSamples.size)) - (meanX * meanY)
+	covariance := (w.corrSumXY / float64(w.xSamples.size)) - (meanX * meanY)
 	correlation = covariance / (math.Sqrt(varX) * math.Sqrt(varY))
+
 	return correlation, cvX, cvY
 }
