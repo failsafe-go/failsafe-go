@@ -3,151 +3,163 @@ package adaptivelimiter
 import (
 	"math"
 	"time"
+
+	"github.com/influxdata/tdigest"
 )
 
-type rttWindow struct {
+type td struct {
 	minRTT time.Duration
-	rttSum time.Duration
 	size   uint
+	*tdigest.TDigest
 }
 
-func newRTTWindow() *rttWindow {
-	return &rttWindow{
-		minRTT: 24 * time.Hour,
-	}
+func (td *td) add(rtt time.Duration) {
+	td.Add(float64(rtt), 1)
+	td.minRTT = min(td.minRTT, rtt)
+	td.size++
 }
 
-func (w *rttWindow) add(rtt time.Duration) {
-	w.minRTT = min(w.minRTT, rtt)
-	w.rttSum += rtt
-	w.size++
+func (td *td) reset() {
+	td.Reset()
+	td.minRTT = 0
+	td.size = 0
 }
 
-func (w *rttWindow) average() time.Duration {
-	if w.size == 0 {
-		return 0
-	}
-	return w.rttSum / time.Duration(w.size)
+func newRollingSum(capacity uint) *rollingSum {
+	return &rollingSum{samples: make([]float64, capacity)}
 }
 
 type rollingSum struct {
-	samples    []float64
-	size       int
-	index      int
-	sum        float64
+	// For variation and covariance
+	samples []float64
+	size    int
+	index   int
+
+	// Rolling sum fields
+	sumY       float64 // Y values are the samples
 	sumSquares float64
+
+	// Rolling regression fields
+	sumX  float64 // X values are the sample indexes
+	sumXX float64
+	sumXY float64
 }
 
-// add adds the value to the window if it's non-zero, updates the sum and sumSquares, and returns the mean, variance,
-// and coefficient of variation for the samples in the window, along with the old value, and whether the window was full.
-// Returns NaN for the cv if there are < 2 samples, the variance is < 0, or the mean is 0.
-func (w *rollingSum) addToSum(value float64) (mean, variance, cv, oldValue float64, full bool) {
+// add adds the value to the window if it's non-zero, updates the sums, and returns the old value along with whether the
+// window is full.
+func (r *rollingSum) add(value float64) (oldValue float64, full bool) {
 	if value != 0 {
-		if w.size < len(w.samples) {
-			w.size++
-		} else {
-			// Remove old value
-			oldValue = w.samples[w.index]
-			w.sum -= oldValue
-			w.sumSquares -= oldValue * oldValue
+		if r.size == len(r.samples) {
 			full = true
+
+			// Remove oldest value
+			oldValue = r.samples[r.index]
+			r.sumY -= oldValue
+			r.sumSquares -= oldValue * oldValue
+
+			// Shift all values left (via telescoping series)
+			r.sumXY = r.sumXY - r.sumY
+
+			// Add new value at the end
+			r.sumXY += float64(len(r.samples)-1) * value
+		} else {
+			r.sumXY += float64(r.size) * value
+			r.size++
 		}
 
 		// Add new value
-		w.samples[w.index] = value
-		w.sum += value
-		w.sumSquares += value * value
+		r.samples[r.index] = value
 
-		w.index = (w.index + 1) % len(w.samples)
+		// Update rolling computations
+		r.sumY += value
+		r.sumSquares += value * value
+
+		// Move index forward
+		r.index = (r.index + 1) % len(r.samples)
 	}
 
-	// Require at least 2 values to return a result
-	if w.size < 2 {
-		return math.NaN(), math.NaN(), math.NaN(), oldValue, full
+	return oldValue, full
+}
+
+// Calculates the coefficient of variation (relative variance), mean, and variance for the sum.
+// Returns NaN values if there are < 2 samples, the variance is < 0, or the mean is 0.
+func (r *rollingSum) calculateCV() (cv, mean, variance float64) {
+	if r.size < 2 {
+		return math.NaN(), math.NaN(), math.NaN()
 	}
 
-	mean = w.sum / float64(w.size)
-	variance = (w.sumSquares / float64(w.size)) - (mean * mean)
+	mean = r.sumY / float64(r.size)
+	variance = (r.sumSquares / float64(r.size)) - (mean * mean)
 	if variance < 0 || mean == 0 {
-		return math.NaN(), math.NaN(), math.NaN(), oldValue, full
+		return math.NaN(), math.NaN(), math.NaN()
 	}
 
-	// Calculate coefficient of variation (relative variance), which gives us variance as a percentage of the mean
 	cv = math.Sqrt(variance) / mean
-	return mean, variance, cv, oldValue, full
+	return cv, mean, variance
 }
 
-type variationWindow struct {
-	*rollingSum
-}
-
-func newVariationWindow(capacity uint) *variationWindow {
-	return &variationWindow{
-		rollingSum: &rollingSum{samples: make([]float64, capacity)},
+func (r *rollingSum) calculateSlope() float64 {
+	if r.size < 2 {
+		return math.NaN()
 	}
-}
 
-// add adds the value to the window if it's non-zero and returns the coefficient of variation for the samples in the window.
-// Returns 1 if there are < 2 samples, the variance is < 0, or the mean is 0.
-func (w *variationWindow) add(value float64) float64 {
-	_, _, cv, _, _ := w.addToSum(value)
-	if math.IsNaN(cv) {
-		return 1.0
-	}
-	return cv
+	// Calculate slope using least squares
+	n := float64(r.size)
+	sumX := n * (n - 1) / 2
+	sumXSquared := n * (n - 1) * (2*n - 1) / 6
+	return (n*r.sumXY - sumX*r.sumY) / (n*sumXSquared - sumX*sumX)
 }
 
 type correlationWindow struct {
 	warmupSamples uint8
 	xSamples      *rollingSum
 	ySamples      *rollingSum
-	sumXY         float64
+	corrSumXY     float64
 }
 
-func newCovarianceWindow(capacity uint, warmupSamples uint8) *correlationWindow {
+func newCorrelationWindow(capacity uint, warmupSamples uint8) *correlationWindow {
 	return &correlationWindow{
 		warmupSamples: warmupSamples,
-		xSamples:      &rollingSum{samples: make([]float64, capacity)},
-		ySamples:      &rollingSum{samples: make([]float64, capacity)},
+		xSamples:      newRollingSum(capacity),
+		ySamples:      newRollingSum(capacity),
 	}
 }
 
 // add adds the values to the window and returns the current correlation coefficient.
-// Returns a value between .7 and 1 when a correlation between increasing x and y values is present.
-// Returns a value between -1 and -.7 when a correlation between increasing x and decreasing y values is present.
-// Returns 0 if < warmup, low variation (< .01) or weak correlation (< .7).
-func (w *correlationWindow) add(x, y float64) float64 {
-	meanX, varX, cvX, oldX, full := w.xSamples.addToSum(x)
-	meanY, varY, cvY, oldY, _ := w.ySamples.addToSum(y)
-	size := w.xSamples.size
+// Returns a value between 0 and 1 when a correlation between increasing x and y values is present.
+// Returns a value between -1 and 0 when a correlation between increasing x and decreasing y values is present.
+// Returns 0 values if < warmup or low CV (< .01)
+func (w *correlationWindow) add(x, y float64) (correlation, cvX, cvY float64) {
+	oldX, full := w.xSamples.add(x)
+	oldY, _ := w.ySamples.add(y)
+	cvX, meanX, varX := w.xSamples.calculateCV()
+	cvY, meanY, varY := w.ySamples.calculateCV()
 
 	if full {
 		// Remove old value
-		w.sumXY -= oldX * oldY
+		w.corrSumXY -= oldX * oldY
 	}
 
 	// Add new value
-	w.sumXY += x * y
+	w.corrSumXY += x * y
 
 	if math.IsNaN(cvX) || math.IsNaN(cvY) {
-		return 0
+		return 0, 0, 0
+	}
+
+	// Ignore weak correlations
+	if w.xSamples.size < int(w.warmupSamples) {
+		return 0, 0, 0
 	}
 
 	// Ignore measurements that vary by less than 1%
 	minCV := 0.01
 	if cvX < minCV || cvY < minCV {
-		return 0
+		return 0, cvX, cvY
 	}
 
-	// Calculate correlation coefficient
-	covariance := (w.sumXY / float64(size)) - (meanX * meanY)
-	// correlation := covariance / math.Sqrt(varX*varY)
-	correlation := covariance / (math.Sqrt(varX) * math.Sqrt(varY))
+	covariance := (w.corrSumXY / float64(w.xSamples.size)) - (meanX * meanY)
+	correlation = covariance / (math.Sqrt(varX) * math.Sqrt(varY))
 
-	// Ignore weak correlations
-	if math.Abs(correlation) < 0.5 || w.xSamples.size < int(w.warmupSamples) {
-		return 0
-	}
-
-	return correlation
+	return correlation, cvX, cvY
 }

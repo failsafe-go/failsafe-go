@@ -1,4 +1,4 @@
-package adaptivelimiter2
+package adaptivelimiterold
 
 import (
 	"github.com/failsafe-go/failsafe-go"
@@ -8,10 +8,10 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// adaptiveExecutor is a policy.Executor that handles failures according to an adaptiveLimiter2.
+// adaptiveExecutor is a policy.Executor that handles failures according to an adaptiveLimiter.
 type adaptiveExecutor[R any] struct {
 	*policy.BaseExecutor[R]
-	*adaptiveLimiter2[R]
+	*adaptiveLimiter[R]
 }
 
 var _ policy.Executor[any] = &adaptiveExecutor[any]{}

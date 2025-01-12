@@ -1,41 +1,135 @@
 package adaptivelimiter
 
 import (
+	"fmt"
+	"math"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRTTWindow(t *testing.T) {
-	w := newRTTWindow()
-	w.add(100 * time.Millisecond)
-	w.add(200 * time.Millisecond)
-	w.add(300 * time.Millisecond)
+func TestRollingSum_CalculateSlope(t *testing.T) {
+	tests := []struct {
+		name      string
+		values    []float64
+		capacity  uint
+		expected  float64
+		shouldNaN bool
+	}{
+		{
+			name:      "empty window",
+			values:    []float64{},
+			shouldNaN: true,
+		},
+		{
+			name:      "single value",
+			values:    []float64{1.0},
+			shouldNaN: true,
+		},
+		{
+			name:     "flat slope with positive values",
+			values:   []float64{1.0, 1.0, 1.0},
+			expected: 0.0,
+		},
+		{
+			name:     "flat slope with zeros",
+			values:   []float64{1.0, 1.0, 1.0},
+			expected: 0.0,
+		},
+		{
+			name:     "mixed positive and negative values",
+			values:   []float64{-1.0, 2.0},
+			expected: 3.0,
+		},
+		{
+			name:     "positive slope",
+			values:   []float64{1.0, 2.0, 3.0},
+			expected: 1.0,
+		},
+		{
+			name:     "negative slope",
+			values:   []float64{4.0, 3.0, 2.0},
+			expected: -1.0,
+		},
+		{
+			name:     "wrapping slope",
+			capacity: 5,
+			values:   []float64{5, 2, 3, 7, 6},
+			expected: .7,
+		},
+		{
+			name:     "wrapping with small window",
+			values:   []float64{5, 2, 3, 7, 6},
+			expected: 1.5,
+		},
+		{
+			name:     "oversized window",
+			capacity: 5,
+			values:   []float64{3, 7, 6},
+			expected: 1.5,
+		},
+		{
+			name:     "decreasing",
+			values:   []float64{5, 4, 3, 2, 1},
+			expected: -1,
+		},
+		{
+			name:     "wrapping positive slope",
+			values:   []float64{0.0, 1.0, 2.0, 3.0, 4.0, 5.0},
+			expected: 1.0,
+		},
+		{
+			name:     "wrapping negative slope",
+			values:   []float64{5.0, 4.0, 3.0, 2.0, 1.0},
+			expected: -1.0,
+		},
+		{
+			name:     "wrapping negative slope with small window",
+			capacity: 19,
+			values:   []float64{20, 18, 18, 17, 16, 14, 14, 13, 12, 11, 7, 7, 6, 7, 6, 6, 7, 6, 15},
+			expected: -.707,
+		},
+	}
 
-	t.Run("should get minRTT", func(t *testing.T) {
-		assert.Equal(t, 100*time.Millisecond, w.minRTT)
-	})
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			capacity := tc.capacity
+			if capacity == 0 {
+				capacity = 3
+			}
+			w := newRollingSum(capacity)
+			for _, v := range tc.values {
+				w.add(v)
+			}
 
-	t.Run("should get average", func(t *testing.T) {
-		assert.Equal(t, 200*time.Millisecond, w.average())
-	})
+			slope := w.calculateSlope()
+			fmt.Println(w.sumY)
+			fmt.Println(w.sumXY)
+
+			if tc.shouldNaN {
+				assert.True(t, math.IsNaN(slope))
+			} else {
+				assert.InDelta(t, tc.expected, slope, 0.0001)
+			}
+		})
+	}
 }
 
-func TestVariationWindow(t *testing.T) {
+func TestRollingSum(t *testing.T) {
 	tests := []struct {
 		name              string
 		values            []float64
-		capacity          int
+		capacity          uint
 		expectedVariation float64
 		expectedSize      int
+		shouldNaN         bool
 	}{
 		{
-			name:              "single value returns max variation",
-			values:            []float64{5.0},
-			capacity:          3,
-			expectedVariation: 1.0,
-			expectedSize:      1,
+			name:         "less than two positive values returns NaN",
+			values:       []float64{1.0, -1.0},
+			capacity:     3,
+			expectedSize: 2,
+			shouldNaN:    true,
 		},
 		{
 			name:              "zeros are ignored",
@@ -59,13 +153,6 @@ func TestVariationWindow(t *testing.T) {
 			expectedSize:      3,
 		},
 		{
-			name:              "zero mean returns max variation",
-			values:            []float64{1.0, -1.0},
-			capacity:          3,
-			expectedVariation: 1.0,
-			expectedSize:      2,
-		},
-		{
 			name:              "leading zeros are ignored",
 			values:            []float64{0.0, 0.0, 5.0, 10.0},
 			capacity:          3,
@@ -76,33 +163,41 @@ func TestVariationWindow(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			w := newVariationWindow(tc.capacity)
-			var variation float64
+			w := newRollingSum(tc.capacity)
+			var cv float64
 			for _, v := range tc.values {
-				variation = w.add(v)
+				w.add(v)
+				cv, _, _ = w.calculateCV()
 			}
 
-			assert.InDelta(t, tc.expectedVariation, variation, 0.0001)
+			if tc.shouldNaN {
+				assert.True(t, math.IsNaN(cv))
+			} else {
+				assert.InDelta(t, tc.expectedVariation, cv, 0.0001)
+			}
 			assert.Equal(t, tc.expectedSize, w.size)
 		})
 	}
 }
 
-func TestVariationWindowSliding(t *testing.T) {
-	w := newVariationWindow(3)
+func TestRollingSumSliding(t *testing.T) {
+	w := newRollingSum(3)
 
 	w.add(10.0)
 	w.add(20.0)
-	cv := w.add(30.0)
+	w.add(30.0)
+	cv, _, _ := w.calculateCV()
 	assert.InDelta(t, 0.4082, cv, 0.0001)
-	cv = w.add(40.0)
+	w.add(40.0)
+	cv, _, _ = w.calculateCV()
 	assert.InDelta(t, 0.2722, cv, 0.0001)
-	cv = w.add(0.0)
+	w.add(0.0)
+	cv, _, _ = w.calculateCV()
 	assert.InDelta(t, 0.2722, cv, 0.0001)
 	assert.Equal(t, 3, w.size)
 }
 
-func TestCovarianceWindow(t *testing.T) {
+func TestCorrelationWindow(t *testing.T) {
 	tests := []struct {
 		name                string
 		capacity            uint
@@ -136,14 +231,6 @@ func TestCovarianceWindow(t *testing.T) {
 			expectedSize:        3,
 		},
 		{
-			name:                "weak correlation returns zero",
-			capacity:            3,
-			xValues:             []float64{1.0, 2.0, 1.5},
-			yValues:             []float64{10.0, 11.0, 9.0},
-			expectedCorrelation: 0.0,
-			expectedSize:        3,
-		},
-		{
 			name:                "low variation returns zero",
 			capacity:            3,
 			xValues:             []float64{100.0, 100.1, 100.05},
@@ -152,10 +239,10 @@ func TestCovarianceWindow(t *testing.T) {
 			expectedSize:        3,
 		},
 		{
-			name:                "sliding window",
+			name:                "rolling window",
 			capacity:            3,
-			xValues:             []float64{1.0, 2.0, 3.0, 4.0},
-			yValues:             []float64{10.0, 20.0, 30.0, 40.0},
+			xValues:             []float64{1.0, 2.0, 3.0, 4.0, 5.0},
+			yValues:             []float64{10.0, 20.0, 30.0, 40.0, 50.0},
 			expectedCorrelation: 1.0,
 			expectedSize:        3,
 		},
@@ -163,10 +250,10 @@ func TestCovarianceWindow(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			w := newCovarianceWindow(tc.capacity)
+			w := newCorrelationWindow(tc.capacity, 0)
 			var correlation float64
 			for i := range tc.xValues {
-				correlation = w.add(tc.xValues[i], tc.yValues[i])
+				correlation, _, _ = w.add(tc.xValues[i], tc.yValues[i])
 			}
 
 			assert.InDelta(t, tc.expectedCorrelation, correlation, 0.0001)
@@ -175,16 +262,16 @@ func TestCovarianceWindow(t *testing.T) {
 	}
 }
 
-func TestCovarianceWindowSliding(t *testing.T) {
-	w := newCovarianceWindow(3)
+func TestCorrelationWindowSliding(t *testing.T) {
+	w := newCorrelationWindow(3, 0)
 
-	corr := w.add(1.0, 10.0)
+	corr, _, _ := w.add(1.0, 10.0)
 	assert.InDelta(t, 0.0, corr, 0.0001)
-	corr = w.add(2.0, 20.0)
+	corr, _, _ = w.add(2.0, 20.0)
 	assert.InDelta(t, 1.0, corr, 0.0001)
-	corr = w.add(3.0, 30.0)
+	corr, _, _ = w.add(3.0, 30.0)
 	assert.InDelta(t, 1.0, corr, 0.0001)
-	corr = w.add(4.0, 40.0)
+	corr, _, _ = w.add(4.0, 40.0)
 	assert.InDelta(t, 1.0, corr, 0.0001)
 	assert.Equal(t, 3, w.xSamples.size)
 }

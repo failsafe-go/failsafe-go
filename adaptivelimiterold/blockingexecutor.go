@@ -1,4 +1,4 @@
-package adaptivelimiter2
+package adaptivelimiterold
 
 import (
 	"github.com/failsafe-go/failsafe-go"

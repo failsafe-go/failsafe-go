@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/influxdata/tdigest"
+
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/internal/util"
 	"github.com/failsafe-go/failsafe-go/policy"
@@ -18,17 +20,6 @@ import (
 var ErrExceeded = errors.New("limit exceeded")
 
 const warmupSamples = 10
-
-type Info interface {
-	// Limit returns the concurrent execution limit, as calculated by the adaptive limiter.
-	Limit() int
-
-	// Inflight returns the current number of inflight executions.
-	Inflight() int
-
-	// Blocked returns the current number of blocked executions.
-	Blocked() int
-}
 
 // AdaptiveLimiter is a concurrency limiter that adjusts its limit up or down based on execution time trends:
 //  - When recent execution times are trending up relative to longer term execution times, the concurrency limit is decreased.
@@ -50,7 +41,6 @@ type Info interface {
 // R is the execution result type. This type is concurrency safe.
 type AdaptiveLimiter[R any] interface {
 	failsafe.Policy[R]
-	Info
 
 	// AcquirePermit attempts to acquire a permit to perform an execution via the limiter, waiting until one is
 	// available or the execution is canceled. Returns [context.Canceled] if the ctx is canceled.
@@ -65,6 +55,15 @@ type AdaptiveLimiter[R any] interface {
 
 	// CanAcquirePermit returns whether it's currently possible to acquire a permit.
 	CanAcquirePermit() bool
+
+	// Limit returns the concurrent execution limit, as calculated by the adaptive limiter.
+	Limit() int
+
+	// Inflight returns the current number of inflight executions.
+	Inflight() int
+
+	// Blocked returns the current number of blocked executions.
+	Blocked() int
 }
 
 // Permit is a permit to perform an execution that must be completed by calling Record or Drop.
@@ -95,6 +94,10 @@ type Builder[R any] interface {
 	// The default value is 60.
 	WithLongWindow(size uint) Builder[R]
 
+	// WithSampleQuantile configures the quantile ot recorded response times to consider when adjusting the concurrency limit.
+	// Defaults to .9 which uses p90 samples.
+	WithSampleQuantile(quantile float32) Builder[R]
+
 	// WithLimits configures min, max, and initial limits.
 	// The default values are 1, 1, and 20.
 	WithLimits(minLimit uint, maxLimit uint, initialLimit uint) Builder[R]
@@ -103,30 +106,24 @@ type Builder[R any] interface {
 	// The default value is 5, which means the limit will only rise to 5 times the inflight executions.
 	WithMaxLimitFactor(maxLimitFactor float32) Builder[R]
 
-	// WithSmoothing configures a smoothingFactor, from 0.0 to 1.0, which smoothes limit changes so that they are more gradual.
-	// The default value is .1, which means each limit change only contributes 10% to the new limit.
-	WithSmoothing(smoothingFactor float32) Builder[R]
-
 	// WithMaxExecutionTime enables blocking of executions when the limiter is full, up to some max average execution time,
 	// which includes the time spent while executions are blocked waiting for a permit. Enabling this allows short execution
 	// spikes to be absorbed without strictly rejecting executions when the limiter is full.
 	// This is disabled by default, which means no executions will block when the limiter is full.
 	WithMaxExecutionTime(maxExecutionTime time.Duration) Builder[R]
 
-	// WithVariationWindow configures the size of the window used to calculate coefficient of variation for execution time
-	// measurements, which helps determine when execution times are stable.
-	// The default value is 8.
-	WithVariationWindow(size uint) Builder[R]
-
 	// WithCorrelationWindow configures how many recent limit and execution time measurements are stored to detect whether increases
 	// in limits correlate with increases in execution times, which will cause the limit to be adjusted down.
 	// The default value is 20.
 	WithCorrelationWindow(size uint) Builder[R]
 
+	// WithStabilizationWindow configures the size of the windows tracking recent response times and inflight numbers to
+	// determine when recent response times are stable.
+	// The default value is 10.
+	WithStabilizationWindow(size uint) Builder[R]
+
 	// WithLogger configures a logger which provides debug logging of limit adjustments.
 	WithLogger(logger *slog.Logger) Builder[R]
-
-	WithPID() Builder[R]
 
 	// OnLimitChanged configures a listener to be called with the limit changes.
 	OnLimitChanged(listener func(event LimitChangedEvent)) Builder[R]
@@ -142,41 +139,50 @@ type LimitChangedEvent struct {
 }
 
 type config[R any] struct {
-	logger                 *slog.Logger
-	shortWindowMinDuration time.Duration
-	shortWindowMaxDuration time.Duration
-	shortWindowMinSamples  uint
-	longWindowSize         uint
-	correlationWindowSize  uint
-	variationWindow        uint
+	logger                  *slog.Logger
+	shortWindowMinDuration  time.Duration
+	shortWindowMaxDuration  time.Duration
+	shortWindowMinSamples   uint
+	longWindowSize          uint
+	quantile                float64
+	correlationWindowSize   uint
+	stabilizationWindowSize uint
 
-	minLimit        float64
-	maxLimit        float64
-	initialLimit    uint
-	maxLimitFactor  float64
-	smoothingFactor float64
+	minLimit       float64
+	maxLimit       float64
+	initialLimit   uint
+	maxLimitFactor float64
+
+	alphaFunc    func(int) int
+	betaFunc     func(int) int
+	increaseFunc func(int) int
+	decreaseFunc func(int) int
 
 	maxExecutionTime     time.Duration
 	limitChangedListener func(LimitChangedEvent)
-
-	pid bool
 }
 
 var _ Builder[any] = &config[any]{}
 
 func NewBuilder[R any]() Builder[R] {
 	return &config[R]{
-		shortWindowMinDuration: time.Second,
-		shortWindowMaxDuration: time.Second,
-		shortWindowMinSamples:  1,
-		longWindowSize:         60,
-		correlationWindowSize:  20,
-		variationWindow:        8,
-		minLimit:               1,
-		maxLimit:               200,
-		initialLimit:           20,
-		maxLimitFactor:         5.0,
-		smoothingFactor:        0.1,
+		shortWindowMinDuration:  time.Second,
+		shortWindowMaxDuration:  time.Second,
+		shortWindowMinSamples:   1,
+		longWindowSize:          60,
+		quantile:                0.9,
+		correlationWindowSize:   20,
+		stabilizationWindowSize: 10,
+
+		minLimit:       1,
+		maxLimit:       200,
+		initialLimit:   20,
+		maxLimitFactor: 5.0,
+
+		alphaFunc:    util.Log10RootFunction(3),
+		betaFunc:     util.Log10RootFunction(6),
+		increaseFunc: util.Log10RootFunction(0),
+		decreaseFunc: util.Log10RootFunction(0),
 	}
 }
 
@@ -192,6 +198,11 @@ func (c *config[R]) WithLongWindow(size uint) Builder[R] {
 	return c
 }
 
+func (c *config[R]) WithSampleQuantile(quantile float32) Builder[R] {
+	c.quantile = float64(quantile)
+	return c
+}
+
 func (c *config[R]) WithLimits(minLimit uint, maxLimit uint, initialLimit uint) Builder[R] {
 	c.minLimit = float64(minLimit)
 	c.maxLimit = float64(maxLimit)
@@ -201,11 +212,6 @@ func (c *config[R]) WithLimits(minLimit uint, maxLimit uint, initialLimit uint) 
 
 func (c *config[R]) WithMaxLimitFactor(maxLimitFactor float32) Builder[R] {
 	c.maxLimitFactor = float64(maxLimitFactor)
-	return c
-}
-
-func (c *config[R]) WithSmoothing(smoothingFactor float32) Builder[R] {
-	c.smoothingFactor = float64(smoothingFactor)
 	return c
 }
 
@@ -219,18 +225,13 @@ func (c *config[R]) WithCorrelationWindow(size uint) Builder[R] {
 	return c
 }
 
-func (c *config[R]) WithVariationWindow(size uint) Builder[R] {
-	c.variationWindow = size
+func (c *config[R]) WithStabilizationWindow(size uint) Builder[R] {
+	c.stabilizationWindowSize = size
 	return c
 }
 
 func (c *config[R]) WithLogger(logger *slog.Logger) Builder[R] {
 	c.logger = logger
-	return c
-}
-
-func (c *config[R]) WithPID() Builder[R] {
-	c.pid = true
 	return c
 }
 
@@ -241,38 +242,20 @@ func (c *config[R]) OnLimitChanged(listener func(event LimitChangedEvent)) Build
 
 func (c *config[R]) Build() AdaptiveLimiter[R] {
 	adaptive := &adaptiveLimiter[R]{
-		config:            c,
-		semaphore:         util.NewDynamicSemaphore(int64(c.initialLimit)),
-		limit:             float64(c.initialLimit),
-		shortRTT:          newRTTWindow(),
-		longRTT:           util.NewEWMA(c.longWindowSize, warmupSamples),
-		nextUpdateTime:    time.Now(),
-		rttVariation:      newVariationWindow(8),
-		correlationWindow: newCovarianceWindow(c.correlationWindowSize, warmupSamples),
+		config:                c,
+		semaphore:             util.NewDynamicSemaphore(int64(c.initialLimit)),
+		limit:                 float64(c.initialLimit),
+		shortRTT:              &td{TDigest: tdigest.NewWithCompression(100)},
+		longRTT:               util.NewEWMA(c.longWindowSize, warmupSamples),
+		nextUpdateTime:        time.Now(),
+		rttCorrelation:        newCorrelationWindow(c.correlationWindowSize, warmupSamples),
+		throughputCorrelation: newCorrelationWindow(c.correlationWindowSize, warmupSamples),
+		rttWindow:             newRollingSum(c.stabilizationWindowSize),
+		inflightWindow:        newRollingSum(c.stabilizationWindowSize),
 	}
-	// if c.pid {
-	// 	result := newPIDLimiter(adaptive)
-	// 	result.ScheduleCalibrations(context.Background(), time.Second)
-	// 	return result
-	// }
 	if c.maxExecutionTime != 0 {
-		return &blockingLimiter[R]{
-			adaptiveLimiter: adaptive,
-		}
+		return &blockingLimiter[R]{adaptiveLimiter: adaptive}
 	}
-	// if c.priorized {
-	// 	return &priorityBlockingLimiter[R]{
-	// 		adaptiveLimiter:   adaptive,
-	// 		maxExecutionTime:  maxExecutionTime,
-	// 		priorityThreshold: PriorityLowest,
-	// 		kp:                0.1, // Gradual response to spikes
-	// 		ki:                1.4, // Aggressive response to sustained load
-	// 		calibrations: &calibrationWindow{
-	// 			window:       make([]calibrationPeriod, 30), // 30 second history
-	// 			integralEWMA: util.NewEWMA(30, 5),           // 30 samples, 5 warmup
-	// 		},
-	// 	}
-	// }
 	return adaptive
 }
 
@@ -284,12 +267,15 @@ type adaptiveLimiter[R any] struct {
 	mu        sync.Mutex
 
 	// Guarded by mu
-	limit             float64            // The current concurrency limit
-	shortRTT          *rttWindow         // Tracks short term average execution time (round trip time)
-	longRTT           util.MovingAverage // Tracks long term average execution time
-	nextUpdateTime    time.Time          // Tracks when the limit can next be updated
-	rttVariation      *variationWindow   // Tracks the variation of execution times
-	correlationWindow *correlationWindow // Tracks the correlation between concurrency and execution times
+	limit          float64 // The current concurrency limit
+	shortRTT       *td
+	longRTT        util.MovingAverage // Tracks long term average execution time
+	nextUpdateTime time.Time          // Tracks when the limit can next be updated
+
+	throughputCorrelation *correlationWindow // Tracks the correlation between concurrency and throughput
+	rttCorrelation        *correlationWindow // Tracks the correlation between concurrency and round trip times (RTT)
+	rttWindow             *rollingSum        // Tracks the variation of recent RTT
+	inflightWindow        *rollingSum        // Tracks the slope of recent inflight executions
 }
 
 func (l *adaptiveLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
@@ -342,15 +328,15 @@ func (l *adaptiveLimiter[R]) record(startTime time.Time, inflight int, dropped b
 	defer l.mu.Unlock()
 
 	now := time.Now()
-	rtt := now.Sub(startTime)
 	if !dropped {
+		rtt := now.Sub(startTime) / 1e6
 		l.shortRTT.add(rtt)
 	}
 
 	if now.After(l.nextUpdateTime) && l.shortRTT.size >= l.shortWindowMinSamples {
-		l.updateLimit(float64(l.shortRTT.average()), inflight)
+		l.updateLimit(l.shortRTT.Quantile(l.quantile), inflight)
 		minRTT := l.shortRTT.minRTT
-		l.shortRTT = newRTTWindow()
+		l.shortRTT.reset()
 		minWindowTime := max(minRTT*2, l.shortWindowMinDuration)
 		l.nextUpdateTime = now.Add(min(minWindowTime, l.shortWindowMaxDuration))
 	}
@@ -360,49 +346,77 @@ func (l *adaptiveLimiter[R]) record(startTime time.Time, inflight int, dropped b
 // A stability check prevents unnecessary decreases during steady state.
 // A correlation adjustment prevents upward drift during overload.
 func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
-	// Update long term RTT and calculate the initial gradient
+	// Update long term RTT and calculate the queue size
+	// This is the primary signal that we threshold off of to detect overload
 	longRTT := l.longRTT.Add(shortRTT)
 	gradient := longRTT / shortRTT
 	queueSize := int(math.Ceil(float64(inflight) * (1 - gradient)))
 
-	// Calculate RTT variation and correlation with inflight
-	rttVariation := l.rttVariation.add(shortRTT)
-	correlation := l.correlationWindow.add(float64(inflight), shortRTT)
+	// Calculate throughput correlation, throughput slope, throughput CV, and rtt correlation
+	// These are the secondary signals that we threshold off of to detect overload
+	throughput := float64(inflight) / (shortRTT)
+	throughputCorr, _, throughputCV := l.throughputCorrelation.add(float64(inflight), throughput)
+	throughputSlope := l.throughputCorrelation.ySamples.calculateSlope()
+	rttCorr, _, _ := l.rttCorrelation.add(float64(inflight), shortRTT)
 
-	// If gradient would decrease limit and either the adjustment is small or RTT is stable, maintain the current limit
-	if gradient < 1.0 && (gradient > .8 || rttVariation < 0.05) {
-		l.logLimit("limit stable", l.limit, inflight, shortRTT, longRTT, queueSize, rttVariation, correlation, gradient)
-		return
+	// Calculate the rtt CV and inflight slope
+	// These are used to detect when rtt has stabilized after a recent decrease
+	l.rttWindow.add(shortRTT)
+	rttCV, _, _ := l.rttWindow.calculateCV()
+	l.inflightWindow.add(float64(inflight))
+	inflightSlope := l.inflightWindow.calculateSlope()
+
+	newLimit := l.limit
+	alpha := l.alphaFunc(int(l.limit)) // alpha is the queueSize threshold below which we increase
+	beta := l.betaFunc(int(l.limit))   // beta is the queueSize threshold above which we decrease
+	var direction, reason string
+	decrease := false
+
+	if queueSize > beta {
+		// This condition handles severe overload where recent RTT significantly exceeds the baseline
+		reason = "queue"
+		decrease = true
+	} else if throughputCorr < 0 && throughputSlope < 0 {
+		// This condition handles moderate overload where throughput decreases relative to inflight
+		reason = "thrptCorr"
+		decrease = true
+	} else if throughputCV < .1 && rttCorr > .7 {
+		// This condition handles moderate overload where throughputCorr is positive and stable but rttCorr is indicating overload
+		reason = "thrptVar"
+		decrease = true
+	} else if queueSize < alpha {
+		// If our queue size is sufficiently small, increase until we detect overload
+		direction = "increased"
+		reason = "queue"
+		newLimit = l.limit + float64(l.increaseFunc(int(l.limit)))
+	} else {
+		// If queueSize is between alpha and beta, leave the limit unchanged
+		direction = "leaving"
+		reason = "queue"
 	}
 
-	// Adjust the gradient based on any correlation between increases in concurrency and RTT by tracking their correlationWindow.
-	// This is necessary to guard against situations where the limit rises too far while RTT is unstable.
-	// if correlation != 0 {
-	// 	// Adjust by up to 5%
-	// 	adjustment := 1.0 - (correlation * 0.05)
-	// 	gradient *= adjustment
-	// 	if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
-	// 		l.logger.Debug("adjusting",
-	// 			"adjustment", adjustment,
-	// 			"gradient", fmt.Sprintf("%.2f", gradient))
-	// 	}
-	// }
+	if decrease {
+		// Consider the limit stable if RTT is stable and inflight recently decreased
+		if rttCV < 0.05 && inflightSlope < 0 {
+			direction = "leaving"
+			reason = "stable"
+		} else {
+			direction = "decreased"
+			newLimit = l.limit - float64(l.decreaseFunc(int(l.limit)))
+		}
+	}
 
-	// Clamp the gradient
-	gradient = max(0.5, min(1.5, gradient))
-
-	// Adjust, smooth, and clamp the limit based on the gradient
-	newLimit := l.limit * gradient
-	newLimit = util.Smooth(l.limit, newLimit, l.smoothingFactor)
+	// Clamp the limit based on the gradient
 	newLimit = max(l.minLimit, min(l.maxLimit, newLimit))
 
 	// Don't increase the limit beyond the max limit factor
 	if newLimit > float64(inflight)*l.maxLimitFactor {
-		l.logLimit("limit maxed", l.limit, inflight, shortRTT, longRTT, queueSize, rttVariation, correlation, gradient)
-		return
+		direction = "decreased"
+		reason = "maxed"
+		newLimit = l.limit - float64(l.decreaseFunc(int(l.limit)))
 	}
 
-	l.logLimit("limit updated", newLimit, inflight, shortRTT, longRTT, queueSize, rttVariation, correlation, gradient)
+	l.logLimit(direction, reason, newLimit, gradient, queueSize, inflight, shortRTT, longRTT, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputSlope, throughputCV)
 
 	if uint(l.limit) != uint(newLimit) {
 		if l.limitChangedListener != nil {
@@ -417,17 +431,24 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 	l.limit = newLimit
 }
 
-func (l *adaptiveLimiter[R]) logLimit(msg string, limit float64, inflight int, shortRTT, longRTT float64, queueSize int, rttVariation, correlation, gradient float64) {
+func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, gradient float64, queueSize, inflight int, shortRTT, longRTT, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputSlope, throughputCV float64) {
 	if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
-		l.logger.Debug(msg,
+		l.logger.Debug("limit update",
+			"direction", direction,
+			"reason", reason,
 			"limit", fmt.Sprintf("%.2f", limit),
+			"gradient", fmt.Sprintf("%.2f", gradient),
+			"queueSize", fmt.Sprintf("%d", queueSize),
 			"inflight", inflight,
-			"shortRTT", fmt.Sprintf("%.2f", shortRTT/1e6),
-			"longRTT", fmt.Sprintf("%.2f", longRTT/1e6),
-			//	"queueSize", fmt.Sprintf("%d", queueSize),
-			"rttVariation", fmt.Sprintf("%.3f", rttVariation),
-			"correlation", fmt.Sprintf("%.2f", correlation),
-			"gradient", fmt.Sprintf("%.2f", gradient))
+			"shortRTT", fmt.Sprintf("%.2f", shortRTT),
+			"longRTT", fmt.Sprintf("%.2f", longRTT),
+			"thrpt", fmt.Sprintf("%.2f", throughput),
+			"thrptCorr", fmt.Sprintf("%.2f", throughputCorr),
+			"thrptSlp", fmt.Sprintf("%.2f", throughputSlope),
+			"rttCV", fmt.Sprintf("%.3f", rttCV),
+			"inflightSlp", fmt.Sprintf("%.2f", inflightSlope),
+			"thrptCV", fmt.Sprintf("%.2f", throughputCV),
+			"rttCorr", fmt.Sprintf("%.2f", rttCorr))
 	}
 }
 

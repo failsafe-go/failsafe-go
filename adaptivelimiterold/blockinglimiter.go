@@ -1,4 +1,4 @@
-package adaptivelimiter2
+package adaptivelimiterold
 
 import (
 	"context"
@@ -8,10 +8,10 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// blockingLimiter wraps an adaptiveLimiter2 and blocks some portion of requests when the adaptiveLimiter2 is at its
+// blockingLimiter wraps an adaptiveLimiter and blocks some portion of requests when the adaptiveLimiter is at its
 // limit.
 type blockingLimiter[R any] struct {
-	*adaptiveLimiter2[R]
+	*adaptiveLimiter[R]
 
 	// Guarded by mu
 	blockedCount int
@@ -33,7 +33,7 @@ func (l *blockingLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) 
 	// Acquire a permit, blocking if needed
 	l.blockedCount++
 	l.mu.Unlock()
-	permit, err := l.adaptiveLimiter2.AcquirePermit(ctx)
+	permit, err := l.adaptiveLimiter.AcquirePermit(ctx)
 	l.mu.Lock()
 	l.blockedCount--
 	l.mu.Unlock()
@@ -60,7 +60,6 @@ func (l *blockingLimiter[R]) CanAcquirePermit() bool {
 // blocked requests it would take before a new request is serviced, and the average processing time per request.
 func (l *blockingLimiter[R]) estimateLatency() time.Duration {
 	avgProcessing := time.Duration(l.longRTT.Value())
-	// avgProcessing := time.Duration(l.targetRTT)
 	if avgProcessing == 0 {
 		avgProcessing = l.maxExecutionTime / warmupSamples
 	}

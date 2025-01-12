@@ -1,4 +1,4 @@
-package adaptivelimiter
+package adaptivelimiterold
 
 // // pidExecutor is a policy.Executor that handles failures according to a PIDLimiter.
 // type pidExecutor[R any] struct {

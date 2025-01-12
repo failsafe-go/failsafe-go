@@ -1,4 +1,4 @@
-package adaptivelimiter2
+package adaptivelimiterold
 
 import (
 	"context"
@@ -7,8 +7,6 @@ import (
 	"math"
 	"sync"
 	"time"
-
-	"github.com/influxdata/tdigest"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/internal/util"
@@ -20,7 +18,18 @@ import (
 
 const warmupSamples = 10
 
-// AdaptiveLimiter2 is a concurrency limiter that adjusts its limit up or down based on execution time trends:
+type Info interface {
+	// Limit returns the concurrent execution limit, as calculated by the adaptive limiter.
+	Limit() int
+
+	// Inflight returns the current number of inflight executions.
+	Inflight() int
+
+	// Blocked returns the current number of blocked executions.
+	Blocked() int
+}
+
+// AdaptiveLimiter is a concurrency limiter that adjusts its limit up or down based on execution time trends:
 //  - When recent execution times are trending up relative to longer term execution times, the concurrency limit is decreased.
 //  - When recent execution times are trending down relative to longer term execution times, the concurrency limit is increased.
 //
@@ -28,7 +37,7 @@ const warmupSamples = 10
 // longer-term execution times. Limit increases are additionally controlled to ensure they don't increase execution times. Any
 // executions in excess of the limit will be rejected with ErrExceeded.
 //
-// By default, an AdaptiveLimiter2 will converge on a concurrency limit that represents the capacity of the machine it's
+// By default, an AdaptiveLimiter will converge on a concurrency limit that represents the capacity of the machine it's
 // running on, and avoids having executions block. Since enforcing a limit without allowing for blocking is too strict in
 // some cases and may cause unexpected rejections, optional blocking of executions when the limiter is full can be
 // enabled by configuring a maxExecutionTime.
@@ -38,8 +47,9 @@ const warmupSamples = 10
 // requests, the current limit, and the long-term average execution time.
 //
 // R is the execution result type. This type is concurrency safe.
-type AdaptiveLimiter2[R any] interface {
+type AdaptiveLimiter[R any] interface {
 	failsafe.Policy[R]
+	Info
 
 	// AcquirePermit attempts to acquire a permit to perform an execution via the limiter, waiting until one is
 	// available or the execution is canceled. Returns [context.Canceled] if the ctx is canceled.
@@ -54,15 +64,6 @@ type AdaptiveLimiter2[R any] interface {
 
 	// CanAcquirePermit returns whether it's currently possible to acquire a permit.
 	CanAcquirePermit() bool
-
-	// Limit returns the concurrent execution limit, as calculated by the adaptive limiter.
-	Limit() int
-
-	// Inflight returns the current number of inflight executions.
-	Inflight() int
-
-	// Blocked returns the current number of blocked executions.
-	Blocked() int
 }
 
 // Permit is a permit to perform an execution that must be completed by calling Record or Drop.
@@ -78,7 +79,7 @@ type Permit interface {
 }
 
 /*
-Builder builds AdaptiveLimiter2 instances.
+Builder builds AdaptiveLimiter instances.
 
 This type is not concurrency safe.
 */
@@ -124,14 +125,16 @@ type Builder[R any] interface {
 	// WithLogger configures a logger which provides debug logging of limit adjustments.
 	WithLogger(logger *slog.Logger) Builder[R]
 
+	WithPID() Builder[R]
+
 	// OnLimitChanged configures a listener to be called with the limit changes.
 	OnLimitChanged(listener func(event LimitChangedEvent)) Builder[R]
 
-	// Build returns a new AdaptiveLimiter2 using the builder's configuration.
-	Build() AdaptiveLimiter2[R]
+	// Build returns a new AdaptiveLimiter using the builder's configuration.
+	Build() AdaptiveLimiter[R]
 }
 
-// LimitChangedEvent indicates an AdaptiveLimiter2's limit has changed.
+// LimitChangedEvent indicates an AdaptiveLimiter's limit has changed.
 type LimitChangedEvent struct {
 	OldLimit uint
 	NewLimit uint
@@ -144,7 +147,7 @@ type config[R any] struct {
 	shortWindowMinSamples  uint
 	longWindowSize         uint
 	correlationWindowSize  uint
-	variationWindowSize    uint
+	variationWindow        uint
 
 	minLimit        float64
 	maxLimit        float64
@@ -152,13 +155,10 @@ type config[R any] struct {
 	maxLimitFactor  float64
 	smoothingFactor float64
 
-	alphaFunc    func(int) int
-	betaFunc     func(int) int
-	increaseFunc func(int) int
-	decreaseFunc func(int) int
-
 	maxExecutionTime     time.Duration
 	limitChangedListener func(LimitChangedEvent)
+
+	pid bool
 }
 
 var _ Builder[any] = &config[any]{}
@@ -170,17 +170,12 @@ func NewBuilder[R any]() Builder[R] {
 		shortWindowMinSamples:  1,
 		longWindowSize:         60,
 		correlationWindowSize:  20,
-		variationWindowSize:    8,
+		variationWindow:        8,
 		minLimit:               1,
 		maxLimit:               200,
 		initialLimit:           20,
 		maxLimitFactor:         5.0,
 		smoothingFactor:        0.1,
-
-		alphaFunc:    util.Log10RootFunction(3),
-		betaFunc:     util.Log10RootFunction(6),
-		increaseFunc: util.Log10RootFunction(0),
-		decreaseFunc: util.Log10RootFunction(0),
 	}
 }
 
@@ -224,7 +219,7 @@ func (c *config[R]) WithCorrelationWindow(size uint) Builder[R] {
 }
 
 func (c *config[R]) WithVariationWindow(size uint) Builder[R] {
-	c.variationWindowSize = size
+	c.variationWindow = size
 	return c
 }
 
@@ -233,32 +228,54 @@ func (c *config[R]) WithLogger(logger *slog.Logger) Builder[R] {
 	return c
 }
 
+func (c *config[R]) WithPID() Builder[R] {
+	c.pid = true
+	return c
+}
+
 func (c *config[R]) OnLimitChanged(listener func(event LimitChangedEvent)) Builder[R] {
 	c.limitChangedListener = listener
 	return c
 }
 
-func (c *config[R]) Build() AdaptiveLimiter2[R] {
-	adaptive := &adaptiveLimiter2[R]{
-		config:                c,
-		semaphore:             util.NewDynamicSemaphore(int64(c.initialLimit)),
-		limit:                 float64(c.initialLimit),
-		shortRTT:              &td{TDigest: tdigest.NewWithCompression(100)},
-		longRTT:               util.NewEWMA(c.longWindowSize, warmupSamples),
-		nextUpdateTime:        time.Now(),
-		rttVariation:          newVariationWindow(c.variationWindowSize),
-		rttCorrelation:        newCorrelationWindow(c.correlationWindowSize, warmupSamples),
-		throughputCorrelation: newCorrelationWindow(c.correlationWindowSize, warmupSamples),
+func (c *config[R]) Build() AdaptiveLimiter[R] {
+	adaptive := &adaptiveLimiter[R]{
+		config:            c,
+		semaphore:         util.NewDynamicSemaphore(int64(c.initialLimit)),
+		limit:             float64(c.initialLimit),
+		shortRTT:          newRTTWindow(),
+		longRTT:           util.NewEWMA(c.longWindowSize, warmupSamples),
+		nextUpdateTime:    time.Now(),
+		rttVariation:      newVariationWindow(8),
+		correlationWindow: newCovarianceWindow(c.correlationWindowSize, warmupSamples),
 	}
+	// if c.pid {
+	// 	result := newPIDLimiter(adaptive)
+	// 	result.ScheduleCalibrations(context.Background(), time.Second)
+	// 	return result
+	// }
 	if c.maxExecutionTime != 0 {
 		return &blockingLimiter[R]{
-			adaptiveLimiter2: adaptive,
+			adaptiveLimiter: adaptive,
 		}
 	}
+	// if c.priorized {
+	// 	return &priorityBlockingLimiter[R]{
+	// 		adaptiveLimiter:   adaptive,
+	// 		maxExecutionTime:  maxExecutionTime,
+	// 		priorityThreshold: PriorityLowest,
+	// 		kp:                0.1, // Gradual response to spikes
+	// 		ki:                1.4, // Aggressive response to sustained load
+	// 		calibrations: &calibrationWindow{
+	// 			window:       make([]calibrationPeriod, 30), // 30 second history
+	// 			integralEWMA: util.NewEWMA(30, 5),           // 30 samples, 5 warmup
+	// 		},
+	// 	}
+	// }
 	return adaptive
 }
 
-type adaptiveLimiter2[R any] struct {
+type adaptiveLimiter[R any] struct {
 	*config[R]
 
 	// Mutable state
@@ -266,20 +283,15 @@ type adaptiveLimiter2[R any] struct {
 	mu        sync.Mutex
 
 	// Guarded by mu
-	limit float64 // The current concurrency limit
-	// shortRTT         *rttWindow         // Tracks short term average execution time (round trip time)
-	shortRTT *td
-	longRTT  util.MovingAverage // Tracks long term average execution time
-	// targetRTT             float64
-	nextUpdateTime        time.Time          // Tracks when the limit can next be updated
-	rttVariation          *variationWindow   // Tracks the variation of execution times
-	rttCorrelation        *correlationWindow // Tracks the correlation between concurrency and execution times
-	throughputCorrelation *correlationWindow // Tracks the correlation between concurrency and throughput
-
-	remainingAdjustments uint
+	limit             float64            // The current concurrency limit
+	shortRTT          *rttWindow         // Tracks short term average execution time (round trip time)
+	longRTT           util.MovingAverage // Tracks long term average execution time
+	nextUpdateTime    time.Time          // Tracks when the limit can next be updated
+	rttVariation      *variationWindow   // Tracks the variation of execution times
+	correlationWindow *correlationWindow // Tracks the correlation between concurrency and execution times
 }
 
-func (l *adaptiveLimiter2[R]) AcquirePermit(ctx context.Context) (Permit, error) {
+func (l *adaptiveLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -293,7 +305,7 @@ func (l *adaptiveLimiter2[R]) AcquirePermit(ctx context.Context) (Permit, error)
 	}, nil
 }
 
-func (l *adaptiveLimiter2[R]) TryAcquirePermit() (Permit, bool) {
+func (l *adaptiveLimiter[R]) TryAcquirePermit() (Permit, bool) {
 	if !l.semaphore.TryAcquire() {
 		return nil, false
 	}
@@ -304,26 +316,26 @@ func (l *adaptiveLimiter2[R]) TryAcquirePermit() (Permit, bool) {
 	}, true
 }
 
-func (l *adaptiveLimiter2[R]) CanAcquirePermit() bool {
+func (l *adaptiveLimiter[R]) CanAcquirePermit() bool {
 	return !l.semaphore.IsFull()
 }
 
-func (l *adaptiveLimiter2[R]) Limit() int {
+func (l *adaptiveLimiter[R]) Limit() int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return int(l.limit)
 }
 
-func (l *adaptiveLimiter2[R]) Inflight() int {
+func (l *adaptiveLimiter[R]) Inflight() int {
 	return l.semaphore.Inflight()
 }
 
-func (l *adaptiveLimiter2[R]) Blocked() int {
+func (l *adaptiveLimiter[R]) Blocked() int {
 	return 0
 }
 
 // Records the duration of a completed execution, updating the concurrency limit if the short shortRTT window is full.
-func (l *adaptiveLimiter2[R]) record(startTime time.Time, inflight int, dropped bool) {
+func (l *adaptiveLimiter[R]) record(startTime time.Time, inflight int, dropped bool) {
 	l.semaphore.Release()
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -335,9 +347,9 @@ func (l *adaptiveLimiter2[R]) record(startTime time.Time, inflight int, dropped 
 	}
 
 	if now.After(l.nextUpdateTime) && l.shortRTT.size >= l.shortWindowMinSamples {
-		l.updateLimit(l.shortRTT.Quantile(.9), inflight)
+		l.updateLimit(float64(l.shortRTT.average()), inflight)
 		minRTT := l.shortRTT.minRTT
-		l.shortRTT.reset()
+		l.shortRTT = newRTTWindow()
 		minWindowTime := max(minRTT*2, l.shortWindowMinDuration)
 		l.nextUpdateTime = now.Add(min(minWindowTime, l.shortWindowMaxDuration))
 	}
@@ -346,66 +358,50 @@ func (l *adaptiveLimiter2[R]) record(startTime time.Time, inflight int, dropped 
 // updateLimit updates the concurrency limit based on the gradient between the shortRTT and historical longRTT.
 // A stability check prevents unnecessary decreases during steady state.
 // A correlation adjustment prevents upward drift during overload.
-func (l *adaptiveLimiter2[R]) updateLimit(shortRTT float64, inflight int) {
+func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 	// Update long term RTT and calculate the initial gradient
 	longRTT := l.longRTT.Add(shortRTT)
 	gradient := longRTT / shortRTT
 	queueSize := int(math.Ceil(float64(inflight) * (1 - gradient)))
 
 	// Calculate RTT variation and correlation with inflight
-	rttVariation := l.rttVariation.add(shortRTT / 1e6)
-	rttCorr, _, _ := l.rttCorrelation.add(float64(inflight), shortRTT/1e6)
-	throughput := float64(inflight) / (shortRTT / 1e6)
-	throughputCorr, _, throughputVariation := l.throughputCorrelation.add(float64(inflight), throughput)
-	inflightSlope := l.throughputCorrelation.xSamples.calculateSlope()
-	throughputSlope := l.throughputCorrelation.ySamples.calculateSlope()
+	rttVariation := l.rttVariation.add(shortRTT)
+	correlation := l.correlationWindow.add(float64(inflight), shortRTT)
 
-	alpha := l.alphaFunc(int(l.limit))
-	beta := l.betaFunc(int(l.limit))
-	newLimit := l.limit
-	direction := "leaving"
-
-	decrease := false
-
-	if queueSize > beta {
-		// This condition handles severe overload where recent RTT significantly exceeds the baseline
-		direction = "decreasing queue"
-		decrease = true
-	} else if throughputCorr < 0 && throughputSlope < 0 {
-		// This condition handles moderate overload where throughput decreases relative to inflight
-		direction = "decreasing thruCorr"
-		decrease = true
-		// l.throughputCorrelation.xSamples.debugSlope()
-	} else if rttCorr > .7 && throughputVariation < .1 {
-		// This condition handles ongoing moderate overload where throughput may have stabilized, but RTT is still degrading relative to inflight
-		direction = "decreasing rttCorr"
-		decrease = true
-		// l.throughputCorrelation.xSamples.debugSlope()
-	} else if queueSize < alpha {
-		direction = "increasing"
-		newLimit = l.limit + float64(l.increaseFunc(int(l.limit)))
+	// If gradient would decrease limit and either the adjustment is small or RTT is stable, maintain the current limit
+	if gradient < 1.0 && (gradient > .8 || rttVariation < 0.05) {
+		l.logLimit("limit stable", l.limit, inflight, shortRTT, longRTT, queueSize, rttVariation, correlation, gradient)
+		return
 	}
 
-	if decrease {
-		// Consider the limit stable if RTT is stable and we were recently decreasing inflight
-		if rttVariation < 0.05 && inflightSlope < 0 {
-			l.logLimit("limit stable", l.limit, "holding", queueSize, beta, inflight, inflightSlope, shortRTT, longRTT, throughput, rttVariation, rttCorr, throughputSlope, throughputVariation, throughputCorr, gradient)
-			return
-		}
-		newLimit = l.limit - float64(l.decreaseFunc(int(l.limit)))
-	}
+	// Adjust the gradient based on any correlation between increases in concurrency and RTT by tracking their correlationWindow.
+	// This is necessary to guard against situations where the limit rises too far while RTT is unstable.
+	// if correlation != 0 {
+	// 	// Adjust by up to 5%
+	// 	adjustment := 1.0 - (correlation * 0.05)
+	// 	gradient *= adjustment
+	// 	if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
+	// 		l.logger.Debug("adjusting",
+	// 			"adjustment", adjustment,
+	// 			"gradient", fmt.Sprintf("%.2f", gradient))
+	// 	}
+	// }
 
-	// Clamp the limit based on the gradient
+	// Clamp the gradient
+	gradient = max(0.5, min(1.5, gradient))
+
+	// Adjust, smooth, and clamp the limit based on the gradient
+	newLimit := l.limit * gradient
+	newLimit = util.Smooth(l.limit, newLimit, l.smoothingFactor)
 	newLimit = max(l.minLimit, min(l.maxLimit, newLimit))
 
 	// Don't increase the limit beyond the max limit factor
 	if newLimit > float64(inflight)*l.maxLimitFactor {
-		direction = "maxed"
-		l.logLimit("limit maxed", l.limit, direction, queueSize, beta, inflight, inflightSlope, shortRTT, longRTT, throughput, rttVariation, rttCorr, throughputSlope, throughputVariation, throughputCorr, gradient)
-		newLimit = l.limit - float64(l.decreaseFunc(int(l.limit)))
-	} else {
-		l.logLimit("limit updated", newLimit, direction, queueSize, beta, inflight, inflightSlope, shortRTT, longRTT, throughput, rttVariation, rttCorr, throughputSlope, throughputVariation, throughputCorr, gradient)
+		l.logLimit("limit maxed", l.limit, inflight, shortRTT, longRTT, queueSize, rttVariation, correlation, gradient)
+		return
 	}
+
+	l.logLimit("limit updated", newLimit, inflight, shortRTT, longRTT, queueSize, rttVariation, correlation, gradient)
 
 	if uint(l.limit) != uint(newLimit) {
 		if l.limitChangedListener != nil {
@@ -420,39 +416,31 @@ func (l *adaptiveLimiter2[R]) updateLimit(shortRTT float64, inflight int) {
 	l.limit = newLimit
 }
 
-func (l *adaptiveLimiter2[R]) logLimit(msg string, limit float64, direction string, queueSize, beta, inflight int, inflightSlope, shortRTT, longRTT float64, throughput float64, rttVariation, rttCorr float64, throughputSlope, throughputVariation, throughputCorr float64, gradient float64) {
+func (l *adaptiveLimiter[R]) logLimit(msg string, limit float64, inflight int, shortRTT, longRTT float64, queueSize int, rttVariation, correlation, gradient float64) {
 	if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
 		l.logger.Debug(msg,
 			"limit", fmt.Sprintf("%.2f", limit),
-			"direction", direction,
-			// "initialQueueSize", fmt.Sprintf("%d", queueSize),
-			"queueSize", fmt.Sprintf("%d", queueSize),
-			//	"beta", fmt.Sprintf("%d", beta),
 			"inflight", inflight,
-			"inflightSlope", fmt.Sprintf("%.2f", inflightSlope/1e6),
 			"shortRTT", fmt.Sprintf("%.2f", shortRTT/1e6),
 			"longRTT", fmt.Sprintf("%.2f", longRTT/1e6),
-			"rttVar", fmt.Sprintf("%.3f", rttVariation),
-			"rttCorr", fmt.Sprintf("%.2f", rttCorr),
-			"thrpt", fmt.Sprintf("%.2f", throughput),
-			"thrptSlope", fmt.Sprintf("%.2f", throughputSlope),
-			"thrptVar", fmt.Sprintf("%.2f", throughput),
-			"thrptCorr", fmt.Sprintf("%.2f", throughputCorr),
+			//	"queueSize", fmt.Sprintf("%d", queueSize),
+			"rttVariation", fmt.Sprintf("%.3f", rttVariation),
+			"correlation", fmt.Sprintf("%.2f", correlation),
 			"gradient", fmt.Sprintf("%.2f", gradient))
 	}
 }
 
-func (l *adaptiveLimiter2[R]) ToExecutor(_ R) any {
+func (l *adaptiveLimiter[R]) ToExecutor(_ R) any {
 	e := &adaptiveExecutor[R]{
-		BaseExecutor:     &policy.BaseExecutor[R]{},
-		adaptiveLimiter2: l,
+		BaseExecutor:    &policy.BaseExecutor[R]{},
+		adaptiveLimiter: l,
 	}
 	e.Executor = e
 	return e
 }
 
 type recordingPermit[R any] struct {
-	limiter         *adaptiveLimiter2[R]
+	limiter         *adaptiveLimiter[R]
 	startTime       time.Time
 	currentInflight int
 }

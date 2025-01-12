@@ -59,6 +59,7 @@ func (l *blockingLimiter[R]) CanAcquirePermit() bool {
 // blocked requests it would take before a new request is serviced, and the average processing time per request.
 func (l *blockingLimiter[R]) estimateLatency() time.Duration {
 	avgProcessing := time.Duration(l.longRTT.Value())
+	// avgProcessing := time.Duration(l.targetRTT)
 	if avgProcessing == 0 {
 		avgProcessing = l.maxExecutionTime / warmupSamples
 	}
