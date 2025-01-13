@@ -74,7 +74,7 @@ func checkAcquire(t *testing.T, sem *DynamicSemaphore, wantAcquire bool) {
 	}
 }
 
-func TestDynamicSemaphoreAcquire(t *testing.T) {
+func TestDynamicSemaphore_Acquire(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -200,4 +200,84 @@ func TestDynamicSemaphore_IsFull(t *testing.T) {
 			assert.Equal(t, tc.expected, s.IsFull())
 		})
 	}
+}
+
+func TestDynamicSemaphore_IsOverloaded(t *testing.T) {
+	testTimeout := 100 * time.Millisecond
+
+	t.Run("should not be overloaded when sempahore is not full", func(t *testing.T) {
+		s := &DynamicSemaphore{size: 2, overloadTimeout: testTimeout}
+		err := s.Acquire(context.Background())
+		require.NoError(t, err)
+		assert.False(t, s.IsOverloaded(), "should not be overloaded when permits available")
+	})
+
+	t.Run("should be overloaded after overload timeout", func(t *testing.T) {
+		s := &DynamicSemaphore{size: 1, overloadTimeout: testTimeout}
+		err := s.Acquire(context.Background())
+		require.NoError(t, err)
+
+		// When
+		go func() {
+			s.Acquire(context.Background())
+		}()
+
+		time.Sleep(testTimeout / 2)
+		assert.False(t, s.IsOverloaded())
+		time.Sleep(testTimeout)
+		assert.True(t, s.IsOverloaded())
+		s.Release()
+		assert.False(t, s.IsOverloaded())
+	})
+
+	t.Run("should reset overload timeout", func(t *testing.T) {
+		s := &DynamicSemaphore{size: 1, overloadTimeout: testTimeout}
+
+		err := s.Acquire(context.Background())
+		require.NoError(t, err)
+
+		// When overload begins
+		go func() {
+			s.Acquire(context.Background())
+		}()
+
+		// Then
+		assert.False(t, s.IsOverloaded())
+		time.Sleep(testTimeout)
+		assert.True(t, s.IsOverloaded())
+		s.Release()
+		assert.False(t, s.IsOverloaded())
+
+		// Overload again
+		go func() {
+			s.Acquire(context.Background())
+		}()
+
+		// Then
+		time.Sleep(testTimeout)
+		assert.True(t, s.IsOverloaded())
+	})
+}
+
+func TestDynamicSemaphore_Waiters(t *testing.T) {
+	testTimeout := 100 * time.Millisecond
+	s := &DynamicSemaphore{size: 1, overloadTimeout: testTimeout}
+	err := s.Acquire(context.Background())
+	require.NoError(t, err)
+
+	// When
+	go func() {
+		s.Acquire(context.Background())
+	}()
+	go func() {
+		s.Acquire(context.Background())
+	}()
+
+	time.Sleep(testTimeout)
+	assert.True(t, s.IsOverloaded())
+	assert.Equal(t, 2, s.Waiters())
+	s.Release()
+	assert.Equal(t, 1, s.Waiters())
+	s.Release()
+	assert.Equal(t, 0, s.Waiters())
 }

@@ -7,15 +7,19 @@ import (
 	"container/list"
 	"context"
 	"sync"
+	"time"
 )
 
 // DynamicSemaphore implements a semaphore whose capacity can be changed dynamically at
 // run time.
 type DynamicSemaphore struct {
-	mu      sync.Mutex
-	size    int64
-	cur     int64
-	waiters list.List
+	overloadTimeout time.Duration
+
+	mu           sync.Mutex
+	size         int64
+	cur          int64
+	waiters      list.List
+	blockedSince time.Time
 }
 
 // NewDynamicSemaphore returns a dynamic semaphore with the given initial capacity. Note
@@ -24,7 +28,8 @@ type DynamicSemaphore struct {
 // use.
 func NewDynamicSemaphore(n int64) *DynamicSemaphore {
 	return &DynamicSemaphore{
-		size: n,
+		overloadTimeout: 10 * time.Second,
+		size:            n,
 	}
 }
 
@@ -52,6 +57,9 @@ func (s *DynamicSemaphore) Acquire(ctx context.Context) error {
 
 	// Need to wait, add to waiter list
 	ready := make(chan struct{})
+	if s.waiters.Len() == 0 {
+		s.blockedSince = time.Now()
+	}
 	elem := s.waiters.PushBack(ready)
 	s.mu.Unlock()
 
@@ -109,6 +117,11 @@ func (s *DynamicSemaphore) Release() {
 	// Need to yield our slot to the next waiter.
 	// Remove them from the list
 	s.waiters.Remove(next)
+
+	if s.waiters.Len() == 0 {
+		s.blockedSince = time.Time{}
+	}
+
 	// And trigger it's chan before we release the lock
 	close(next.Value.(chan struct{}))
 	// Note we _don't_ decrement inflight since the slot was yielded directly.
@@ -118,6 +131,20 @@ func (s *DynamicSemaphore) IsFull() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.cur == s.size
+}
+
+// IsOverloaded returns whether it's been 10 seconds since the sempahore was not full, indicating sustained overload.
+func (s *DynamicSemaphore) IsOverloaded() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.blockedSince.IsZero() && time.Since(s.blockedSince) >= s.overloadTimeout
+}
+
+// Waiters returns how many callers are blocked waiting for the semaphore.
+func (s *DynamicSemaphore) Waiters() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.waiters.Len()
 }
 
 func (s *DynamicSemaphore) Inflight() int {

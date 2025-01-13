@@ -41,6 +41,7 @@ const warmupSamples = 10
 // R is the execution result type. This type is concurrency safe.
 type AdaptiveLimiter[R any] interface {
 	failsafe.Policy[R]
+	AdaptiveLimiterInfo[R]
 
 	// AcquirePermit attempts to acquire a permit to perform an execution via the limiter, waiting until one is
 	// available or the execution is canceled. Returns [context.Canceled] if the ctx is canceled.
@@ -55,7 +56,12 @@ type AdaptiveLimiter[R any] interface {
 
 	// CanAcquirePermit returns whether it's currently possible to acquire a permit.
 	CanAcquirePermit() bool
+}
 
+// Info about the adaptive limiter.
+//
+// R is the execution result type. This type is concurrency safe.
+type AdaptiveLimiterInfo[R any] interface {
 	// Limit returns the concurrent execution limit, as calculated by the adaptive limiter.
 	Limit() int
 
@@ -78,12 +84,19 @@ type Permit interface {
 	Drop()
 }
 
+type Builder[R any] interface {
+	BaseBuilder[R]
+
+	// Build returns a new AdaptiveLimiter using the builder's configuration.
+	Build() AdaptiveLimiter[R]
+}
+
 /*
-Builder builds AdaptiveLimiter instances.
+BaseBuilder defines base behavior for building AdaptiveLimiter instances.
 
 This type is not concurrency safe.
 */
-type Builder[R any] interface {
+type BaseBuilder[R any] interface {
 	// WithShortWindow configures the size of a window that is used to determine current, short-term load on the system in
 	// terms of the min and max duration of the window, and the min number of samples that must be recorded in the window.
 	// The default values are 1s, 1s, and 1.
@@ -106,12 +119,6 @@ type Builder[R any] interface {
 	// The default value is 5, which means the limit will only rise to 5 times the inflight executions.
 	WithMaxLimitFactor(maxLimitFactor float32) Builder[R]
 
-	// WithMaxExecutionTime enables blocking of executions when the limiter is full, up to some max average execution time,
-	// which includes the time spent while executions are blocked waiting for a permit. Enabling this allows short execution
-	// spikes to be absorbed without strictly rejecting executions when the limiter is full.
-	// This is disabled by default, which means no executions will block when the limiter is full.
-	WithMaxExecutionTime(maxExecutionTime time.Duration) Builder[R]
-
 	// WithCorrelationWindow configures how many recent limit and execution time measurements are stored to detect whether increases
 	// in limits correlate with increases in execution times, which will cause the limit to be adjusted down.
 	// The default value is 20.
@@ -122,14 +129,23 @@ type Builder[R any] interface {
 	// The default value is 10.
 	WithStabilizationWindow(size uint) Builder[R]
 
+	// WithBlocking enables blocking of executions when the limiter is full, up to some max average execution time,
+	// which includes the time spent while executions are blocked waiting for a permit. Enabling this allows short execution
+	// spikes to be absorbed without strictly rejecting executions when the limiter is full.
+	// This is disabled by default, which means no executions will block when the limiter is full.
+	WithBlocking(maxExecutionTime time.Duration) Builder[R]
+
+	// WithPrioritization enables prioritized blocking of executions when the limiter is full, up to some max average
+	// execution time, which includes the time spent while executions are blocked waiting for a permit. Enabling this allows
+	// short execution spikes to be absorbed without strictly rejecting executions when the limiter is full. This is
+	// disabled by default, which means no executions will block when the limiter is full.
+	WithPrioritization(prioritizer Prioritizer[R], maxExecutionTime time.Duration) PriorityLimiterBuilder[R]
+
 	// WithLogger configures a logger which provides debug logging of limit adjustments.
 	WithLogger(logger *slog.Logger) Builder[R]
 
 	// OnLimitChanged configures a listener to be called with the limit changes.
 	OnLimitChanged(listener func(event LimitChangedEvent)) Builder[R]
-
-	// Build returns a new AdaptiveLimiter using the builder's configuration.
-	Build() AdaptiveLimiter[R]
 }
 
 // LimitChangedEvent indicates an AdaptiveLimiter's limit has changed.
@@ -215,11 +231,6 @@ func (c *config[R]) WithMaxLimitFactor(maxLimitFactor float32) Builder[R] {
 	return c
 }
 
-func (c *config[R]) WithMaxExecutionTime(maxExecutionTime time.Duration) Builder[R] {
-	c.maxExecutionTime = maxExecutionTime
-	return c
-}
-
 func (c *config[R]) WithCorrelationWindow(size uint) Builder[R] {
 	c.correlationWindowSize = size
 	return c
@@ -228,6 +239,19 @@ func (c *config[R]) WithCorrelationWindow(size uint) Builder[R] {
 func (c *config[R]) WithStabilizationWindow(size uint) Builder[R] {
 	c.stabilizationWindowSize = size
 	return c
+}
+
+func (c *config[R]) WithBlocking(maxExecutionTime time.Duration) Builder[R] {
+	c.maxExecutionTime = maxExecutionTime
+	return c
+}
+
+func (c *config[R]) WithPrioritization(prioritizer Prioritizer[R], maxExecutionTime time.Duration) PriorityLimiterBuilder[R] {
+	c.maxExecutionTime = maxExecutionTime
+	return &priorityConfig[R]{
+		config:      c,
+		prioritizer: prioritizer,
+	}
 }
 
 func (c *config[R]) WithLogger(logger *slog.Logger) Builder[R] {
@@ -241,7 +265,7 @@ func (c *config[R]) OnLimitChanged(listener func(event LimitChangedEvent)) Build
 }
 
 func (c *config[R]) Build() AdaptiveLimiter[R] {
-	adaptive := &adaptiveLimiter[R]{
+	return &adaptiveLimiter[R]{
 		config:                c,
 		semaphore:             util.NewDynamicSemaphore(int64(c.initialLimit)),
 		limit:                 float64(c.initialLimit),
@@ -253,10 +277,6 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 		rttWindow:             newRollingSum(c.stabilizationWindowSize),
 		inflightWindow:        newRollingSum(c.stabilizationWindowSize),
 	}
-	if c.maxExecutionTime != 0 {
-		return &blockingLimiter[R]{adaptiveLimiter: adaptive}
-	}
-	return adaptive
 }
 
 type adaptiveLimiter[R any] struct {
@@ -267,9 +287,9 @@ type adaptiveLimiter[R any] struct {
 	mu        sync.Mutex
 
 	// Guarded by mu
-	limit          float64 // The current concurrency limit
-	shortRTT       *td
-	longRTT        util.MovingAverage // Tracks long term average execution time
+	limit          float64            // The current concurrency limit
+	shortRTT       *td                // Short term execution times in milliseconds
+	longRTT        util.MovingAverage // Tracks long term average execution time in milliseconds
 	nextUpdateTime time.Time          // Tracks when the limit can next be updated
 
 	throughputCorrelation *correlationWindow // Tracks the correlation between concurrency and throughput
@@ -377,12 +397,13 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 		reason = "queue"
 		decrease = true
 	} else if throughputCorr < 0 && throughputSlope < 0 {
-		// This condition handles moderate overload where throughput decreases relative to inflight
+		// This condition handles moderate overload where inflight is increasing but throughput is decreasing
 		reason = "thrptCorr"
 		decrease = true
 	} else if throughputCV < .1 && rttCorr > .7 {
-		// This condition handles moderate overload where throughputCorr is positive and stable but rttCorr is indicating overload
-		reason = "thrptVar"
+		// This condition handles moderate overload where throughputCorr is positive and stable but rttCorr is high
+		// This indicates overload since latency is increasing with inflight, but throughput is not
+		reason = "thrptCV"
 		decrease = true
 	} else if queueSize < alpha {
 		// If our queue size is sufficiently small, increase until we detect overload

@@ -11,9 +11,20 @@ import (
 // limit.
 type blockingLimiter[R any] struct {
 	*adaptiveLimiter[R]
+	maxExecutionTime time.Duration
 
 	// Guarded by mu
 	blockedCount int
+}
+
+// NewBlockingLimiter returns a limiter that enables blocking of executions when the limiter is full, up to some max
+// average execution time, which includes the time spent while executions are blocked waiting for a permit. A blocking
+// limiter allows short execution spikes to be absorbed without strictly rejecting executions when the limiter is full.
+func NewBlockingLimiter[R any](delegate *adaptiveLimiter[R], maxExecutionTime time.Duration) AdaptiveLimiter[R] {
+	return &blockingLimiter[R]{
+		adaptiveLimiter:  delegate,
+		maxExecutionTime: maxExecutionTime,
+	}
 }
 
 func (l *blockingLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
@@ -59,7 +70,6 @@ func (l *blockingLimiter[R]) CanAcquirePermit() bool {
 // blocked requests it would take before a new request is serviced, and the average processing time per request.
 func (l *blockingLimiter[R]) estimateLatency() time.Duration {
 	avgProcessing := time.Duration(l.longRTT.Value())
-	// avgProcessing := time.Duration(l.targetRTT)
 	if avgProcessing == 0 {
 		avgProcessing = l.maxExecutionTime / warmupSamples
 	}
