@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,11 +19,31 @@ const (
 	PriorityCritical
 )
 
+// priorityRange provides a wider range of priorities that allow for rejecting a subset of requests within a Priority.
+type priorityRange struct {
+	lower, upper int
+}
+
+// Defining the priority ranges as a map
+var priorityRanges = map[Priority]priorityRange{
+	PriorityLow:      {0, 99},
+	PriorityMedium:   {100, 199},
+	PriorityHigh:     {200, 299},
+	PriorityCritical: {300, 399},
+}
+
+func generateGranularPriority(priority Priority) int {
+	r := priorityRanges[priority]
+	return rand.Intn(r.upper-r.lower+1) + r.lower
+}
+
+// Prioritizer regularly adjusts a rejection threshold for incoming requests based on throughput of priority limiters.
 type Prioritizer[R any] interface {
 	register(limiter *priorityBlockingLimiter[R])
 
-	// CurrentPriority returns the current priority threshold, below which requests will be rejected.
-	CurrentPriority() Priority
+	// Threshold returns the current granular priority threshold, below which requests will be rejected. A granular priority
+	// for each request is generated based on its given priority.
+	Threshold() int
 
 	// ScheduleCalibrations runs calibration on an interval until the ctx is done or the returned CancelFunc is called.
 	ScheduleCalibrations(ctx context.Context, interval time.Duration) context.CancelFunc
@@ -41,8 +62,10 @@ type prioritizer[R any] struct {
 
 func NewPrioritizer[R any]() Prioritizer[R] {
 	return &prioritizer[R]{
-		kp: 0.1, // Gradual response to spikes
-		ki: 1.4, // Aggressive response to sustained load
+		// kp: 0.1, // Gradual response to spikes
+		// ki: 1.4, // Aggressive response to sustained load
+		kp: 0.05, // Reduced from 0.1
+		ki: 0.3,  // Reduced from 1.4
 		calibrations: &calibrationWindow{
 			window: make([]calibrationPeriod, 30), // 30 second history
 			// integralEWMA: util.NewEWMA(30, 5),           // 30 samples, 5 warmup
@@ -57,8 +80,8 @@ func (p *prioritizer[R]) register(limiter *priorityBlockingLimiter[R]) {
 	p.limiters = append(p.limiters, limiter)
 }
 
-func (p *prioritizer[R]) CurrentPriority() Priority {
-	return Priority(p.priorityThreshold.Load())
+func (p *prioritizer[R]) Threshold() int {
+	return int(p.priorityThreshold.Load())
 }
 
 // ScheduleCalibrations runs calibration on an interval
@@ -97,7 +120,7 @@ func (p *prioritizer[R]) Calibrate() {
 		inCount := int(limiter.inCount.Swap(0))
 		outCount := int(limiter.outCount.Swap(0))
 		ratio := float32(inCount) / float32(outCount)
-		if ratio > maxRatio {
+		if mostOverloaded == nil || ratio > maxRatio {
 			mostOverloaded = limiter
 			maxRatio = ratio
 			maxIn = inCount
@@ -105,42 +128,42 @@ func (p *prioritizer[R]) Calibrate() {
 		}
 	}
 	if mostOverloaded == nil {
+		p.mu.Unlock()
 		return
 	}
 
-	// Get both P value and integral sum from calibration window
 	freeInflight := mostOverloaded.Limit() - mostOverloaded.Inflight()
-	pValue, integralSum := p.calibrations.add(maxIn, maxOut, freeInflight, mostOverloaded.Limit())
+	// (maxOut + freeInflight) / maxIn
+	requests := float64(maxIn)
+	accepts := float64(maxOut + freeInflight)
+	successThreshold := 1.0
+	rejectProbability := max(0, requests-accepts/successThreshold) / (requests)
+
+	// // Get latest error and integral sum from calibration window
+	// freeInflight := mostOverloaded.Limit() - mostOverloaded.Inflight()
+	// errorValue, integralSum := p.calibrations.add(maxIn, maxOut, freeInflight, mostOverloaded.Limit())
 	p.mu.Unlock()
 
-	// Calculate PID adjustment
-	adjustment := p.kp*pValue + p.ki*integralSum
+	// // Calculate PI
+	// adjustment := p.kp*errorValue + p.ki*integralSum
+	// rejectionRatio := math.Max(0, math.Min(1, adjustment))
 
-	// Convert to threshold change
-	currentThreshold := Priority(p.priorityThreshold.Load())
-	newThreshold := currentThreshold
-
-	// Only change threshold on significant adjustments
-	if adjustment > 0.5 && currentThreshold < PriorityCritical {
-		// Overloaded, increase the threshold
-		newThreshold++
-	} else if adjustment < -0.5 && currentThreshold > PriorityLow {
-		// Underloaded, lower the threshold
-		newThreshold--
+	if p.logger != nil && p.logger.Enabled(nil, slog.LevelDebug) {
+		p.logger.Debug("prioritizer calibration",
+			// "newThresh",,
+			"oldThresh", p.priorityThreshold.Load(),
+			"in", maxIn,
+			"out", maxOut,
+			"rejectionPro", fmt.Sprintf("%.2f", rejectProbability),
+			//	"freeInflight", freeInflight,
+			//	"error", fmt.Sprintf("%.2f", errorValue),
+			//	"integral", fmt.Sprintf("%.2f", integralSum),
+			// "PI", fmt.Sprintf("%.2f", adjustment),
+			//	"rejectionRatio", fmt.Sprintf("%.2f", rejectionRatio)
+		)
 	}
 
-	if p.logger != nil && newThreshold != currentThreshold {
-		p.logger.Debug("updated priority threshold",
-			"newThresh", newThreshold,
-			"oldThresh", currentThreshold,
-			"pValue", fmt.Sprintf("%.2f", pValue),
-			"integral", fmt.Sprintf("%.2f", integralSum),
-			"adjustment", fmt.Sprintf("%.2f", adjustment),
-			"maxIn", maxIn,
-			"maxOut", maxOut)
-	}
-
-	p.priorityThreshold.Store(int32(newThreshold))
+	// p.priorityThreshold.Store(int32(newThreshold))
 }
 
 type calibrationWindow struct {
@@ -154,36 +177,38 @@ type calibrationWindow struct {
 type calibrationPeriod struct {
 	inCount  int     // Items that entered the limiter during the calibration period
 	outCount int     // Items that exited the limiter during the calibration period
-	pValue   float64 // The computed P value for the calibration period
+	error    float64 // The computed P value for the calibration period
 }
 
-func (c *calibrationWindow) add(in, out, freeInflight int, limit int) (pValue float64, integralSum float64) {
+func (c *calibrationWindow) add(in, out, freeInflight int, limit int) (error float64, integralSum float64) {
 	if c.size < len(c.window) {
 		c.size++
 	} else {
-		// If window is full, subtract the oldest P value before overwriting
-		c.integralSum -= c.window[c.head].pValue
+		// If window is full, subtract the oldest error before overwriting
+		c.integralSum -= c.window[c.head].error
 	}
 
-	pValue = computePValue(in, out, freeInflight, limit)
-	c.integralSum += pValue
+	error = computeError(in, out, freeInflight, limit)
+	c.integralSum += error
 	c.window[c.head] = calibrationPeriod{
 		inCount:  in,
 		outCount: out,
-		pValue:   pValue,
+		error:    error,
 	}
 	c.head = (c.head + 1) % len(c.window)
 
-	return pValue, c.integralSum
+	return error, c.integralSum
 }
 
-// Computes P value from request flow metrics.
-// A positive P value indicates overload, negative indicates underload.
-func computePValue(in, out, freeInflight int, limit int) float64 {
-	if out == 0 {
-		return float64(limit)
+// Computes the error from execution flow metrics.
+// A positive error value indicates overload, negative indicates underload.
+func computeError(in, out, freeInflight int, limit int) float64 {
+	normalizer := out
+	if normalizer == 0 {
+		normalizer = limit
 	}
-	return float64(in-(out+freeInflight)) / float64(out)
+	numerator := float64(in - (out + freeInflight))
+	return numerator / float64(normalizer)
 }
 
 // type calibrationWindow struct {
@@ -196,26 +221,26 @@ func computePValue(in, out, freeInflight int, limit int) float64 {
 // type calibrationPeriod struct {
 // 	inCount  int
 // 	outCount int
-// 	pValue   float64
+// 	error   float64
 // }
 //
-// func (c *calibrationWindow) add(in, out, freeInflight int, limit int) (pValue float64, integralSum float64) {
+// func (c *calibrationWindow) add(in, out, freeInflight int, limit int) (error float64, integralSum float64) {
 // 	if c.size < len(c.window) {
 // 		c.size++
 // 	}
 //
 // 	// Calculate P value from request flow metrics
-// 	pValue = computePValue(in, out, freeInflight, limit)
+// 	error = computeError(in, out, freeInflight, limit)
 //
 // 	// Use EWMA for integral term instead of unbounded sum
 // 	// This provides a bounded history window and weights recent values more heavily
-// 	//integralSum = c.integralEWMA.Add(pValue)
+// 	//integralSum = c.integralEWMA.Add(error)
 //
 // 	c.window[c.head] = calibrationPeriod{
 // 		inCount:  in,
 // 		outCount: out,
-// 		pValue:   pValue,
+// 		error:   error,
 // 	}
 // 	c.head = (c.head + 1) % len(c.window)
-// 	return pValue, integralSum
+// 	return error, integralSum
 // }

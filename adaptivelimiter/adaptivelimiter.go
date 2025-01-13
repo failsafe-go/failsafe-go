@@ -3,7 +3,6 @@ package adaptivelimiter
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"math"
 	"sync"
@@ -453,24 +452,24 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 }
 
 func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, gradient float64, queueSize, inflight int, shortRTT, longRTT, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputSlope, throughputCV float64) {
-	if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
-		l.logger.Debug("limit update",
-			"direction", direction,
-			"reason", reason,
-			"limit", fmt.Sprintf("%.2f", limit),
-			"gradient", fmt.Sprintf("%.2f", gradient),
-			"queueSize", fmt.Sprintf("%d", queueSize),
-			"inflight", inflight,
-			"shortRTT", fmt.Sprintf("%.2f", shortRTT),
-			"longRTT", fmt.Sprintf("%.2f", longRTT),
-			"thrpt", fmt.Sprintf("%.2f", throughput),
-			"thrptCorr", fmt.Sprintf("%.2f", throughputCorr),
-			"thrptSlp", fmt.Sprintf("%.2f", throughputSlope),
-			"rttCV", fmt.Sprintf("%.3f", rttCV),
-			"inflightSlp", fmt.Sprintf("%.2f", inflightSlope),
-			"thrptCV", fmt.Sprintf("%.2f", throughputCV),
-			"rttCorr", fmt.Sprintf("%.2f", rttCorr))
-	}
+	// if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
+	// 	l.logger.Debug("limit update",
+	// 		"direction", direction,
+	// 		"reason", reason,
+	// 		"limit", fmt.Sprintf("%.2f", limit),
+	// 		"gradient", fmt.Sprintf("%.2f", gradient),
+	// 		"queueSize", fmt.Sprintf("%d", queueSize),
+	// 		"inflight", inflight,
+	// 		"shortRTT", fmt.Sprintf("%.2f", shortRTT),
+	// 		"longRTT", fmt.Sprintf("%.2f", longRTT),
+	// 		"thrpt", fmt.Sprintf("%.2f", throughput),
+	// 		"thrptCorr", fmt.Sprintf("%.2f", throughputCorr),
+	// 		"thrptSlp", fmt.Sprintf("%.2f", throughputSlope),
+	// 		"rttCV", fmt.Sprintf("%.3f", rttCV),
+	// 		"inflightSlp", fmt.Sprintf("%.2f", inflightSlope),
+	// 		"thrptCV", fmt.Sprintf("%.2f", throughputCV),
+	// 		"rttCorr", fmt.Sprintf("%.2f", rttCorr))
+	// }
 }
 
 func (l *adaptiveLimiter[R]) ToExecutor(_ R) any {

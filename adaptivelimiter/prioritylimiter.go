@@ -63,8 +63,9 @@ type priorityBlockingLimiter[R any] struct {
 }
 
 func (l *priorityBlockingLimiter[R]) AcquirePermit(ctx context.Context, priority Priority) (Permit, error) {
-	// Reject if priority is higher (lower importance) than threshold
-	if priority < l.prioritizer.CurrentPriority() {
+	// Generate a granular priority for the request and threshold it against the prioritizer
+	granularPriority := generateGranularPriority(priority)
+	if granularPriority < l.prioritizer.Threshold() {
 		return nil, ErrExceeded
 	}
 

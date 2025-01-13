@@ -16,7 +16,7 @@ var _ policy.Executor[any] = &blockingExecutor[any]{}
 
 func (e *priorityExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
-		priority := PriorityCritical
+		priority := PriorityLow
 		if untypedKey := exec.Context().Value(PriorityKey); untypedKey != nil {
 			priority, _ = untypedKey.(Priority)
 		}
