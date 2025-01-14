@@ -7,15 +7,15 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// blockingExecutor is a policy.Executor that handles failures according to a blockingLimiter.
-type blockingExecutor[R any] struct {
+// latencyLimiterExecutor is a policy.Executor that handles failures according to a latencyLimiter.
+type latencyLimiterExecutor[R any] struct {
 	*policy.BaseExecutor[R]
-	*blockingLimiter[R]
+	*latencyLimiter[R]
 }
 
-var _ policy.Executor[any] = &blockingExecutor[any]{}
+var _ policy.Executor[any] = &latencyLimiterExecutor[any]{}
 
-func (e *blockingExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
+func (e *latencyLimiterExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		if permit, err := e.AcquirePermit(exec.Context()); err != nil {
 			return internal.FailureResult[R](err)

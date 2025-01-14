@@ -148,7 +148,7 @@ func TestClientCancelWithContext(t *testing.T) {
 		},
 		{
 			"with canceling request context and slow executor context",
-			status.Error(codes.Canceled, "context canceled"),
+			context.Canceled,
 			fastCtxFn,
 			slowCtxFn(),
 		},

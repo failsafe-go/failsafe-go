@@ -8,15 +8,18 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/influxdata/tdigest"
 )
 
 type Priority int
 
 const (
-	PriorityLow Priority = iota
+	PriorityVeryLow Priority = iota
+	PriorityLow
 	PriorityMedium
 	PriorityHigh
-	PriorityCritical
+	PriorityVeryHigh
 )
 
 // priorityRange provides a wider range of priorities that allow for rejecting a subset of requests within a Priority.
@@ -26,10 +29,11 @@ type priorityRange struct {
 
 // Defining the priority ranges as a map
 var priorityRanges = map[Priority]priorityRange{
-	PriorityLow:      {0, 99},
-	PriorityMedium:   {100, 199},
-	PriorityHigh:     {200, 299},
-	PriorityCritical: {300, 399},
+	PriorityVeryLow:  {0, 99},
+	PriorityLow:      {100, 199},
+	PriorityMedium:   {200, 299},
+	PriorityHigh:     {300, 399},
+	PriorityVeryHigh: {400, 499},
 }
 
 func generateGranularPriority(priority Priority) int {
@@ -37,55 +41,137 @@ func generateGranularPriority(priority Priority) int {
 	return rand.Intn(r.upper-r.lower+1) + r.lower
 }
 
-// Prioritizer regularly adjusts a rejection threshold for incoming requests based on throughput of priority limiters.
-type Prioritizer[R any] interface {
-	register(limiter *priorityBlockingLimiter[R])
+// Prioritizer regularly computes a shared rejection rate for multiple limiters.
+type Prioritizer interface {
+	// RejectionRate returns the current rate, from 0 to 1, at which the limiter will reject requests, based on recent
+	// execution times.
+	RejectionRate() float64
 
-	// Threshold returns the current granular priority threshold, below which requests will be rejected. A granular priority
-	// for each request is generated based on its given priority.
-	Threshold() int
+	// Calibrate calibrates the RejectionRate based on recent execution times from registered limiters.
+	Calibrate()
 
-	// ScheduleCalibrations runs calibration on an interval until the ctx is done or the returned CancelFunc is called.
+	// ScheduleCalibrations runs calibration on the interval until the ctx is done or the returned CancelFunc is called.
 	ScheduleCalibrations(ctx context.Context, interval time.Duration) context.CancelFunc
+
+	register(limiter rttEstimator)
+	recordPriority(priority int)
+	threshold() int
 }
 
-type prioritizer[R any] struct {
-	logger *slog.Logger
-	kp     float64
-	ki     float64
+// PrioritizerBuilder builds Prioritizer instances.
+//
+// This type is not concurrency safe.
+type PrioritizerBuilder interface {
+	// WithLogger configures a logger which provides debug logging of calibrations.
+	WithLogger(logger *slog.Logger) PrioritizerBuilder
 
-	priorityThreshold atomic.Int32
-	mu                sync.Mutex
-	limiters          []*priorityBlockingLimiter[R] // Guarded by mu
-	calibrations      *calibrationWindow            // Guarded by mu
+	// Build returns a new Prioritizer using the builder's configuration.
+	Build() Prioritizer
 }
 
-func NewPrioritizer[R any]() Prioritizer[R] {
-	return &prioritizer[R]{
-		// kp: 0.1, // Gradual response to spikes
-		// ki: 1.4, // Aggressive response to sustained load
-		kp: 0.05, // Reduced from 0.1
-		ki: 0.3,  // Reduced from 1.4
-		calibrations: &calibrationWindow{
-			window: make([]calibrationPeriod, 30), // 30 second history
-			// integralEWMA: util.NewEWMA(30, 5),           // 30 samples, 5 warmup
-		},
+type prioritizerConfig struct {
+	logger             *slog.Logger
+	rejectionThreshold time.Duration
+	maxExecutionTime   time.Duration
+}
+
+var _ PrioritizerBuilder = &prioritizerConfig{}
+
+func NewPrioritizer(rejectionThreshold time.Duration, maxExecutionTime time.Duration) Prioritizer {
+	return NewPrioritizerBuilder(rejectionThreshold, maxExecutionTime).Build()
+}
+
+// NewPrioritizerBuilder returns a PrioritizerBuilder.
+func NewPrioritizerBuilder(rejectionThreshold time.Duration, maxExecutionTime time.Duration) PrioritizerBuilder {
+	return &prioritizerConfig{
+		rejectionThreshold: rejectionThreshold,
+		maxExecutionTime:   maxExecutionTime,
 	}
 }
 
-func (p *prioritizer[R]) register(limiter *priorityBlockingLimiter[R]) {
+func (c *prioritizerConfig) WithLogger(logger *slog.Logger) PrioritizerBuilder {
+	c.logger = logger
+	return c
+}
+
+func (c *prioritizerConfig) Build() Prioritizer {
+	pCopy := *c
+	return &prioritizer{
+		prioritizerConfig: &pCopy, // TODO copy base fields
+		digest:            tdigest.NewWithCompression(100),
+	}
+}
+
+type rttEstimator interface {
+	averageRTT() float64
+	estimateRTT() time.Duration
+}
+
+type prioritizer struct {
+	*prioritizerConfig
+
+	// Mutable state
+	priorityThreshold atomic.Int32
+	mu                sync.Mutex
+	limiters          []rttEstimator   // Guarded by mu
+	digest            *tdigest.TDigest // Guarded by mu
+	rejectionRate     float64          // Guarded by mu
+}
+
+func (p *prioritizer) register(limiter rttEstimator) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.logger = limiter.adaptiveLimiter.logger // TODO remove this hack
 	p.limiters = append(p.limiters, limiter)
 }
 
-func (p *prioritizer[R]) Threshold() int {
-	return int(p.priorityThreshold.Load())
+func (p *prioritizer) RejectionRate() float64 {
+	p.mu.Lock()
+	p.mu.Unlock()
+	return p.rejectionRate
 }
 
-// ScheduleCalibrations runs calibration on an interval
-func (p *prioritizer[R]) ScheduleCalibrations(ctx context.Context, interval time.Duration) context.CancelFunc {
+// Calibrate computes a rejection rate and priority threshold based on the rtt from the most overloaded limiter.
+func (p *prioritizer) Calibrate() {
+	p.mu.Lock()
+
+	// Reset limiter stats and find the most overloaded limiter
+	var maxRTT float64
+	var mostOverloaded rttEstimator
+	for _, limiter := range p.limiters {
+		rtt := limiter.averageRTT()
+		if mostOverloaded == nil || rtt > maxRTT {
+			mostOverloaded = limiter
+			maxRTT = rtt
+		}
+	}
+	if mostOverloaded == nil {
+		p.mu.Unlock()
+		return
+	}
+
+	// Compute rejection rate
+	rtt := mostOverloaded.estimateRTT()
+	rejectionRate := max(0, computeRejectionRate(rtt, p.rejectionThreshold, p.maxExecutionTime))
+	p.rejectionRate = rejectionRate
+
+	// Compute priority threshold
+	var thresh int
+	if rejectionRate != 0 {
+		thresh = int(p.digest.Quantile(rejectionRate))
+	}
+	p.mu.Unlock()
+	p.priorityThreshold.Store(int32(thresh))
+
+	if p.logger != nil && p.logger.Enabled(nil, slog.LevelDebug) {
+		p.logger.Debug("prioritizer calibration",
+			"rtt", rtt.Milliseconds(),
+			"rejectionRate", fmt.Sprintf("%.2f", rejectionRate),
+			"priorityThresh", thresh,
+		)
+	}
+}
+
+func (p *prioritizer) ScheduleCalibrations(ctx context.Context, interval time.Duration) context.CancelFunc {
 	ticker := time.NewTicker(interval)
 	done := make(chan struct{})
 
@@ -108,139 +194,12 @@ func (p *prioritizer[R]) ScheduleCalibrations(ctx context.Context, interval time
 	}
 }
 
-// Calibrate adjusts the priority threshold based on request flow metrics
-func (p *prioritizer[R]) Calibrate() {
+func (p *prioritizer) recordPriority(priority int) {
 	p.mu.Lock()
-
-	// Reset limiter stats and find the most overloaded limiter
-	var maxRatio float32
-	var maxIn, maxOut int
-	var mostOverloaded *priorityBlockingLimiter[R]
-	for _, limiter := range p.limiters {
-		inCount := int(limiter.inCount.Swap(0))
-		outCount := int(limiter.outCount.Swap(0))
-		ratio := float32(inCount) / float32(outCount)
-		if mostOverloaded == nil || ratio > maxRatio {
-			mostOverloaded = limiter
-			maxRatio = ratio
-			maxIn = inCount
-			maxOut = outCount
-		}
-	}
-	if mostOverloaded == nil {
-		p.mu.Unlock()
-		return
-	}
-
-	freeInflight := mostOverloaded.Limit() - mostOverloaded.Inflight()
-	// (maxOut + freeInflight) / maxIn
-	requests := float64(maxIn)
-	accepts := float64(maxOut + freeInflight)
-	successThreshold := 1.0
-	rejectProbability := max(0, requests-accepts/successThreshold) / (requests)
-
-	// // Get latest error and integral sum from calibration window
-	// freeInflight := mostOverloaded.Limit() - mostOverloaded.Inflight()
-	// errorValue, integralSum := p.calibrations.add(maxIn, maxOut, freeInflight, mostOverloaded.Limit())
-	p.mu.Unlock()
-
-	// // Calculate PI
-	// adjustment := p.kp*errorValue + p.ki*integralSum
-	// rejectionRatio := math.Max(0, math.Min(1, adjustment))
-
-	if p.logger != nil && p.logger.Enabled(nil, slog.LevelDebug) {
-		p.logger.Debug("prioritizer calibration",
-			// "newThresh",,
-			"oldThresh", p.priorityThreshold.Load(),
-			"in", maxIn,
-			"out", maxOut,
-			"rejectionPro", fmt.Sprintf("%.2f", rejectProbability),
-			//	"freeInflight", freeInflight,
-			//	"error", fmt.Sprintf("%.2f", errorValue),
-			//	"integral", fmt.Sprintf("%.2f", integralSum),
-			// "PI", fmt.Sprintf("%.2f", adjustment),
-			//	"rejectionRatio", fmt.Sprintf("%.2f", rejectionRatio)
-		)
-	}
-
-	// p.priorityThreshold.Store(int32(newThreshold))
+	defer p.mu.Unlock()
+	p.digest.Add(float64(priority), 1.0)
 }
 
-type calibrationWindow struct {
-	window      []calibrationPeriod
-	size        int
-	head        int
-	integralSum float64 // Sum of P values over the window
-	// integralEWMA util.MovingAverage
+func (p *prioritizer) threshold() int {
+	return int(p.priorityThreshold.Load())
 }
-
-type calibrationPeriod struct {
-	inCount  int     // Items that entered the limiter during the calibration period
-	outCount int     // Items that exited the limiter during the calibration period
-	error    float64 // The computed P value for the calibration period
-}
-
-func (c *calibrationWindow) add(in, out, freeInflight int, limit int) (error float64, integralSum float64) {
-	if c.size < len(c.window) {
-		c.size++
-	} else {
-		// If window is full, subtract the oldest error before overwriting
-		c.integralSum -= c.window[c.head].error
-	}
-
-	error = computeError(in, out, freeInflight, limit)
-	c.integralSum += error
-	c.window[c.head] = calibrationPeriod{
-		inCount:  in,
-		outCount: out,
-		error:    error,
-	}
-	c.head = (c.head + 1) % len(c.window)
-
-	return error, c.integralSum
-}
-
-// Computes the error from execution flow metrics.
-// A positive error value indicates overload, negative indicates underload.
-func computeError(in, out, freeInflight int, limit int) float64 {
-	normalizer := out
-	if normalizer == 0 {
-		normalizer = limit
-	}
-	numerator := float64(in - (out + freeInflight))
-	return numerator / float64(normalizer)
-}
-
-// type calibrationWindow struct {
-// 	window       []calibrationPeriod
-// 	size         int
-// 	head         int
-// 	//integralEWMA util.MovingAverage
-// }
-//
-// type calibrationPeriod struct {
-// 	inCount  int
-// 	outCount int
-// 	error   float64
-// }
-//
-// func (c *calibrationWindow) add(in, out, freeInflight int, limit int) (error float64, integralSum float64) {
-// 	if c.size < len(c.window) {
-// 		c.size++
-// 	}
-//
-// 	// Calculate P value from request flow metrics
-// 	error = computeError(in, out, freeInflight, limit)
-//
-// 	// Use EWMA for integral term instead of unbounded sum
-// 	// This provides a bounded history window and weights recent values more heavily
-// 	//integralSum = c.integralEWMA.Add(error)
-//
-// 	c.window[c.head] = calibrationPeriod{
-// 		inCount:  in,
-// 		outCount: out,
-// 		error:   error,
-// 	}
-// 	c.head = (c.head + 1) % len(c.window)
-// 	return error, integralSum
-// }

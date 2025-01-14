@@ -1,4 +1,4 @@
-package adaptivelimiter
+package adaptivelimiterold
 
 import (
 	"github.com/failsafe-go/failsafe-go"
@@ -12,13 +12,13 @@ type priorityExecutor[R any] struct {
 	*priorityBlockingLimiter[R]
 }
 
-var _ policy.Executor[any] = &priorityExecutor[any]{}
+var _ policy.Executor[any] = &blockingExecutor[any]{}
 
 func (e *priorityExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		priority := PriorityLow
-		if untypedPriority := exec.Context().Value(PriorityKey); untypedPriority != nil {
-			priority, _ = untypedPriority.(Priority)
+		if untypedKey := exec.Context().Value(PriorityKey); untypedKey != nil {
+			priority, _ = untypedKey.(Priority)
 		}
 
 		if permit, err := e.AcquirePermit(exec.Context(), priority); err != nil {

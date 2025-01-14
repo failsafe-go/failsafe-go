@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/influxdata/tdigest"
@@ -40,7 +41,7 @@ const warmupSamples = 10
 // R is the execution result type. This type is concurrency safe.
 type AdaptiveLimiter[R any] interface {
 	failsafe.Policy[R]
-	AdaptiveLimiterInfo[R]
+	Metrics
 
 	// AcquirePermit attempts to acquire a permit to perform an execution via the limiter, waiting until one is
 	// available or the execution is canceled. Returns [context.Canceled] if the ctx is canceled.
@@ -57,10 +58,10 @@ type AdaptiveLimiter[R any] interface {
 	CanAcquirePermit() bool
 }
 
-// Info about the adaptive limiter.
+// Metrics provides info about the adaptive limiter.
 //
 // R is the execution result type. This type is concurrency safe.
-type AdaptiveLimiterInfo[R any] interface {
+type Metrics interface {
 	// Limit returns the concurrent execution limit, as calculated by the adaptive limiter.
 	Limit() int
 
@@ -128,17 +129,17 @@ type BaseBuilder[R any] interface {
 	// The default value is 10.
 	WithStabilizationWindow(size uint) Builder[R]
 
-	// WithBlocking enables blocking of executions when the limiter is full, up to some max average execution time,
-	// which includes the time spent while executions are blocked waiting for a permit. Enabling this allows short execution
-	// spikes to be absorbed without strictly rejecting executions when the limiter is full.
-	// This is disabled by default, which means no executions will block when the limiter is full.
-	WithBlocking(maxExecutionTime time.Duration) Builder[R]
+	// WithBlocking will block executions rather than reject them when the limiter is full, up to some max average execution
+	// time, which includes the time spent while executions are blocked waiting for a permit. Enabling this allows short
+	// execution spikes to be absorbed without strictly rejecting executions when the limiter is full. This is disabled by
+	// default, which means no executions will block when the limiter is full.
+	WithBlocking(rejectionThreshold time.Duration, maxExecutionTime time.Duration) LatencyLimiterBuilder[R]
 
-	// WithPrioritization enables prioritized blocking of executions when the limiter is full, up to some max average
-	// execution time, which includes the time spent while executions are blocked waiting for a permit. Enabling this allows
-	// short execution spikes to be absorbed without strictly rejecting executions when the limiter is full. This is
-	// disabled by default, which means no executions will block when the limiter is full.
-	WithPrioritization(prioritizer Prioritizer[R], maxExecutionTime time.Duration) PriorityLimiterBuilder[R]
+	// WithPrioritizedRejection enables prioritized rejections of executions when the limiter is full, where executions block up
+	// to some max average execution time, which includes the time spent while executions are blocked waiting for a permit.
+	// Enabling this allows short execution spikes to be absorbed without strictly rejecting executions when the limiter is
+	// full. This is disabled by default, which means no executions will block when the limiter is full.
+	WithPrioritizedRejection(prioritizer Prioritizer) PriorityLimiterBuilder[R]
 
 	// WithLogger configures a logger which provides debug logging of limit adjustments.
 	WithLogger(logger *slog.Logger) Builder[R]
@@ -173,7 +174,6 @@ type config[R any] struct {
 	increaseFunc func(int) int
 	decreaseFunc func(int) int
 
-	maxExecutionTime     time.Duration
 	limitChangedListener func(LimitChangedEvent)
 }
 
@@ -240,13 +240,15 @@ func (c *config[R]) WithStabilizationWindow(size uint) Builder[R] {
 	return c
 }
 
-func (c *config[R]) WithBlocking(maxExecutionTime time.Duration) Builder[R] {
-	c.maxExecutionTime = maxExecutionTime
-	return c
+func (c *config[R]) WithBlocking(rejectionThreshold time.Duration, maxExecutionTime time.Duration) LatencyLimiterBuilder[R] {
+	return &latencyLimiterConfig[R]{
+		config:             c,
+		rejectionThreshold: rejectionThreshold,
+		maxExecutionTime:   maxExecutionTime,
+	}
 }
 
-func (c *config[R]) WithPrioritization(prioritizer Prioritizer[R], maxExecutionTime time.Duration) PriorityLimiterBuilder[R] {
-	c.maxExecutionTime = maxExecutionTime
+func (c *config[R]) WithPrioritizedRejection(prioritizer Prioritizer) PriorityLimiterBuilder[R] {
 	return &priorityConfig[R]{
 		config:      c,
 		prioritizer: prioritizer,
@@ -282,8 +284,9 @@ type adaptiveLimiter[R any] struct {
 	*config[R]
 
 	// Mutable state
-	semaphore *util.DynamicSemaphore
-	mu        sync.Mutex
+	semaphore    *util.DynamicSemaphore
+	blockedCount atomic.Int32
+	mu           sync.Mutex
 
 	// Guarded by mu
 	limit          float64            // The current concurrency limit
@@ -301,7 +304,10 @@ func (l *adaptiveLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) 
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if err := l.semaphore.Acquire(ctx); err != nil {
+	l.blockedCount.Add(1)
+	err := l.semaphore.Acquire(ctx)
+	l.blockedCount.Add(-1)
+	if err != nil {
 		return nil, err
 	}
 	return &recordingPermit[R]{
@@ -337,7 +343,7 @@ func (l *adaptiveLimiter[R]) Inflight() int {
 }
 
 func (l *adaptiveLimiter[R]) Blocked() int {
-	return 0
+	return int(l.blockedCount.Load())
 }
 
 // Records the duration of a completed execution, updating the concurrency limit if the short shortRTT window is full.
@@ -470,6 +476,38 @@ func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, g
 	// 		"thrptCV", fmt.Sprintf("%.2f", throughputCV),
 	// 		"rttCorr", fmt.Sprintf("%.2f", rttCorr))
 	// }
+}
+
+func (l *adaptiveLimiter[R]) averageRTT() float64 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.longRTT.Value()
+}
+
+// estimateRTT estimates the round trip time for a new request by considering the current limit, how many batches of
+// blocked requests it would take before a new request is serviced, and the average RTT per request.
+func (l *adaptiveLimiter[R]) estimateRTT() time.Duration {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	avgRTT := time.Duration(l.longRTT.Value() * float64(time.Millisecond))
+	if avgRTT == 0 {
+		return 0
+	}
+
+	// Include current request in the latency estimate
+	totalRequests := int(l.blockedCount.Load()) + 1
+
+	// Calculate complete batches needed
+	concurrency := int(l.limit)
+	fullBatches := totalRequests / concurrency
+
+	// If we have any remaining requests, count it as a full batch
+	if totalRequests%concurrency > 0 {
+		fullBatches++
+	}
+
+	return time.Duration(float64(fullBatches) * float64(avgRTT))
 }
 
 func (l *adaptiveLimiter[R]) ToExecutor(_ R) any {

@@ -3,8 +3,6 @@ package adaptivelimiter
 import (
 	"context"
 	"sync"
-	"sync/atomic"
-	"time"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/policy"
@@ -17,7 +15,7 @@ const PriorityKey key = 0
 
 type PriorityLimiter[R any] interface {
 	failsafe.Policy[R]
-	AdaptiveLimiterInfo[R]
+	Metrics
 
 	// AcquirePermit attempts to acquire a permit, potentially blocking up to maxExecutionTime.
 	// The request priority must be less than the current priority threshold for admission.
@@ -38,7 +36,7 @@ type PriorityLimiterBuilder[R any] interface {
 
 type priorityConfig[R any] struct {
 	*config[R]
-	prioritizer Prioritizer[R]
+	prioritizer Prioritizer
 }
 
 func (c *priorityConfig[R]) Build() PriorityLimiter[R] {
@@ -54,68 +52,23 @@ type priorityBlockingLimiter[R any] struct {
 	*adaptiveLimiter[R]
 	*priorityConfig[R]
 
-	// Track request flow
-	inCount      atomic.Uint32
-	outCount     atomic.Uint32
-	blockedCount atomic.Int32
-
 	mu sync.Mutex
 }
 
 func (l *priorityBlockingLimiter[R]) AcquirePermit(ctx context.Context, priority Priority) (Permit, error) {
-	// Generate a granular priority for the request and threshold it against the prioritizer
-	granularPriority := generateGranularPriority(priority)
-	if granularPriority < l.prioritizer.Threshold() {
-		return nil, ErrExceeded
-	}
-
-	l.inCount.Add(1)
-
 	// Try without waiting first
 	if permit, ok := l.adaptiveLimiter.TryAcquirePermit(); ok {
-		l.outCount.Add(1)
 		return permit, nil
 	}
 
-	// Always reject if over maxExecutionTime
-	estimatedLatency := l.estimateLatency()
-	if estimatedLatency > l.adaptiveLimiter.maxExecutionTime {
+	// Generate a granular priority for the request and threshold it against the prioritizer threshold
+	granularPriority := generateGranularPriority(priority)
+	l.prioritizer.recordPriority(granularPriority)
+	if granularPriority < l.prioritizer.threshold() {
 		return nil, ErrExceeded
 	}
 
-	// Block waiting for permit
-	l.blockedCount.Add(1)
-	permit, err := l.adaptiveLimiter.AcquirePermit(ctx)
-	if err != nil {
-		l.blockedCount.Add(-1)
-		return nil, err
-	}
-
-	l.outCount.Add(1)
-	l.blockedCount.Add(-1)
-
-	return permit, nil
-}
-
-func (l *priorityBlockingLimiter[R]) Blocked() int {
-	return int(l.blockedCount.Load())
-}
-
-// estimateLatency estimates wait time for a new request based on current conditions
-func (l *priorityBlockingLimiter[R]) estimateLatency() time.Duration {
-	avgProcessing := time.Duration(l.longRTT.Value() * float64(time.Millisecond))
-	if avgProcessing == 0 {
-		avgProcessing = l.adaptiveLimiter.maxExecutionTime / warmupSamples
-	}
-
-	totalRequests := int(l.blockedCount.Load()) + 1
-	concurrency := l.Limit()
-	fullBatches := totalRequests / concurrency
-	if totalRequests%concurrency > 0 {
-		fullBatches++
-	}
-
-	return time.Duration(float64(fullBatches) * float64(avgProcessing))
+	return l.adaptiveLimiter.AcquirePermit(ctx)
 }
 
 func (l *priorityBlockingLimiter[R]) ToExecutor(_ R) any {

@@ -69,6 +69,9 @@ func errorAs(err error, targetType reflect.Type) bool {
 
 // MergeContexts returns a context that is canceled when either ctx1 or ctx2 are Done.
 func MergeContexts(ctx1, ctx2 context.Context) (context.Context, context.CancelCauseFunc) {
+	if ctx1 == ctx2 {
+		return ctx1, noop
+	}
 	bgContext := context.Background()
 	if ctx1 == bgContext {
 		return ctx2, noop
