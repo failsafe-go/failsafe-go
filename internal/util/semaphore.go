@@ -13,8 +13,6 @@ import (
 // DynamicSemaphore implements a semaphore whose capacity can be changed dynamically at
 // run time.
 type DynamicSemaphore struct {
-	overloadTimeout time.Duration
-
 	mu           sync.Mutex
 	size         int64
 	cur          int64
@@ -27,10 +25,7 @@ type DynamicSemaphore struct {
 // it's possible to use a zero-value semaphore provided SetSize is called before
 // use.
 func NewDynamicSemaphore(n int64) *DynamicSemaphore {
-	return &DynamicSemaphore{
-		overloadTimeout: 10 * time.Second,
-		size:            n,
-	}
+	return &DynamicSemaphore{size: n}
 }
 
 // SetSize dynamically updates the number of available slots. If there are more
@@ -133,11 +128,11 @@ func (s *DynamicSemaphore) IsFull() bool {
 	return s.cur == s.size
 }
 
-// IsOverloaded returns whether it's been 10 seconds since the sempahore was not full, indicating sustained overload.
-func (s *DynamicSemaphore) IsOverloaded() bool {
+// BlockedSince returns the time since the semaphore has been blocked, if any.
+func (s *DynamicSemaphore) BlockedSince() time.Time {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return !s.blockedSince.IsZero() && time.Since(s.blockedSince) >= s.overloadTimeout
+	return s.blockedSince
 }
 
 // Waiters returns how many callers are blocked waiting for the semaphore.

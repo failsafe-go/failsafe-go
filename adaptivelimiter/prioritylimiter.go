@@ -40,7 +40,7 @@ type priorityConfig[R any] struct {
 }
 
 func (c *priorityConfig[R]) Build() PriorityLimiter[R] {
-	limiter := &priorityBlockingLimiter[R]{
+	limiter := &priorityLimiter[R]{
 		adaptiveLimiter: c.config.Build().(*adaptiveLimiter[R]),
 		priorityConfig:  c,
 	}
@@ -48,14 +48,14 @@ func (c *priorityConfig[R]) Build() PriorityLimiter[R] {
 	return limiter
 }
 
-type priorityBlockingLimiter[R any] struct {
+type priorityLimiter[R any] struct {
 	*adaptiveLimiter[R]
 	*priorityConfig[R]
 
 	mu sync.Mutex
 }
 
-func (l *priorityBlockingLimiter[R]) AcquirePermit(ctx context.Context, priority Priority) (Permit, error) {
+func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context, priority Priority) (Permit, error) {
 	// Try without waiting first
 	if permit, ok := l.adaptiveLimiter.TryAcquirePermit(); ok {
 		return permit, nil
@@ -71,10 +71,10 @@ func (l *priorityBlockingLimiter[R]) AcquirePermit(ctx context.Context, priority
 	return l.adaptiveLimiter.AcquirePermit(ctx)
 }
 
-func (l *priorityBlockingLimiter[R]) ToExecutor(_ R) any {
-	e := &priorityExecutor[R]{
-		BaseExecutor:            &policy.BaseExecutor[R]{},
-		priorityBlockingLimiter: l,
+func (l *priorityLimiter[R]) ToExecutor(_ R) any {
+	e := &priorityLimiterExecutor[R]{
+		BaseExecutor:    &policy.BaseExecutor[R]{},
+		priorityLimiter: l,
 	}
 	e.Executor = e
 	return e

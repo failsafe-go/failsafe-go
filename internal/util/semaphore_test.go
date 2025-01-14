@@ -202,18 +202,18 @@ func TestDynamicSemaphore_IsFull(t *testing.T) {
 	}
 }
 
-func TestDynamicSemaphore_IsOverloaded(t *testing.T) {
-	testTimeout := 100 * time.Millisecond
+func TestDynamicSemaphore_BlockedSince(t *testing.T) {
+	overloadDuration := 100 * time.Millisecond
 
 	t.Run("should not be overloaded when sempahore is not full", func(t *testing.T) {
-		s := &DynamicSemaphore{size: 2, overloadTimeout: testTimeout}
+		s := NewDynamicSemaphore(2)
 		err := s.Acquire(context.Background())
 		require.NoError(t, err)
-		assert.False(t, s.IsOverloaded(), "should not be overloaded when permits available")
+		assert.False(t, isOverloaded(s, overloadDuration), "should not be overloaded when permits available")
 	})
 
 	t.Run("should be overloaded after overload timeout", func(t *testing.T) {
-		s := &DynamicSemaphore{size: 1, overloadTimeout: testTimeout}
+		s := NewDynamicSemaphore(1)
 		err := s.Acquire(context.Background())
 		require.NoError(t, err)
 
@@ -222,16 +222,16 @@ func TestDynamicSemaphore_IsOverloaded(t *testing.T) {
 			s.Acquire(context.Background())
 		}()
 
-		time.Sleep(testTimeout / 2)
-		assert.False(t, s.IsOverloaded())
-		time.Sleep(testTimeout)
-		assert.True(t, s.IsOverloaded())
+		time.Sleep(overloadDuration / 2)
+		assert.False(t, isOverloaded(s, overloadDuration))
+		time.Sleep(overloadDuration)
+		assert.True(t, isOverloaded(s, overloadDuration))
 		s.Release()
-		assert.False(t, s.IsOverloaded())
+		assert.False(t, isOverloaded(s, overloadDuration))
 	})
 
 	t.Run("should Reset overload timeout", func(t *testing.T) {
-		s := &DynamicSemaphore{size: 1, overloadTimeout: testTimeout}
+		s := NewDynamicSemaphore(1)
 
 		err := s.Acquire(context.Background())
 		require.NoError(t, err)
@@ -242,11 +242,11 @@ func TestDynamicSemaphore_IsOverloaded(t *testing.T) {
 		}()
 
 		// Then
-		assert.False(t, s.IsOverloaded())
-		time.Sleep(testTimeout)
-		assert.True(t, s.IsOverloaded())
+		assert.False(t, isOverloaded(s, overloadDuration))
+		time.Sleep(overloadDuration)
+		assert.True(t, isOverloaded(s, overloadDuration))
 		s.Release()
-		assert.False(t, s.IsOverloaded())
+		assert.False(t, isOverloaded(s, overloadDuration))
 
 		// Overload again
 		go func() {
@@ -254,14 +254,14 @@ func TestDynamicSemaphore_IsOverloaded(t *testing.T) {
 		}()
 
 		// Then
-		time.Sleep(testTimeout)
-		assert.True(t, s.IsOverloaded())
+		time.Sleep(overloadDuration)
+		assert.True(t, isOverloaded(s, overloadDuration))
 	})
 }
 
 func TestDynamicSemaphore_Waiters(t *testing.T) {
-	testTimeout := 100 * time.Millisecond
-	s := &DynamicSemaphore{size: 1, overloadTimeout: testTimeout}
+	overloadDuration := 100 * time.Millisecond
+	s := NewDynamicSemaphore(1)
 	err := s.Acquire(context.Background())
 	require.NoError(t, err)
 
@@ -273,11 +273,15 @@ func TestDynamicSemaphore_Waiters(t *testing.T) {
 		s.Acquire(context.Background())
 	}()
 
-	time.Sleep(testTimeout)
-	assert.True(t, s.IsOverloaded())
+	time.Sleep(overloadDuration)
+	assert.True(t, time.Since(s.blockedSince) > overloadDuration)
 	assert.Equal(t, 2, s.Waiters())
 	s.Release()
 	assert.Equal(t, 1, s.Waiters())
 	s.Release()
 	assert.Equal(t, 0, s.Waiters())
+}
+
+func isOverloaded(semaphore *DynamicSemaphore, overloadDuration time.Duration) bool {
+	return !semaphore.blockedSince.IsZero() && time.Since(semaphore.blockedSince) > overloadDuration
 }
