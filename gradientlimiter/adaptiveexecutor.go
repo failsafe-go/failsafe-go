@@ -1,4 +1,4 @@
-package adaptivelimiterold
+package pidlimiter
 
 import (
 	"github.com/failsafe-go/failsafe-go"

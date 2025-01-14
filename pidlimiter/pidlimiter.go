@@ -1,4 +1,4 @@
-package adaptivelimiterold
+package pidlimiter
 
 import (
 	"context"
@@ -131,15 +131,13 @@ func (l *pidLimiter[R]) calibrate() {
 	// Update calibrations and get latest
 	limit := l.adaptiveLimiter.Limit()
 	freeInflight := limit - l.adaptiveLimiter.Inflight()
-	pValue, integralSum := l.calibrations.add(inCount, outCount, freeInflight, limit)
+	errorValue, integralSum := l.calibrations.add(inCount, outCount, freeInflight, limit)
 
 	// Compute PI
-	p := pValue
-	i := integralSum
-	adjustment := l.kp*p + l.ki*i
+	pi := l.kp*errorValue + l.ki*integralSum
 
 	// Update and clamp rejection rate
-	newRate := max(0, min(1, l.rejectionRate+adjustment))
+	newRate := max(0, min(1, l.rejectionRate+pi))
 	// if l.rejectionRate != newRate {
 	// 	if l.rateChangedListener != nil {
 	// 		l.rateChangedListener(RejectionRateChangedEvent{
@@ -149,7 +147,7 @@ func (l *pidLimiter[R]) calibrate() {
 	// 	}
 	// }
 	if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
-		l.logger.Debug(fmt.Sprintf("newRejectionRate=%0.2f, oldRejectionRate=%0.2f, in=%d, out=%d, blocked=%d, p=%0.2f, i=%0.2f, adjustment=%0.2f", l.rejectionRate, newRate, inCount, outCount, l.blocked.Load(), p, i, adjustment))
+		l.logger.Debug(fmt.Sprintf("newRejectionRate=%0.2f, oldRejectionRate=%0.2f, in=%d, out=%d, blocked=%d, p=%0.2f, i=%0.2f, pi=%0.2f", l.rejectionRate, newRate, inCount, outCount, l.blocked.Load(), p, i, pi))
 	}
 	l.rejectionRate = newRate
 }
@@ -177,7 +175,7 @@ type pidCalibrationPeriod struct {
 	pValue   float64 // The computed P value for the calibration period
 }
 
-func (c *pidCalibrationWindow) add(in, out, freeInflight int, limit int) (pValue float64, integralSum float64) {
+func (c *pidCalibrationWindow) add(in, out, freeInflight int, limit int) (error float64, integralSum float64) {
 	if c.size < len(c.window) {
 		c.size++
 	} else {
@@ -185,21 +183,21 @@ func (c *pidCalibrationWindow) add(in, out, freeInflight int, limit int) (pValue
 		c.integralSum -= c.window[c.head].pValue
 	}
 
-	pValue = computePValue(in, out, freeInflight, limit)
-	c.integralSum += pValue
+	error = computeError(in, out, freeInflight, limit)
+	c.integralSum += error
 	c.window[c.head] = pidCalibrationPeriod{
 		inCount:  in,
 		outCount: out,
-		pValue:   pValue,
+		pValue:   error,
 	}
 	c.head = (c.head + 1) % len(c.window)
 
-	return pValue, c.integralSum
+	return error, c.integralSum
 }
 
-// Computes a P value for a calibration period.
-// A positive P value indicates overloaded. A negative P value indicates underloaded.
-func computePValue(in, out, freeInflight int, limit int) float64 {
+// Computes an error for a calibration period.
+// A positive error indicates overloaded. A negative error indicates underloaded.
+func computeError(in, out, freeInflight int, limit int) float64 {
 	normalizer := out
 	if normalizer == 0 {
 		normalizer = limit

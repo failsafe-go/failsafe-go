@@ -114,7 +114,7 @@ func TestDynamicSemaphore_Acquire(t *testing.T) {
 	// Should fail to consume another [free: 0]
 	checkAcquire(t, sem, false)
 
-	// Drop one [free: 0] (3 slots used are release, size only 3)
+	// Drop one [free: 0] (3 slots used are release, Size only 3)
 	sem.Release()
 
 	// Should fail to consume another [free: 0]
@@ -230,7 +230,7 @@ func TestDynamicSemaphore_IsOverloaded(t *testing.T) {
 		assert.False(t, s.IsOverloaded())
 	})
 
-	t.Run("should reset overload timeout", func(t *testing.T) {
+	t.Run("should Reset overload timeout", func(t *testing.T) {
 		s := &DynamicSemaphore{size: 1, overloadTimeout: testTimeout}
 
 		err := s.Acquire(context.Background())

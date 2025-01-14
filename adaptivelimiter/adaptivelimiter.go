@@ -3,6 +3,7 @@ package adaptivelimiter
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math"
 	"sync"
@@ -270,13 +271,13 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 		config:                c,
 		semaphore:             util.NewDynamicSemaphore(int64(c.initialLimit)),
 		limit:                 float64(c.initialLimit),
-		shortRTT:              &td{TDigest: tdigest.NewWithCompression(100)},
+		shortRTT:              &util.TD{TDigest: tdigest.NewWithCompression(100)},
 		longRTT:               util.NewEWMA(c.longWindowSize, warmupSamples),
 		nextUpdateTime:        time.Now(),
-		rttCorrelation:        newCorrelationWindow(c.correlationWindowSize, warmupSamples),
-		throughputCorrelation: newCorrelationWindow(c.correlationWindowSize, warmupSamples),
-		rttWindow:             newRollingSum(c.stabilizationWindowSize),
-		inflightWindow:        newRollingSum(c.stabilizationWindowSize),
+		rttCorrelation:        util.NewCorrelationWindow(c.correlationWindowSize, warmupSamples),
+		throughputCorrelation: util.NewCorrelationWindow(c.correlationWindowSize, warmupSamples),
+		rttWindow:             util.NewRollingSum(c.stabilizationWindowSize),
+		inflightWindow:        util.NewRollingSum(c.stabilizationWindowSize),
 	}
 }
 
@@ -290,14 +291,14 @@ type adaptiveLimiter[R any] struct {
 
 	// Guarded by mu
 	limit          float64            // The current concurrency limit
-	shortRTT       *td                // Short term execution times in milliseconds
+	shortRTT       *util.TD           // Short term execution times in milliseconds
 	longRTT        util.MovingAverage // Tracks long term average execution time in milliseconds
 	nextUpdateTime time.Time          // Tracks when the limit can next be updated
 
-	throughputCorrelation *correlationWindow // Tracks the correlation between concurrency and throughput
-	rttCorrelation        *correlationWindow // Tracks the correlation between concurrency and round trip times (RTT)
-	rttWindow             *rollingSum        // Tracks the variation of recent RTT
-	inflightWindow        *rollingSum        // Tracks the slope of recent inflight executions
+	throughputCorrelation *util.CorrelationWindow // Tracks the correlation between concurrency and throughput
+	rttCorrelation        *util.CorrelationWindow // Tracks the correlation between concurrency and round trip times (RTT)
+	rttWindow             *util.RollingSum        // Tracks the variation of recent RTT
+	inflightWindow        *util.RollingSum        // Tracks the slope of recent inflight executions
 }
 
 func (l *adaptiveLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
@@ -355,13 +356,13 @@ func (l *adaptiveLimiter[R]) record(startTime time.Time, inflight int, dropped b
 	now := time.Now()
 	if !dropped {
 		rtt := now.Sub(startTime) / 1e6
-		l.shortRTT.add(rtt)
+		l.shortRTT.Add(rtt)
 	}
 
-	if now.After(l.nextUpdateTime) && l.shortRTT.size >= l.shortWindowMinSamples {
+	if now.After(l.nextUpdateTime) && l.shortRTT.Size >= l.shortWindowMinSamples {
 		l.updateLimit(l.shortRTT.Quantile(l.quantile), inflight)
-		minRTT := l.shortRTT.minRTT
-		l.shortRTT.reset()
+		minRTT := l.shortRTT.MinRTT
+		l.shortRTT.Reset()
 		minWindowTime := max(minRTT*2, l.shortWindowMinDuration)
 		l.nextUpdateTime = now.Add(min(minWindowTime, l.shortWindowMaxDuration))
 	}
@@ -380,16 +381,16 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 	// Calculate throughput correlation, throughput slope, throughput CV, and rtt correlation
 	// These are the secondary signals that we threshold off of to detect overload
 	throughput := float64(inflight) / (shortRTT)
-	throughputCorr, _, throughputCV := l.throughputCorrelation.add(float64(inflight), throughput)
-	throughputSlope := l.throughputCorrelation.ySamples.calculateSlope()
-	rttCorr, _, _ := l.rttCorrelation.add(float64(inflight), shortRTT)
+	throughputCorr, _, throughputCV := l.throughputCorrelation.Add(float64(inflight), throughput)
+	throughputSlope := l.throughputCorrelation.YSamples.CalculateSlope()
+	rttCorr, _, _ := l.rttCorrelation.Add(float64(inflight), shortRTT)
 
 	// Calculate the rtt CV and inflight slope
 	// These are used to detect when rtt has stabilized after a recent decrease
-	l.rttWindow.add(shortRTT)
-	rttCV, _, _ := l.rttWindow.calculateCV()
-	l.inflightWindow.add(float64(inflight))
-	inflightSlope := l.inflightWindow.calculateSlope()
+	l.rttWindow.Add(shortRTT)
+	rttCV, _, _ := l.rttWindow.CalculateCV()
+	l.inflightWindow.Add(float64(inflight))
+	inflightSlope := l.inflightWindow.CalculateSlope()
 
 	newLimit := l.limit
 	alpha := l.alphaFunc(int(l.limit)) // alpha is the queueSize threshold below which we increase
@@ -458,24 +459,24 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 }
 
 func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, gradient float64, queueSize, inflight int, shortRTT, longRTT, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputSlope, throughputCV float64) {
-	// if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
-	// 	l.logger.Debug("limit update",
-	// 		"direction", direction,
-	// 		"reason", reason,
-	// 		"limit", fmt.Sprintf("%.2f", limit),
-	// 		"gradient", fmt.Sprintf("%.2f", gradient),
-	// 		"queueSize", fmt.Sprintf("%d", queueSize),
-	// 		"inflight", inflight,
-	// 		"shortRTT", fmt.Sprintf("%.2f", shortRTT),
-	// 		"longRTT", fmt.Sprintf("%.2f", longRTT),
-	// 		"thrpt", fmt.Sprintf("%.2f", throughput),
-	// 		"thrptCorr", fmt.Sprintf("%.2f", throughputCorr),
-	// 		"thrptSlp", fmt.Sprintf("%.2f", throughputSlope),
-	// 		"rttCV", fmt.Sprintf("%.3f", rttCV),
-	// 		"inflightSlp", fmt.Sprintf("%.2f", inflightSlope),
-	// 		"thrptCV", fmt.Sprintf("%.2f", throughputCV),
-	// 		"rttCorr", fmt.Sprintf("%.2f", rttCorr))
-	// }
+	if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
+		l.logger.Debug("limit update",
+			"direction", direction,
+			"reason", reason,
+			"limit", fmt.Sprintf("%.2f", limit),
+			"gradient", fmt.Sprintf("%.2f", gradient),
+			"queueSize", fmt.Sprintf("%d", queueSize),
+			"inflight", inflight,
+			"shortRTT", fmt.Sprintf("%.2f", shortRTT),
+			"longRTT", fmt.Sprintf("%.2f", longRTT),
+			"thrpt", fmt.Sprintf("%.2f", throughput),
+			"thrptCorr", fmt.Sprintf("%.2f", throughputCorr),
+			"thrptSlp", fmt.Sprintf("%.2f", throughputSlope),
+			"rttCV", fmt.Sprintf("%.3f", rttCV),
+			"inflightSlp", fmt.Sprintf("%.2f", inflightSlope),
+			"thrptCV", fmt.Sprintf("%.2f", throughputCV),
+			"rttCorr", fmt.Sprintf("%.2f", rttCorr))
+	}
 }
 
 func (l *adaptiveLimiter[R]) averageRTT() float64 {

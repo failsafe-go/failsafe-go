@@ -1,4 +1,4 @@
-package adaptivelimiter
+package util
 
 import (
 	"fmt"
@@ -97,12 +97,12 @@ func TestRollingSum_CalculateSlope(t *testing.T) {
 			if capacity == 0 {
 				capacity = 3
 			}
-			w := newRollingSum(capacity)
+			w := NewRollingSum(capacity)
 			for _, v := range tc.values {
-				w.add(v)
+				w.Add(v)
 			}
 
-			slope := w.calculateSlope()
+			slope := w.CalculateSlope()
 			fmt.Println(w.sumY)
 			fmt.Println(w.sumXY)
 
@@ -163,11 +163,11 @@ func TestRollingSum(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			w := newRollingSum(tc.capacity)
+			w := NewRollingSum(tc.capacity)
 			var cv float64
 			for _, v := range tc.values {
-				w.add(v)
-				cv, _, _ = w.calculateCV()
+				w.Add(v)
+				cv, _, _ = w.CalculateCV()
 			}
 
 			if tc.shouldNaN {
@@ -181,18 +181,18 @@ func TestRollingSum(t *testing.T) {
 }
 
 func TestRollingSumSliding(t *testing.T) {
-	w := newRollingSum(3)
+	w := NewRollingSum(3)
 
-	w.add(10.0)
-	w.add(20.0)
-	w.add(30.0)
-	cv, _, _ := w.calculateCV()
+	w.Add(10.0)
+	w.Add(20.0)
+	w.Add(30.0)
+	cv, _, _ := w.CalculateCV()
 	assert.InDelta(t, 0.4082, cv, 0.0001)
-	w.add(40.0)
-	cv, _, _ = w.calculateCV()
+	w.Add(40.0)
+	cv, _, _ = w.CalculateCV()
 	assert.InDelta(t, 0.2722, cv, 0.0001)
-	w.add(0.0)
-	cv, _, _ = w.calculateCV()
+	w.Add(0.0)
+	cv, _, _ = w.CalculateCV()
 	assert.InDelta(t, 0.2722, cv, 0.0001)
 	assert.Equal(t, 3, w.size)
 }
@@ -250,28 +250,28 @@ func TestCorrelationWindow(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			w := newCorrelationWindow(tc.capacity, 0)
+			w := NewCorrelationWindow(tc.capacity, 0)
 			var correlation float64
 			for i := range tc.xValues {
-				correlation, _, _ = w.add(tc.xValues[i], tc.yValues[i])
+				correlation, _, _ = w.Add(tc.xValues[i], tc.yValues[i])
 			}
 
 			assert.InDelta(t, tc.expectedCorrelation, correlation, 0.0001)
-			assert.Equal(t, tc.expectedSize, w.xSamples.size)
+			assert.Equal(t, tc.expectedSize, w.XSamples.size)
 		})
 	}
 }
 
 func TestCorrelationWindowSliding(t *testing.T) {
-	w := newCorrelationWindow(3, 0)
+	w := NewCorrelationWindow(3, 0)
 
-	corr, _, _ := w.add(1.0, 10.0)
+	corr, _, _ := w.Add(1.0, 10.0)
 	assert.InDelta(t, 0.0, corr, 0.0001)
-	corr, _, _ = w.add(2.0, 20.0)
+	corr, _, _ = w.Add(2.0, 20.0)
 	assert.InDelta(t, 1.0, corr, 0.0001)
-	corr, _, _ = w.add(3.0, 30.0)
+	corr, _, _ = w.Add(3.0, 30.0)
 	assert.InDelta(t, 1.0, corr, 0.0001)
-	corr, _, _ = w.add(4.0, 40.0)
+	corr, _, _ = w.Add(4.0, 40.0)
 	assert.InDelta(t, 1.0, corr, 0.0001)
-	assert.Equal(t, 3, w.xSamples.size)
+	assert.Equal(t, 3, w.XSamples.size)
 }

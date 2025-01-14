@@ -55,7 +55,7 @@ func (s *DynamicSemaphore) Acquire(ctx context.Context) error {
 		return nil
 	}
 
-	// Need to wait, add to waiter list
+	// Need to wait, Add to waiter list
 	ready := make(chan struct{})
 	if s.waiters.Len() == 0 {
 		s.blockedSince = time.Now()

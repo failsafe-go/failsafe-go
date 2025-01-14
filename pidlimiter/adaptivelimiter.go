@@ -1,4 +1,4 @@
-package adaptivelimiterold
+package pidlimiter
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	"github.com/influxdata/tdigest"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/internal/util"
@@ -239,40 +241,16 @@ func (c *config[R]) OnLimitChanged(listener func(event LimitChangedEvent)) Build
 }
 
 func (c *config[R]) Build() AdaptiveLimiter[R] {
-	adaptive := &adaptiveLimiter[R]{
+	return &adaptiveLimiter[R]{
 		config:            c,
 		semaphore:         util.NewDynamicSemaphore(int64(c.initialLimit)),
 		limit:             float64(c.initialLimit),
-		shortRTT:          newRTTWindow(),
+		shortRTT:          &util.TD{TDigest: tdigest.NewWithCompression(100)},
 		longRTT:           util.NewEWMA(c.longWindowSize, warmupSamples),
 		nextUpdateTime:    time.Now(),
-		rttVariation:      newVariationWindow(8),
-		correlationWindow: newCovarianceWindow(c.correlationWindowSize, warmupSamples),
+		rttVariation:      util.NewRollingSum(8),
+		correlationWindow: util.NewCorrelationWindow(c.correlationWindowSize, warmupSamples),
 	}
-	// if c.pid {
-	// 	result := newPIDLimiter(adaptive)
-	// 	result.ScheduleCalibrations(context.Background(), time.Second)
-	// 	return result
-	// }
-	if c.maxExecutionTime != 0 {
-		return &blockingLimiter[R]{
-			adaptiveLimiter: adaptive,
-		}
-	}
-	// if c.priorized {
-	// 	return &priorityBlockingLimiter[R]{
-	// 		adaptiveLimiter:   adaptive,
-	// 		maxExecutionTime:  maxExecutionTime,
-	// 		priorityThreshold: PriorityLowest,
-	// 		kp:                0.1, // Gradual response to spikes
-	// 		ki:                1.4, // Aggressive response to sustained load
-	// 		calibrations: &calibrationWindow{
-	// 			window:       make([]calibrationPeriod, 30), // 30 second history
-	// 			integralEWMA: util.NewEWMA(30, 5),           // 30 samples, 5 warmup
-	// 		},
-	// 	}
-	// }
-	return adaptive
 }
 
 type adaptiveLimiter[R any] struct {
@@ -283,12 +261,12 @@ type adaptiveLimiter[R any] struct {
 	mu        sync.Mutex
 
 	// Guarded by mu
-	limit             float64            // The current concurrency limit
-	shortRTT          *rttWindow         // Tracks short term average execution time (round trip time)
-	longRTT           util.MovingAverage // Tracks long term average execution time
-	nextUpdateTime    time.Time          // Tracks when the limit can next be updated
-	rttVariation      *variationWindow   // Tracks the variation of execution times
-	correlationWindow *correlationWindow // Tracks the correlation between concurrency and execution times
+	limit             float64                 // The current concurrency limit
+	shortRTT          *util.TD                // Tracks short term average execution time (round trip time)
+	longRTT           util.MovingAverage      // Tracks long term average execution time
+	nextUpdateTime    time.Time               // Tracks when the limit can next be updated
+	rttVariation      *util.RollingSum        // Tracks the variation of execution times
+	correlationWindow *util.CorrelationWindow // Tracks the correlation between concurrency and execution times
 }
 
 func (l *adaptiveLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
@@ -341,15 +319,15 @@ func (l *adaptiveLimiter[R]) record(startTime time.Time, inflight int, dropped b
 	defer l.mu.Unlock()
 
 	now := time.Now()
-	rtt := now.Sub(startTime)
 	if !dropped {
-		l.shortRTT.add(rtt)
+		rtt := now.Sub(startTime) / 1e6
+		l.shortRTT.Add(rtt)
 	}
 
-	if now.After(l.nextUpdateTime) && l.shortRTT.size >= l.shortWindowMinSamples {
-		l.updateLimit(float64(l.shortRTT.average()), inflight)
-		minRTT := l.shortRTT.minRTT
-		l.shortRTT = newRTTWindow()
+	if now.After(l.nextUpdateTime) && l.shortRTT.Size >= l.shortWindowMinSamples {
+		l.updateLimit(l.shortRTT.Quantile(.9), inflight)
+		minRTT := l.shortRTT.MinRTT
+		l.shortRTT.Reset()
 		minWindowTime := max(minRTT*2, l.shortWindowMinDuration)
 		l.nextUpdateTime = now.Add(min(minWindowTime, l.shortWindowMaxDuration))
 	}
@@ -365,8 +343,9 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 	queueSize := int(math.Ceil(float64(inflight) * (1 - gradient)))
 
 	// Calculate RTT variation and correlation with inflight
-	rttVariation := l.rttVariation.add(shortRTT)
-	correlation := l.correlationWindow.add(float64(inflight), shortRTT)
+	l.rttVariation.Add(shortRTT)
+	rttVariation, _, _ := l.rttVariation.CalculateCV()
+	correlation, _, _ := l.correlationWindow.Add(float64(inflight), shortRTT)
 
 	// If gradient would decrease limit and either the adjustment is small or RTT is stable, maintain the current limit
 	if gradient < 1.0 && (gradient > .8 || rttVariation < 0.05) {

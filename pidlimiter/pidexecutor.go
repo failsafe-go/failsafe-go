@@ -1,4 +1,4 @@
-package vegaslimiter
+package pidlimiter
 
 import (
 	"github.com/failsafe-go/failsafe-go"
@@ -7,15 +7,15 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// blockingExecutor is a policy.Executor that handles failures according to a blockingLimiter.
-type blockingExecutor[R any] struct {
+// pidExecutor is a policy.Executor that handles failures according to a PIDLimiter.
+type pidExecutor[R any] struct {
 	*policy.BaseExecutor[R]
-	*blockingLimiter[R]
+	*pidLimiter[R]
 }
 
-var _ policy.Executor[any] = &blockingExecutor[any]{}
+var _ policy.Executor[any] = &pidExecutor[any]{}
 
-func (e *blockingExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
+func (e *pidExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		if permit, err := e.AcquirePermit(exec.Context()); err != nil {
 			return internal.FailureResult[R](err)
