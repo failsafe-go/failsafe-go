@@ -2,6 +2,7 @@ package util
 
 import (
 	"context"
+	"math"
 	"reflect"
 	"time"
 )
@@ -68,6 +69,9 @@ func errorAs(err error, targetType reflect.Type) bool {
 
 // MergeContexts returns a context that is canceled when either ctx1 or ctx2 are Done.
 func MergeContexts(ctx1, ctx2 context.Context) (context.Context, context.CancelCauseFunc) {
+	if ctx1 == ctx2 {
+		return ctx1, noop
+	}
 	bgContext := context.Background()
 	if ctx1 == bgContext {
 		return ctx2, noop
@@ -116,6 +120,29 @@ func RandomDelay[T number](delay T, jitter T, random float64) T {
 func RandomDelayFactor[T number](delay T, jitterFactor float32, random float32) T {
 	randomFactor := 1 + (1-random*2)*jitterFactor
 	return T(float32(delay) * randomFactor)
+}
+
+// Smooth returns a value that is decreased by some portion of the oldValue, and increased by some portion of the
+// newValue, based on the factor.
+func Smooth(oldValue, newValue, factor float64) float64 {
+	return oldValue*(1-factor) + newValue*factor
+}
+
+var log10RootLookup []int
+
+func Log10RootFunction(baseline int) func(limit int) int {
+	return func(limit int) int {
+		if limit < len(log10RootLookup) {
+			return baseline + log10RootLookup[limit]
+		}
+		return baseline + int(math.Log10(float64(limit)))
+	}
+}
+
+func init() {
+	for i := 0; i < 1000; i++ {
+		log10RootLookup = append(log10RootLookup, int(max(1, float64(int(math.Log10(float64(i)))))))
+	}
 }
 
 type Clock interface {

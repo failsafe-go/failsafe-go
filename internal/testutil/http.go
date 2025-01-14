@@ -10,10 +10,14 @@ import (
 )
 
 func MockResponse(statusCode int, body string) *httptest.Server {
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+	return httptest.NewServer(MockHandler(statusCode, body))
+}
+
+func MockHandler(statusCode int, body string) http.HandlerFunc {
+	return func(w http.ResponseWriter, request *http.Request) {
 		w.WriteHeader(statusCode)
 		fmt.Fprintf(w, body)
-	}))
+	}
 }
 
 func MockFlakyServer(failTimes int, responseCode int, retryAfterDelay time.Duration, finalResponse string) (server *httptest.Server, resetFailures func()) {
@@ -34,7 +38,11 @@ func MockFlakyServer(failTimes int, responseCode int, retryAfterDelay time.Durat
 }
 
 func MockDelayedResponse(statusCode int, body string, delay time.Duration) *httptest.Server {
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+	return httptest.NewServer(MockDelayedHandler(statusCode, body, delay))
+}
+
+func MockDelayedHandler(statusCode int, body string, delay time.Duration) http.HandlerFunc {
+	return func(w http.ResponseWriter, request *http.Request) {
 		timer := time.NewTimer(delay)
 		select {
 		case <-timer.C:
@@ -43,7 +51,7 @@ func MockDelayedResponse(statusCode int, body string, delay time.Duration) *http
 		case <-request.Context().Done():
 			timer.Stop()
 		}
-	}))
+	}
 }
 
 func MockDelayedResponseWithEarlyFlush(statusCode int, body string, delay time.Duration) *httptest.Server {

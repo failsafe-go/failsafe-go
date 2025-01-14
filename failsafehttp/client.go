@@ -70,10 +70,20 @@ func doRequest(request *http.Request, executor failsafe.Executor[*http.Response]
 		return nil, err
 	}
 
+	// Merge the request context with the Executor so it's available for policies
+	ctx, cancel := util.MergeContexts(request.Context(), executor.Context())
+	defer cancel(nil)
+	if ctx != executor.Context() {
+		executor = executor.WithContext(ctx)
+	}
+
 	return executor.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
-		ctx, cancel := util.MergeContexts(request.Context(), exec.Context())
-		defer cancel(nil)
-		req := request.WithContext(ctx)
+		// Merge the latest execution context into the request for each attempt
+		ctxInner, cancelInner := util.MergeContexts(request.Context(), exec.Context())
+		defer cancelInner(nil)
+		if ctxInner != request.Context() {
+			request = request.WithContext(ctxInner)
+		}
 
 		// Get new body for each attempt
 		if bodyFunc != nil {
@@ -81,14 +91,14 @@ func doRequest(request *http.Request, executor failsafe.Executor[*http.Response]
 				return nil, err
 			} else {
 				if c, ok := body.(io.ReadCloser); ok {
-					req.Body = c
+					request.Body = c
 				} else {
-					req.Body = io.NopCloser(body)
+					request.Body = io.NopCloser(body)
 				}
 			}
 		}
 
-		return reqFn(req)
+		return reqFn(request)
 	})
 }
 
