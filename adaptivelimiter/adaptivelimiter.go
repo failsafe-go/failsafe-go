@@ -169,6 +169,7 @@ type config[R any] struct {
 	maxLimit       float64
 	initialLimit   uint
 	maxLimitFactor float64
+	blocking       bool
 
 	alphaFunc    func(int) int
 	betaFunc     func(int) int
@@ -242,6 +243,7 @@ func (c *config[R]) WithStabilizationWindow(size uint) Builder[R] {
 }
 
 func (c *config[R]) WithBlocking(rejectionThreshold time.Duration, maxExecutionTime time.Duration) LatencyLimiterBuilder[R] {
+	c.blocking = true
 	return &latencyLimiterConfig[R]{
 		config:             c,
 		rejectionThreshold: rejectionThreshold,
@@ -250,6 +252,7 @@ func (c *config[R]) WithBlocking(rejectionThreshold time.Duration, maxExecutionT
 }
 
 func (c *config[R]) WithPrioritizedRejection(prioritizer Prioritizer) PriorityLimiterBuilder[R] {
+	c.blocking = true
 	return &priorityConfig[R]{
 		config:      c,
 		prioritizer: prioritizer,
@@ -280,6 +283,8 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 		inflightWindow:        util.NewRollingSum(c.stabilizationWindowSize),
 	}
 }
+
+const overloadThreshold = 5 * time.Second
 
 type adaptiveLimiter[R any] struct {
 	*config[R]
@@ -382,7 +387,6 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 	// These are the secondary signals that we threshold off of to detect overload
 	throughput := float64(inflight) / (shortRTT)
 	throughputCorr, _, throughputCV := l.throughputCorrelation.Add(float64(inflight), throughput)
-	throughputSlope := l.throughputCorrelation.YSamples.CalculateSlope()
 	rttCorr, _, _ := l.rttCorrelation.Add(float64(inflight), shortRTT)
 
 	// Calculate the rtt CV and inflight slope
@@ -393,6 +397,7 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 	inflightSlope := l.inflightWindow.CalculateSlope()
 
 	newLimit := l.limit
+	overloaded := l.isOverloaded(inflight)
 	alpha := l.alphaFunc(int(l.limit)) // alpha is the queueSize threshold below which we increase
 	beta := l.betaFunc(int(l.limit))   // beta is the queueSize threshold above which we decrease
 	var direction, reason string
@@ -402,12 +407,12 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 		// This condition handles severe overload where recent RTT significantly exceeds the baseline
 		reason = "queue"
 		decrease = true
-	} else if throughputCorr < 0 && throughputSlope < 0 {
-		// This condition handles moderate overload where inflight is increasing but throughput is decreasing
+	} else if overloaded && throughputCorr < 0 {
+		// This condition prevents runaway limit increases during moderate overload where inflight is increasing but throughput is decreasing
 		reason = "thrptCorr"
 		decrease = true
-	} else if throughputCV < .1 && rttCorr > .7 {
-		// This condition handles moderate overload where throughputCorr is positive and stable but rttCorr is high
+	} else if overloaded && throughputCV < .1 && rttCorr > .7 {
+		// This condition prevents runaway limit increases during moderate overload where throughputCorr is positive and stable but rttCorr is high
 		// This indicates overload since latency is increasing with inflight, but throughput is not
 		reason = "thrptCV"
 		decrease = true
@@ -443,7 +448,7 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 		newLimit = l.limit - float64(l.decreaseFunc(int(l.limit)))
 	}
 
-	l.logLimit(direction, reason, newLimit, gradient, queueSize, inflight, shortRTT, longRTT, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputSlope, throughputCV)
+	l.logLimit(direction, reason, newLimit, gradient, queueSize, inflight, shortRTT, longRTT, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputCV)
 
 	if uint(l.limit) != uint(newLimit) {
 		if l.limitChangedListener != nil {
@@ -458,7 +463,7 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 	l.limit = newLimit
 }
 
-func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, gradient float64, queueSize, inflight int, shortRTT, longRTT, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputSlope, throughputCV float64) {
+func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, gradient float64, queueSize, inflight int, shortRTT, longRTT, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputCV float64) {
 	if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
 		l.logger.Debug("limit update",
 			"direction", direction,
@@ -471,12 +476,20 @@ func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, g
 			"longRTT", fmt.Sprintf("%.2f", longRTT),
 			"thrpt", fmt.Sprintf("%.2f", throughput),
 			"thrptCorr", fmt.Sprintf("%.2f", throughputCorr),
-			"thrptSlp", fmt.Sprintf("%.2f", throughputSlope),
 			"rttCV", fmt.Sprintf("%.3f", rttCV),
 			"inflightSlp", fmt.Sprintf("%.2f", inflightSlope),
 			"thrptCV", fmt.Sprintf("%.2f", throughputCV),
 			"rttCorr", fmt.Sprintf("%.2f", rttCorr))
 	}
+}
+
+// isOverloaded returns whether the limiter is overloaded by checking blocked
+func (l *adaptiveLimiter[R]) isOverloaded(inflight int) bool {
+	if l.blocking {
+		blockedSince := l.semaphore.BlockedSince()
+		return !blockedSince.IsZero() && time.Since(blockedSince) >= overloadThreshold
+	}
+	return l.semaphore.IsFull()
 }
 
 func (l *adaptiveLimiter[R]) averageRTT() float64 {

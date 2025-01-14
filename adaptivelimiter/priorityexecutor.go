@@ -7,14 +7,14 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-type priorityExecutor[R any] struct {
+type priorityLimiterExecutor[R any] struct {
 	*policy.BaseExecutor[R]
-	*priorityBlockingLimiter[R]
+	*priorityLimiter[R]
 }
 
-var _ policy.Executor[any] = &priorityExecutor[any]{}
+var _ policy.Executor[any] = &priorityLimiterExecutor[any]{}
 
-func (e *priorityExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
+func (e *priorityLimiterExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		priority := PriorityLow
 		if untypedPriority := exec.Context().Value(PriorityKey); untypedPriority != nil {
