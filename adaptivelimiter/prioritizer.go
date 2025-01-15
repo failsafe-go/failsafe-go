@@ -157,7 +157,7 @@ func (p *prioritizer) Calibrate() {
 
 	// Compute rejection rate
 	rtt := mostOverloaded.estimateRTT()
-	rejectionRate := max(0, computeRejectionRate(rtt, p.rejectionThreshold, p.maxExecutionTime))
+	rejectionRate := computeRejectionRate(rtt, p.rejectionThreshold, p.maxExecutionTime)
 	p.rejectionRate = rejectionRate
 
 	// Compute priority threshold
