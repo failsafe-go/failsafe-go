@@ -452,13 +452,11 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 
 	l.logLimit(direction, reason, newLimit, gradient, queueSize, inflight, shortRTT, longRTT, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputCV)
 
-	if uint(l.limit) != uint(newLimit) {
-		if l.limitChangedListener != nil {
-			l.limitChangedListener(LimitChangedEvent{
-				OldLimit: uint(l.limit),
-				NewLimit: uint(newLimit),
-			})
-		}
+	if uint(l.limit) != uint(newLimit) && l.limitChangedListener != nil {
+		l.limitChangedListener(LimitChangedEvent{
+			OldLimit: uint(l.limit),
+			NewLimit: uint(newLimit),
+		})
 	}
 
 	l.semaphore.SetSize(int64(newLimit))

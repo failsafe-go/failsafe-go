@@ -63,6 +63,9 @@ type Prioritizer interface {
 //
 // This type is not concurrency safe.
 type PrioritizerBuilder interface {
+	// OnPriorityChanged configures a listener to be called with the priority threshold changes.
+	OnPriorityChanged(listener func(event PriorityChangedEvent)) PrioritizerBuilder
+
 	// WithLogger configures a logger which provides debug logging of calibrations.
 	WithLogger(logger *slog.Logger) PrioritizerBuilder
 
@@ -70,8 +73,15 @@ type PrioritizerBuilder interface {
 	Build() Prioritizer
 }
 
+// PriorityChangedEvent indicates an Prioritizer's priority threshold has changed.
+type PriorityChangedEvent struct {
+	OldPriorityThreshold uint
+	NewPriorityThreshold uint
+}
+
 type prioritizerConfig struct {
 	logger             *slog.Logger
+	listener           func(event PriorityChangedEvent)
 	rejectionThreshold time.Duration
 	maxExecutionTime   time.Duration
 }
@@ -92,6 +102,11 @@ func NewPrioritizerBuilder(rejectionThreshold time.Duration, maxExecutionTime ti
 
 func (c *prioritizerConfig) WithLogger(logger *slog.Logger) PrioritizerBuilder {
 	c.logger = logger
+	return c
+}
+
+func (c *prioritizerConfig) OnPriorityChanged(listener func(event PriorityChangedEvent)) PrioritizerBuilder {
+	c.listener = listener
 	return c
 }
 
@@ -146,19 +161,26 @@ func (p *prioritizer) Calibrate() {
 	p.rejectionRate = rejectionRate
 
 	// Compute priority threshold
-	var thresh int
+	var newThresh int32
 	if rejectionRate != 0 {
-		thresh = int(p.digest.Quantile(rejectionRate))
+		newThresh = int32(p.digest.Quantile(rejectionRate))
 	}
 	p.mu.Unlock()
-	p.priorityThreshold.Store(int32(thresh))
+	oldThresh := p.priorityThreshold.Swap(newThresh)
 
 	if p.logger != nil && p.logger.Enabled(nil, slog.LevelDebug) {
 		p.logger.Debug("prioritizer calibration",
 			"rtt", rtt.Milliseconds(),
 			"rejectionRate", fmt.Sprintf("%.2f", rejectionRate),
-			"priorityThresh", thresh,
+			"priorityThresh", newThresh,
 		)
+	}
+
+	if oldThresh != newThresh && p.listener != nil {
+		p.listener(PriorityChangedEvent{
+			OldPriorityThreshold: uint(oldThresh),
+			NewPriorityThreshold: uint(newThresh),
+		})
 	}
 }
 
