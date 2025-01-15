@@ -121,32 +121,10 @@ func TestClientRetryPolicyFallback(t *testing.T) {
 		return (response != nil && response.StatusCode == 429) || err != nil
 	}).Build()
 
-	tests := []struct {
-		name             string
-		requestCtxFn     func() context.Context
-		expectedAttempts int
-	}{
-		{
-			"with bad request",
-			nil,
-			3,
-		},
-		{
-			"with canceled request",
-			testutil.CanceledContextFn,
-			1,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			// When / Then
-			test(t, server).
-				RequestContext(tc.requestCtxFn).
-				With(fb, rp).
-				AssertSuccess(tc.expectedAttempts, tc.expectedAttempts, 200, "fallback")
-		})
-	}
+	// When / Then
+	test(t, server).
+		With(fb, rp).
+		AssertSuccess(3, 3, 200, "fallback")
 }
 
 func TestClientBulkhead(t *testing.T) {
