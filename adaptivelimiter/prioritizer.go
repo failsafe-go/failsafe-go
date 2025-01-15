@@ -133,17 +133,7 @@ func (p *prioritizer) RejectionRate() float64 {
 // Calibrate computes a rejection rate and priority threshold based on the rtt from the most overloaded limiter.
 func (p *prioritizer) Calibrate() {
 	p.mu.Lock()
-
-	// Reset limiter stats and find the most overloaded limiter
-	var maxRTT float64
-	var mostOverloaded rttEstimator
-	for _, limiter := range p.limiters {
-		rtt := limiter.averageRTT()
-		if mostOverloaded == nil || rtt > maxRTT {
-			mostOverloaded = limiter
-			maxRTT = rtt
-		}
-	}
+	mostOverloaded := p.mostOverloadedLimiter()
 	if mostOverloaded == nil {
 		p.mu.Unlock()
 		return
@@ -169,6 +159,19 @@ func (p *prioritizer) Calibrate() {
 			"priorityThresh", thresh,
 		)
 	}
+}
+
+func (p *prioritizer) mostOverloadedLimiter() rttEstimator {
+	var maxRTT float64
+	var mostOverloaded rttEstimator
+	for _, limiter := range p.limiters {
+		rtt := limiter.averageRTT()
+		if mostOverloaded == nil || rtt > maxRTT {
+			mostOverloaded = limiter
+			maxRTT = rtt
+		}
+	}
+	return mostOverloaded
 }
 
 func (p *prioritizer) ScheduleCalibrations(ctx context.Context, interval time.Duration) context.CancelFunc {
