@@ -13,6 +13,7 @@ type key int
 // PriorityKey is a key to use with a Context that stores the priority value.
 const PriorityKey key = 0
 
+// PriorityLimiter is an adaptive concurrency limiter that can prioritize request rejections via a Prioritizer.
 type PriorityLimiter[R any] interface {
 	failsafe.Policy[R]
 	Metrics
@@ -61,7 +62,7 @@ func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context, priority Priorit
 		return permit, nil
 	}
 
-	// Generate a granular priority for the request and threshold it against the prioritizer threshold
+	// Generate a granular priority for the request and compare it to the prioritizer threshold
 	granularPriority := generateGranularPriority(priority)
 	l.prioritizer.recordPriority(granularPriority)
 	if granularPriority < l.prioritizer.threshold() {

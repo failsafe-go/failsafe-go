@@ -41,7 +41,8 @@ func generateGranularPriority(priority Priority) int {
 	return rand.Intn(r.upper-r.lower+1) + r.lower
 }
 
-// Prioritizer regularly computes a shared rejection rate for multiple limiters.
+// Prioritizer computes a rejection rate and priority threshold for priority limiters, which can be used to control
+// rejection of prioritized executions across multiple priority limiters.
 type Prioritizer interface {
 	// RejectionRate returns the current rate, from 0 to 1, at which the limiter will reject requests, based on recent
 	// execution times.

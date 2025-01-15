@@ -2,7 +2,6 @@ package adaptivelimiter
 
 import (
 	"context"
-	"math"
 	"math/rand"
 	"time"
 
@@ -10,6 +9,8 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
+// LatencyLimiter is an adaptive concurrency limiter that can limit the latency of blocked requests by rejecting
+// requests once blocking exceeds the configed thresholds.
 type LatencyLimiter[R any] interface {
 	failsafe.Policy[R]
 	Metrics
@@ -103,7 +104,10 @@ func (l *latencyLimiter[R]) RejectionRate() float64 {
 }
 
 func computeRejectionRate(rtt, rejectionThreshold, maxExecutionTime time.Duration) float64 {
-	return math.Min(1.0, float64(rtt-rejectionThreshold)/float64(maxExecutionTime-rejectionThreshold))
+	if maxExecutionTime <= rejectionThreshold {
+		return 1
+	}
+	return max(0, min(1, float64(rtt-rejectionThreshold)/float64(maxExecutionTime-rejectionThreshold)))
 }
 
 func (l *latencyLimiter[R]) ToExecutor(_ R) any {

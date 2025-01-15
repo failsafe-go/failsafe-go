@@ -3,7 +3,6 @@ package testutil
 import (
 	"context"
 	"log"
-	"math"
 	"net"
 	"sync/atomic"
 	"time"
@@ -28,7 +27,7 @@ func MockGrpcResponses(responses ...string) pbfixtures.PingServiceServer {
 	calls := atomic.Int32{}
 	return &pingService{responseFn: func(context.Context) (*pbfixtures.PingResponse, error) {
 		idx := int(calls.Add(1)) - 1
-		idx = int(math.Min(float64(idx), float64(len(responses)-1)))
+		idx = int(min(float64(idx), float64(len(responses)-1)))
 		return &pbfixtures.PingResponse{Msg: responses[idx]}, nil
 	}}
 }
