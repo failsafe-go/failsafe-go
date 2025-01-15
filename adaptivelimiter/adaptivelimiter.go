@@ -26,18 +26,14 @@ const warmupSamples = 10
 //  - When recent execution times are trending up relative to longer term execution times, the concurrency limit is decreased.
 //  - When recent execution times are trending down relative to longer term execution times, the concurrency limit is increased.
 //
-// To accomplish this, short-term average execution times are tracked and regularly compared to a weighted moving average of
+// To accomplish this, short-term execution times are tracked and regularly compared to a weighted moving average of
 // longer-term execution times. Limit increases are additionally controlled to ensure they don't increase execution times. Any
 // executions in excess of the limit will be rejected with ErrExceeded.
 //
 // By default, an AdaptiveLimiter will converge on a concurrency limit that represents the capacity of the machine it's
 // running on, and avoids having executions block. Since enforcing a limit without allowing for blocking is too strict in
 // some cases and may cause unexpected rejections, optional blocking of executions when the limiter is full can be
-// enabled by configuring a maxExecutionTime.
-//
-// When blocking is enabled and the limiter is full, execution block up to the configures maxExecutionTime based on an
-// estimated execution time for incoming requests. Estimated execution time considers the current number of blocked
-// requests, the current limit, and the long-term average execution time.
+// enabled via WithBlocking, and blocking with prioritized rejection can be enabled via WithPrioritizedRejection.
 //
 // R is the execution result type. This type is concurrency safe.
 type AdaptiveLimiter[R any] interface {
@@ -130,16 +126,22 @@ type BaseBuilder[R any] interface {
 	// The default value is 10.
 	WithStabilizationWindow(size uint) Builder[R]
 
-	// WithBlocking will block executions rather than reject them when the limiter is full, up to some max average execution
-	// time, which includes the time spent while executions are blocked waiting for a permit. Enabling this allows short
-	// execution spikes to be absorbed without strictly rejecting executions when the limiter is full. This is disabled by
-	// default, which means no executions will block when the limiter is full.
+	// WithBlocking will block executions rather than reject them when the limiter is full. Blocking allows short execution
+	// spikes to be absorbed without strictly rejecting executions. When blocking is enabled, the limiter is full, and
+	// execution times exceed the rejection threshold, executions block up to the configured maxExecutionTime based on an
+	// estimated execution time for incoming requests. Estimated execution time considers the current number of blocked
+	// requests, the current limit, and the long-term average execution time.
+	//
+	// Blocking is disabled by default, which means no executions will block when the limiter is full.
 	WithBlocking(rejectionThreshold time.Duration, maxExecutionTime time.Duration) LatencyLimiterBuilder[R]
 
-	// WithPrioritizedRejection enables prioritized rejections of executions when the limiter is full, where executions block up
-	// to some max average execution time, which includes the time spent while executions are blocked waiting for a permit.
-	// Enabling this allows short execution spikes to be absorbed without strictly rejecting executions when the limiter is
-	// full. This is disabled by default, which means no executions will block when the limiter is full.
+	// WithPrioritizedRejection enables prioritized rejections of executions when the limiter is full, where executions
+	// block up to some max average execution time, which includes the time spent while executions are blocked waiting for a
+	// permit. Enabling this allows short execution spikes to be absorbed without strictly rejecting executions when the
+	// limiter is full. Rejections are performed using the Prioritizer, which sets a rejection threshold baesd on the most
+	// overloaded limiters being used by the Prioritizer.
+	//
+	// Prioritized rejection is disabled by default, which means no executions will block when the limiter is full.
 	WithPrioritizedRejection(prioritizer Prioritizer) PriorityLimiterBuilder[R]
 
 	// WithLogger configures a logger which provides debug logging of limit adjustments.
