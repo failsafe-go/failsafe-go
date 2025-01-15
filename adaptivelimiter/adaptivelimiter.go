@@ -104,7 +104,7 @@ type BaseBuilder[R any] interface {
 	// The default value is 60.
 	WithLongWindow(size uint) Builder[R]
 
-	// WithSampleQuantile configures the quantile ot recorded response times to consider when adjusting the concurrency limit.
+	// WithSampleQuantile configures the quantile of recorded response times to consider when adjusting the concurrency limit.
 	// Defaults to .9 which uses p90 samples.
 	WithSampleQuantile(quantile float32) Builder[R]
 
