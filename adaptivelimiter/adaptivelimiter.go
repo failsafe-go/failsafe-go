@@ -385,14 +385,14 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 	gradient := longRTT / shortRTT
 	queueSize := int(math.Ceil(float64(inflight) * (1 - gradient)))
 
-	// Calculate throughput correlation, throughput slope, throughput CV, and rtt correlation
+	// Calculate throughput correlation, throughput CV, and RTT correlation
 	// These are the secondary signals that we threshold off of to detect overload
 	throughput := float64(inflight) / (shortRTT)
 	throughputCorr, _, throughputCV := l.throughputCorrelation.Add(float64(inflight), throughput)
 	rttCorr, _, _ := l.rttCorrelation.Add(float64(inflight), shortRTT)
 
-	// Calculate the rtt CV and inflight slope
-	// These are used to detect when rtt has stabilized after a recent decrease
+	// Calculate the RTT CV and inflight slope
+	// These are used to detect when RTT has stabilized after a recent decrease
 	l.rttWindow.Add(shortRTT)
 	rttCV, _, _ := l.rttWindow.CalculateCV()
 	l.inflightWindow.Add(float64(inflight))
