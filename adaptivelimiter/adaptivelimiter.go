@@ -362,8 +362,7 @@ func (l *adaptiveLimiter[R]) record(startTime time.Time, inflight int, dropped b
 
 	now := time.Now()
 	if !dropped {
-		rtt := now.Sub(startTime) / 1e6
-		l.shortRTT.Add(rtt)
+		l.shortRTT.Add(now.Sub(startTime))
 	}
 
 	if now.After(l.nextUpdateTime) && l.shortRTT.Size >= l.shortWindowMinSamples {
@@ -387,7 +386,7 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 
 	// Calculate throughput correlation, throughput CV, and RTT correlation
 	// These are the secondary signals that we threshold off of to detect overload
-	throughput := float64(inflight) / (shortRTT)
+	throughput := float64(inflight) / (shortRTT / 1e9) // Convert to RPS
 	throughputCorr, _, throughputCV := l.throughputCorrelation.Add(float64(inflight), throughput)
 	rttCorr, _, _ := l.rttCorrelation.Add(float64(inflight), shortRTT)
 
@@ -484,8 +483,8 @@ func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, g
 			"gradient", fmt.Sprintf("%.2f", gradient),
 			"queueSize", fmt.Sprintf("%d", queueSize),
 			"inflight", inflight,
-			"shortRTT", fmt.Sprintf("%.2f", shortRTT),
-			"longRTT", fmt.Sprintf("%.2f", longRTT),
+			"shortRTT", time.Duration(shortRTT).Round(time.Microsecond),
+			"longRTT", time.Duration(longRTT).Round(time.Microsecond),
 			"thrpt", fmt.Sprintf("%.2f", throughput),
 			"thrptCorr", fmt.Sprintf("%.2f", throughputCorr),
 			"rttCV", fmt.Sprintf("%.3f", rttCV),
@@ -516,7 +515,7 @@ func (l *adaptiveLimiter[R]) estimateRTT() time.Duration {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	avgRTT := time.Duration(l.longRTT.Value() * float64(time.Millisecond))
+	avgRTT := time.Duration(l.longRTT.Value())
 	if avgRTT == 0 {
 		return 0
 	}
