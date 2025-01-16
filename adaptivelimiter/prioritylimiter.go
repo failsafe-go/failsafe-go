@@ -21,6 +21,9 @@ type PriorityLimiter[R any] interface {
 	// AcquirePermit attempts to acquire a permit, potentially blocking up to maxExecutionTime.
 	// The request priority must be less than the current priority threshold for admission.
 	AcquirePermit(ctx context.Context, priority Priority) (Permit, error)
+
+	// CanAcquirePermit returns whether it's currently possible to acquire a permit for the priority.
+	CanAcquirePermit(priority Priority) bool
 }
 
 /*
@@ -70,6 +73,10 @@ func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context, priority Priorit
 	}
 
 	return l.adaptiveLimiter.AcquirePermit(ctx)
+}
+
+func (l *priorityLimiter[R]) CanAcquirePermit(priority Priority) bool {
+	return generateGranularPriority(priority) >= l.prioritizer.threshold()
 }
 
 func (l *priorityLimiter[R]) ToExecutor(_ R) any {

@@ -46,9 +46,9 @@ type AdaptiveLimiter[R any] interface {
 	// ctx may be nil.
 	AcquirePermit(context.Context) (Permit, error)
 
-	// TryAcquirePermit attempts to acquire a permit to perform an execution via the limiter, returning whether the
-	// Permit was acquired or not. Callers must call Record or Drop to release a successfully acquired permit back
-	// to the limiter.
+	// TryAcquirePermit attempts to acquire a permit to perform an execution via the limiter, returning whether the Permit
+	// was acquired or not. This method will not block if the limiter is full. Callers must call Record or Drop to release a
+	// successfully acquired permit back to the limiter.
 	TryAcquirePermit() (Permit, bool)
 
 	// CanAcquirePermit returns whether it's currently possible to acquire a permit.

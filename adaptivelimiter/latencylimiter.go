@@ -56,14 +56,36 @@ type latencyLimiter[R any] struct {
 
 func (l *latencyLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
 	// Try to get a permit without waiting
-	if permit, ok := l.TryAcquirePermit(); ok {
+	if permit, ok := l.adaptiveLimiter.TryAcquirePermit(); ok {
 		return permit, nil
 	}
 
+	if l.isQueueFull() {
+		return nil, ErrExceeded
+	}
+
+	// Acquire a permit, blocking if needed
+	l.blockedCount.Add(1)
+	permit, err := l.adaptiveLimiter.AcquirePermit(ctx)
+	l.blockedCount.Add(-1)
+	if err != nil {
+		return nil, err
+	}
+
+	return permit, nil
+}
+
+func (l *latencyLimiter[R]) CanAcquirePermit() bool {
+	return !l.semaphore.IsFull() || !l.isQueueFull()
+}
+
+// Returns whether the "queue" that forms when the limiter is full is also considered full, based on the current
+// rejection rate for a new execution.
+func (l *latencyLimiter[R]) isQueueFull() bool {
 	// Estimate if the blocking limiter is at capacity
 	rttEstimate := l.estimateRTT()
 	if rttEstimate > l.maxExecutionTime {
-		return nil, ErrExceeded
+		return true
 	}
 
 	rejectionRate := computeRejectionRate(rttEstimate, l.rejectionThreshold, l.maxExecutionTime)
@@ -73,28 +95,10 @@ func (l *latencyLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
 
 	// Reject requests based on the rejection rate
 	if rejectionRate >= 1 || rejectionRate >= rand.Float64() {
-		return nil, ErrExceeded
+		return true
 	}
 
-	// Acquire a permit, blocking if needed
-	l.blockedCount.Add(1)
-	permit, err := l.adaptiveLimiter.AcquirePermit(ctx)
-	l.blockedCount.Add(-1)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return permit, nil
-}
-
-func (l *latencyLimiter[R]) CanAcquirePermit() bool {
-	if l.semaphore.IsFull() {
-		l.mu.Lock()
-		defer l.mu.Unlock()
-		return l.rejectionRate >= 1 || l.rejectionRate >= rand.Float64()
-	}
-	return true
+	return false
 }
 
 func (l *latencyLimiter[R]) RejectionRate() float64 {
