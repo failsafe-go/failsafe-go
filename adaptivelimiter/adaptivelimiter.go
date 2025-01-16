@@ -223,7 +223,7 @@ func (c *config[R]) WithSampleQuantile(quantile float32) Builder[R] {
 }
 
 func (c *config[R]) WithLimits(minLimit uint, maxLimit uint, initialLimit uint) Builder[R] {
-	c.minLimit = float64(minLimit)
+	c.minLimit = float64(max(1, minLimit))
 	c.maxLimit = float64(maxLimit)
 	c.initialLimit = initialLimit
 	return c
@@ -440,14 +440,26 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 		}
 	}
 
-	// Clamp the limit based on the gradient
-	newLimit = max(l.minLimit, min(l.maxLimit, newLimit))
-
-	// Don't increase the limit beyond the max limit factor
+	// Decrease the limit if needed, based on the max limit factor
 	if newLimit > float64(inflight)*l.maxLimitFactor {
 		direction = "decreased"
 		reason = "maxed"
 		newLimit = l.limit - float64(l.decreaseFunc(int(l.limit)))
+	}
+
+	// Clamp the limit
+	if newLimit > l.maxLimit {
+		if l.limit == l.maxLimit {
+			direction = "leaving"
+			reason = "max"
+		}
+		newLimit = l.maxLimit
+	} else if newLimit < l.minLimit {
+		if l.limit == l.minLimit {
+			direction = "leaving"
+			reason = "min"
+		}
+		newLimit = l.minLimit
 	}
 
 	l.logLimit(direction, reason, newLimit, gradient, queueSize, inflight, shortRTT, longRTT, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputCV)
