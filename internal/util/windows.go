@@ -14,9 +14,13 @@ type TD struct {
 }
 
 func (td *TD) Add(rtt time.Duration) {
-	td.TDigest.Add(float64(rtt), 1)
-	td.MinRTT = min(td.MinRTT, rtt)
+	if td.Size == 0 {
+		td.MinRTT = rtt
+	} else {
+		td.MinRTT = min(td.MinRTT, rtt)
+	}
 	td.Size++
+	td.TDigest.Add(float64(rtt), 1)
 }
 
 func (td *TD) Reset() {
