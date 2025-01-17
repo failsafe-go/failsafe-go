@@ -170,7 +170,7 @@ func (p *prioritizer) Calibrate() {
 
 	if p.logger != nil && p.logger.Enabled(nil, slog.LevelDebug) {
 		p.logger.Debug("prioritizer calibration",
-			"rtt", rtt.Milliseconds(),
+			"rtt", rtt.Round(time.Microsecond),
 			"rejectionRate", fmt.Sprintf("%.2f", rejectionRate),
 			"priorityThresh", newThresh,
 		)
