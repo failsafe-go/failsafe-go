@@ -161,15 +161,16 @@ func (p *prioritizer) Calibrate() {
 	}
 
 	integralSum1 := p.integralEWMA.Add(errorValue)
-	gain := .5
-	piEWMA := gain * integralSum1
-	//	pi := piEWMA
+	piEWMA := integralSum1
+	// gain := .5
+	// piEWMA := gain * integralSum1
+	pi := piEWMA
 
 	// Update calibrations and compute PI
-	integralSum := p.calibrations.add(in, out, errorValue)
-	pValue := p.kp * errorValue
-	iValue := p.ki * integralSum
-	pi := pValue + iValue
+	// integralSum := p.calibrations.add(in, out, errorValue)
+	// pValue := p.kp * errorValue
+	// iValue := p.ki * integralSum
+	// pi := pValue + iValue
 
 	// Update and clamp rejection rate
 	oldRate := p.rejectionRate

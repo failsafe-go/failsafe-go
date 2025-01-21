@@ -68,6 +68,12 @@ type priorityLimiter[R any] struct {
 }
 
 func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context, priority Priority) (Permit, error) {
+	// Generate a granular priority for the request and compare it to the prioritizer threshold
+	granularPriority := generateGranularPriority(priority)
+	if granularPriority < l.prioritizer.threshold() {
+		return nil, ErrExceeded
+	}
+
 	// Try without waiting first
 	if permit, ok := l.adaptiveLimiter.TryAcquirePermit(); ok {
 		l.inCount.Add(1)
@@ -75,13 +81,7 @@ func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context, priority Priorit
 		return permit, nil
 	}
 
-	// Generate a granular priority for the request and compare it to the prioritizer threshold
-	granularPriority := generateGranularPriority(priority)
 	l.prioritizer.recordPriority(granularPriority)
-	if granularPriority < l.prioritizer.threshold() {
-		return nil, ErrExceeded
-	}
-
 	l.inCount.Add(1)
 	defer l.outCount.Add(1)
 	return l.adaptiveLimiter.AcquirePermit(ctx)
