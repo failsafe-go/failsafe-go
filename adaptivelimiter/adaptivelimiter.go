@@ -142,7 +142,7 @@ type BaseBuilder[R any] interface {
 	// overloaded limiters being used by the Prioritizer.
 	//
 	// Prioritized rejection is disabled by default, which means no executions will block when the limiter is full.
-	WithPrioritizedRejection(prioritizer Prioritizer) PriorityLimiterBuilder[R]
+	WithPrioritizedRejection(prioritizer Prioritizer, name string) PriorityLimiterBuilder[R]
 
 	// WithLogger configures a logger which provides debug logging of limit adjustments.
 	WithLogger(logger *slog.Logger) Builder[R]
@@ -253,11 +253,12 @@ func (c *config[R]) WithBlocking(rejectionThreshold time.Duration, maxExecutionT
 	}
 }
 
-func (c *config[R]) WithPrioritizedRejection(prioritizer Prioritizer) PriorityLimiterBuilder[R] {
+func (c *config[R]) WithPrioritizedRejection(prioritizer Prioritizer, name string) PriorityLimiterBuilder[R] {
 	c.blocking = true
 	return &priorityConfig[R]{
 		config:      c,
 		prioritizer: prioritizer,
+		name:        name,
 	}
 }
 
@@ -398,7 +399,7 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 	inflightSlope := l.inflightWindow.CalculateSlope()
 
 	newLimit := l.limit
-	overloaded := l.isOverloaded(inflight)
+	overloaded := l.isOverloaded()
 	alpha := l.alphaFunc(int(l.limit)) // alpha is the queueSize threshold below which we increase
 	beta := l.betaFunc(int(l.limit))   // beta is the queueSize threshold above which we decrease
 	var direction, reason string
@@ -495,44 +496,12 @@ func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, g
 }
 
 // isOverloaded returns whether the limiter is overloaded by checking blocked
-func (l *adaptiveLimiter[R]) isOverloaded(inflight int) bool {
+func (l *adaptiveLimiter[R]) isOverloaded() bool {
 	if l.blocking {
 		blockedSince := l.semaphore.BlockedSince()
 		return !blockedSince.IsZero() && time.Since(blockedSince) >= overloadThreshold
 	}
 	return l.semaphore.IsFull()
-}
-
-func (l *adaptiveLimiter[R]) averageRTT() float64 {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.longRTT.Value()
-}
-
-// estimateRTT estimates the round trip time for a new request by considering the current limit, how many batches of
-// blocked requests it would take before a new request is serviced, and the average RTT per request.
-func (l *adaptiveLimiter[R]) estimateRTT() time.Duration {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	avgRTT := time.Duration(l.longRTT.Value())
-	if avgRTT == 0 {
-		return 0
-	}
-
-	// Include current request in the latency estimate
-	totalRequests := int(l.blockedCount.Load()) + 1
-
-	// Calculate complete batches needed
-	concurrency := int(l.limit)
-	fullBatches := totalRequests / concurrency
-
-	// If we have any remaining requests, count it as a full batch
-	if totalRequests%concurrency > 0 {
-		fullBatches++
-	}
-
-	return time.Duration(float64(fullBatches) * float64(avgRTT))
 }
 
 func (l *adaptiveLimiter[R]) ToExecutor(_ R) any {

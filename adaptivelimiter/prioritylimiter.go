@@ -3,6 +3,7 @@ package adaptivelimiter
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/policy"
@@ -41,12 +42,16 @@ type PriorityLimiterBuilder[R any] interface {
 type priorityConfig[R any] struct {
 	*config[R]
 	prioritizer Prioritizer
+	name        string
 }
 
 func (c *priorityConfig[R]) Build() PriorityLimiter[R] {
 	limiter := &priorityLimiter[R]{
 		adaptiveLimiter: c.config.Build().(*adaptiveLimiter[R]),
 		priorityConfig:  c,
+		calibrations: &pidCalibrationWindow{
+			window: make([]pidCalibrationPeriod, 30),
+		},
 	}
 	c.prioritizer.register(limiter)
 	return limiter
@@ -56,12 +61,17 @@ type priorityLimiter[R any] struct {
 	*adaptiveLimiter[R]
 	*priorityConfig[R]
 
-	mu sync.Mutex
+	inCount      atomic.Uint32 // Requests received in current calibration period
+	outCount     atomic.Uint32 // Requests permitted in current calibration period
+	mu           sync.Mutex
+	calibrations *pidCalibrationWindow // Guaded by mu
 }
 
 func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context, priority Priority) (Permit, error) {
 	// Try without waiting first
 	if permit, ok := l.adaptiveLimiter.TryAcquirePermit(); ok {
+		l.inCount.Add(1)
+		l.outCount.Add(1)
 		return permit, nil
 	}
 
@@ -72,11 +82,21 @@ func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context, priority Priorit
 		return nil, ErrExceeded
 	}
 
+	l.inCount.Add(1)
+	defer l.outCount.Add(1)
 	return l.adaptiveLimiter.AcquirePermit(ctx)
 }
 
 func (l *priorityLimiter[R]) CanAcquirePermit(priority Priority) bool {
 	return generateGranularPriority(priority) >= l.prioritizer.threshold()
+}
+
+func (l *priorityLimiter[R]) getAndResetStats() (int, int) {
+	return int(l.inCount.Swap(0)), int(l.outCount.Swap(0))
+}
+
+func (l *priorityLimiter[R]) name() string {
+	return l.priorityConfig.name
 }
 
 func (l *priorityLimiter[R]) ToExecutor(_ R) any {

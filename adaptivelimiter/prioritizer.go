@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/influxdata/tdigest"
+
+	"github.com/failsafe-go/failsafe-go/internal/util"
 )
 
 type Priority int
@@ -54,7 +56,7 @@ type Prioritizer interface {
 	// ScheduleCalibrations runs calibration on the interval until the ctx is done or the returned CancelFunc is called.
 	ScheduleCalibrations(ctx context.Context, interval time.Duration) context.CancelFunc
 
-	register(limiter rttEstimator)
+	register(limiter pidStats)
 	recordPriority(priority int)
 	threshold() int
 }
@@ -80,23 +82,28 @@ type PriorityChangedEvent struct {
 }
 
 type prioritizerConfig struct {
-	logger             *slog.Logger
-	listener           func(event PriorityChangedEvent)
-	rejectionThreshold time.Duration
-	maxExecutionTime   time.Duration
+	logger   *slog.Logger
+	kp       float64 // Proportional gain: responds to immediate load
+	ki       float64 // Integral gain: responds to sustained load over time
+	listener func(event PriorityChangedEvent)
 }
 
 var _ PrioritizerBuilder = &prioritizerConfig{}
 
-func NewPrioritizer(rejectionThreshold time.Duration, maxExecutionTime time.Duration) Prioritizer {
-	return NewPrioritizerBuilder(rejectionThreshold, maxExecutionTime).Build()
+func NewPrioritizer() Prioritizer {
+	return NewPrioritizerBuilder().Build()
 }
 
 // NewPrioritizerBuilder returns a PrioritizerBuilder.
-func NewPrioritizerBuilder(rejectionThreshold time.Duration, maxExecutionTime time.Duration) PrioritizerBuilder {
+func NewPrioritizerBuilder() PrioritizerBuilder {
 	return &prioritizerConfig{
-		rejectionThreshold: rejectionThreshold,
-		maxExecutionTime:   maxExecutionTime,
+		// Using a small value (.1) results in a gradual response to spikes
+		// If P(t)=0.5 (50% overload), this kp value adds 0.05 to the rejection rate
+		kp: .1, // .05,
+
+		// Using a large value (1.4) results in aggressive response to sustained load
+		// If sum(P)=1.0, this ki value adds 1.4 to the rejection rate
+		ki: 1.4, // .3,
 	}
 }
 
@@ -114,13 +121,10 @@ func (c *prioritizerConfig) Build() Prioritizer {
 	pCopy := *c
 	return &prioritizer{
 		prioritizerConfig: &pCopy, // TODO copy base fields
+		calibrations:      newPidCalibrationWindow(30),
+		integralEWMA:      util.NewEWMA(30, 5), // 30 sample window, 5 warmup samples
 		digest:            tdigest.NewWithCompression(100),
 	}
-}
-
-type rttEstimator interface {
-	averageRTT() float64
-	estimateRTT() time.Duration
 }
 
 type prioritizer struct {
@@ -129,12 +133,14 @@ type prioritizer struct {
 	// Mutable state
 	priorityThreshold atomic.Int32
 	mu                sync.Mutex
-	limiters          []rttEstimator   // Guarded by mu
+	limiters          []pidStats            // Guarded by mu
+	calibrations      *pidCalibrationWindow // Guarded by mu
+	integralEWMA      util.MovingAverage
 	digest            *tdigest.TDigest // Guarded by mu
 	rejectionRate     float64          // Guarded by mu
 }
 
-func (p *prioritizer) register(limiter rttEstimator) {
+func (p *prioritizer) register(limiter pidStats) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.limiters = append(p.limiters, limiter)
@@ -146,33 +152,47 @@ func (p *prioritizer) RejectionRate() float64 {
 	return p.rejectionRate
 }
 
-// Calibrate computes a rejection rate and priority threshold based on the rtt from the most overloaded limiter.
 func (p *prioritizer) Calibrate() {
 	p.mu.Lock()
-	mostOverloaded := p.mostOverloadedLimiter()
+	mostOverloaded, in, out, errorValue := p.mostOverloadedLimiter()
 	if mostOverloaded == nil {
 		p.mu.Unlock()
 		return
 	}
 
-	// Compute rejection rate
-	rtt := mostOverloaded.estimateRTT()
-	rejectionRate := computeRejectionRate(rtt, p.rejectionThreshold, p.maxExecutionTime)
-	p.rejectionRate = rejectionRate
+	integralSum1 := p.integralEWMA.Add(errorValue)
+	gain := .5
+	piEWMA := gain * integralSum1
+	//	pi := piEWMA
+
+	// Update calibrations and compute PI
+	integralSum := p.calibrations.add(in, out, errorValue)
+	pValue := p.kp * errorValue
+	iValue := p.ki * integralSum
+	pi := pValue + iValue
+
+	// Update and clamp rejection rate
+	oldRate := p.rejectionRate
+	newRate := max(0, min(1, oldRate+pi))
+	p.rejectionRate = newRate
 
 	// Compute priority threshold
-	var newThresh int32
-	if rejectionRate != 0 {
-		newThresh = int32(p.digest.Quantile(rejectionRate))
-	}
+	newThresh := int32(p.digest.Quantile(newRate))
 	p.mu.Unlock()
 	oldThresh := p.priorityThreshold.Swap(newThresh)
 
 	if p.logger != nil && p.logger.Enabled(nil, slog.LevelDebug) {
 		p.logger.Debug("prioritizer calibration",
-			"rtt", rtt.Round(time.Microsecond),
-			"rejectionRate", fmt.Sprintf("%.2f", rejectionRate),
-			"priorityThresh", newThresh,
+			"newRate", fmt.Sprintf("%.2f", newRate),
+			"oldRate", fmt.Sprintf("%.2f", oldRate),
+			"newThresh", newThresh,
+			"mostOverloaded", mostOverloaded.name(),
+			"in", in,
+			"out", out,
+			"blocked", mostOverloaded.Blocked(),
+			"pi", fmt.Sprintf("%.2f", pi),
+			"piEWMA", fmt.Sprintf("%.2f", piEWMA),
+			"newThresh", newThresh,
 		)
 	}
 
@@ -184,17 +204,23 @@ func (p *prioritizer) Calibrate() {
 	}
 }
 
-func (p *prioritizer) mostOverloadedLimiter() rttEstimator {
-	var maxRTT float64
-	var mostOverloaded rttEstimator
+func (p *prioritizer) mostOverloadedLimiter() (pidStats, int, int, float64) {
+	var maxError float64
+	var mostOverloaded pidStats
+	var mostOverloadedIn, mostOverloadedOut int
 	for _, limiter := range p.limiters {
-		rtt := limiter.averageRTT()
-		if mostOverloaded == nil || rtt > maxRTT {
+		// Reset stats
+		in, out := limiter.getAndResetStats()
+		freeInflight := limiter.Limit() - limiter.Inflight()
+		errorValue := computeError(in, out, freeInflight, limiter.Limit())
+
+		if mostOverloaded == nil || errorValue > maxError {
+			maxError = errorValue
 			mostOverloaded = limiter
-			maxRTT = rtt
+			mostOverloadedIn, mostOverloadedOut = in, out
 		}
 	}
-	return mostOverloaded
+	return mostOverloaded, mostOverloadedIn, mostOverloadedOut, maxError
 }
 
 func (p *prioritizer) ScheduleCalibrations(ctx context.Context, interval time.Duration) context.CancelFunc {

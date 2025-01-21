@@ -3,6 +3,7 @@ package adaptivelimiter
 import (
 	"context"
 	"math/rand"
+	"sync/atomic"
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
@@ -18,6 +19,12 @@ type LatencyLimiter[R any] interface {
 	// RejectionRate returns the current rate, from 0 to 1, at which the limiter will reject requests, based on recent
 	// execution times.
 	RejectionRate() float64
+
+	// // Calibrate calibrates the RejectionRate based on recent execution times from registered limiters.
+	// Calibrate()
+	//
+	// // ScheduleCalibrations runs calibration on the interval until the ctx is done or the returned CancelFunc is called.
+	// ScheduleCalibrations(ctx context.Context, interval time.Duration) context.CancelFunc
 }
 
 /*
@@ -42,6 +49,17 @@ func (c *latencyLimiterConfig[R]) Build() LatencyLimiter[R] {
 	return &latencyLimiter[R]{
 		adaptiveLimiter:      c.config.Build().(*adaptiveLimiter[R]),
 		latencyLimiterConfig: c,
+		// calibrations: &pidCalibrationWindow{
+		// 	window: make([]pidCalibrationPeriod, 30),
+		// 	// integralEWMA: util.NewEWMA(30, 5), // 30 sample window, 5 warmup samples
+		// },
+		// Using a small value (.1) results in a gradual response to spikes
+		// If P(t)=0.5 (50% overload), this kp value adds 0.05 to the rejection rate
+		kp: .1,
+
+		// Using a large value (1.4) results in aggressive response to sustained load
+		// If sum(P)=1.0, this ki value adds 1.4 to the rejection rate
+		ki: 1.4,
 	}
 }
 
@@ -51,12 +69,22 @@ type latencyLimiter[R any] struct {
 	*adaptiveLimiter[R]
 	*latencyLimiterConfig[R]
 
+	// PI parameters
+	kp float64 // Proportional gain: responds to recent load
+	ki float64 // Integral gain: responds to longer term load
+
+	// Mutable state
+	inCount  atomic.Uint32 // Requests received in current calibration period
+	outCount atomic.Uint32 // Requests permitted in current calibration period
+	// calibrations  *pidCalibrationWindow
 	rejectionRate float64 // Guarded by mu
 }
 
 func (l *latencyLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
 	// Try to get a permit without waiting
 	if permit, ok := l.adaptiveLimiter.TryAcquirePermit(); ok {
+		l.inCount.Add(1)
+		l.outCount.Add(1)
 		return permit, nil
 	}
 
@@ -65,9 +93,9 @@ func (l *latencyLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
 	}
 
 	// Acquire a permit, blocking if needed
-	l.blockedCount.Add(1)
+	l.inCount.Add(1)
 	permit, err := l.adaptiveLimiter.AcquirePermit(ctx)
-	l.blockedCount.Add(-1)
+	l.outCount.Add(1)
 	if err != nil {
 		return nil, err
 	}
@@ -82,15 +110,8 @@ func (l *latencyLimiter[R]) CanAcquirePermit() bool {
 // Returns whether the "queue" that forms when the limiter is full is also considered full, based on the current
 // rejection rate for a new execution.
 func (l *latencyLimiter[R]) isQueueFull() bool {
-	// Estimate if the blocking limiter is at capacity
-	rttEstimate := l.estimateRTT()
-	if rttEstimate > l.maxExecutionTime {
-		return true
-	}
-
-	rejectionRate := computeRejectionRate(rttEstimate, l.rejectionThreshold, l.maxExecutionTime)
 	l.mu.Lock()
-	l.rejectionRate = rejectionRate
+	rejectionRate := l.rejectionRate
 	l.mu.Unlock()
 
 	// Reject requests based on the rejection rate
@@ -105,13 +126,6 @@ func (l *latencyLimiter[R]) RejectionRate() float64 {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.rejectionRate
-}
-
-func computeRejectionRate(rtt, rejectionThreshold, maxExecutionTime time.Duration) float64 {
-	if maxExecutionTime <= rejectionThreshold {
-		return 1
-	}
-	return max(0, min(1, float64(rtt-rejectionThreshold)/float64(maxExecutionTime-rejectionThreshold)))
 }
 
 func (l *latencyLimiter[R]) ToExecutor(_ R) any {
