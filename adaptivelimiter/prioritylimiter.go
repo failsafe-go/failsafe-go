@@ -74,16 +74,16 @@ func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context, priority Priorit
 		return nil, ErrExceeded
 	}
 
+	// Maintain "queue" stats
+	l.inCount.Add(1)
+	defer l.outCount.Add(1)
+
 	// Try without waiting first
 	if permit, ok := l.adaptiveLimiter.TryAcquirePermit(); ok {
-		l.inCount.Add(1)
-		l.outCount.Add(1)
 		return permit, nil
 	}
 
 	l.prioritizer.recordPriority(granularPriority)
-	l.inCount.Add(1)
-	defer l.outCount.Add(1)
 	return l.adaptiveLimiter.AcquirePermit(ctx)
 }
 

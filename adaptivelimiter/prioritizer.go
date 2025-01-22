@@ -4,14 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/influxdata/tdigest"
-
-	"github.com/failsafe-go/failsafe-go/internal/util"
 )
 
 type Priority int
@@ -103,7 +102,7 @@ func NewPrioritizerBuilder() PrioritizerBuilder {
 
 		// Using a large value (1.4) results in aggressive response to sustained load
 		// If sum(P)=1.0, this ki value adds 1.4 to the rejection rate
-		ki: 1.4, // .3,
+		ki: .14, // .3,
 	}
 }
 
@@ -122,8 +121,8 @@ func (c *prioritizerConfig) Build() Prioritizer {
 	return &prioritizer{
 		prioritizerConfig: &pCopy, // TODO copy base fields
 		calibrations:      newPidCalibrationWindow(30),
-		integralEWMA:      util.NewEWMA(30, 5), // 30 sample window, 5 warmup samples
-		digest:            tdigest.NewWithCompression(100),
+		// integralEWMA:      util.NewEWMA(10, 5), // 30 sample window, 5 warmup samples
+		digest: tdigest.NewWithCompression(100),
 	}
 }
 
@@ -135,9 +134,9 @@ type prioritizer struct {
 	mu                sync.Mutex
 	limiters          []pidStats            // Guarded by mu
 	calibrations      *pidCalibrationWindow // Guarded by mu
-	integralEWMA      util.MovingAverage
-	digest            *tdigest.TDigest // Guarded by mu
-	rejectionRate     float64          // Guarded by mu
+	// integralEWMA      util.MovingAverage
+	digest        *tdigest.TDigest // Guarded by mu
+	rejectionRate float64          // Guarded by mu
 }
 
 func (p *prioritizer) register(limiter pidStats) {
@@ -155,26 +154,25 @@ func (p *prioritizer) RejectionRate() float64 {
 func (p *prioritizer) Calibrate() {
 	p.mu.Lock()
 	mostOverloaded, in, out, errorValue := p.mostOverloadedLimiter()
-	if mostOverloaded == nil {
-		p.mu.Unlock()
-		return
-	}
-
-	integralSum1 := p.integralEWMA.Add(errorValue)
-	piEWMA := integralSum1
-	// gain := .5
-	// piEWMA := gain * integralSum1
-	pi := piEWMA
 
 	// Update calibrations and compute PI
-	// integralSum := p.calibrations.add(in, out, errorValue)
-	// pValue := p.kp * errorValue
-	// iValue := p.ki * integralSum
-	// pi := pValue + iValue
+	integralSum := p.calibrations.add(in, out, errorValue)
+	pValue := p.kp * errorValue
+	iValue := p.ki * integralSum
+	pi := pValue + iValue
 
-	// Update and clamp rejection rate
+	// Instead of adding full PI to current rate, limit how much we can change per calibration
 	oldRate := p.rejectionRate
-	newRate := max(0, min(1, oldRate+pi))
+	maxChange := 0.1 // Max 10% change per calibration
+
+	// Scale change by how far PI wants to move
+	changeScale := math.Abs(pi) / (math.Abs(pi) + 1) // Asymptotic scaling
+	actualChange := maxChange * changeScale * math.Copysign(1, pi)
+
+	newRate := max(0.0, min(1.0, oldRate+actualChange))
+
+	// Apply limits to get actual output
+	// newRate := max(0.0, min(1.0, unboundedOutput))
 	p.rejectionRate = newRate
 
 	// Compute priority threshold
@@ -185,14 +183,13 @@ func (p *prioritizer) Calibrate() {
 	if p.logger != nil && p.logger.Enabled(nil, slog.LevelDebug) {
 		p.logger.Debug("prioritizer calibration",
 			"newRate", fmt.Sprintf("%.2f", newRate),
-			"oldRate", fmt.Sprintf("%.2f", oldRate),
 			"newThresh", newThresh,
 			"mostOverloaded", mostOverloaded.name(),
+			"errorValue", fmt.Sprintf("%.2f", errorValue),
 			"in", in,
 			"out", out,
 			"blocked", mostOverloaded.Blocked(),
 			"pi", fmt.Sprintf("%.2f", pi),
-			"piEWMA", fmt.Sprintf("%.2f", piEWMA),
 			"newThresh", newThresh,
 		)
 	}
