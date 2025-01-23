@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/influxdata/tdigest"
+
+	"github.com/failsafe-go/failsafe-go/internal/util"
 )
 
 type Priority int
@@ -120,9 +122,9 @@ func (c *prioritizerConfig) Build() Prioritizer {
 	pCopy := *c
 	return &prioritizer{
 		prioritizerConfig: &pCopy, // TODO copy base fields
-		calibrations:      newPidCalibrationWindow(30),
-		// integralEWMA:      util.NewEWMA(10, 5), // 30 sample window, 5 warmup samples
-		digest: tdigest.NewWithCompression(100),
+		//	calibrations:      newPidCalibrationWindow(30),
+		integralEWMA: util.NewEWMA(30, 5), // 30 sample window, 5 warmup samples
+		digest:       tdigest.NewWithCompression(100),
 	}
 }
 
@@ -132,9 +134,9 @@ type prioritizer struct {
 	// Mutable state
 	priorityThreshold atomic.Int32
 	mu                sync.Mutex
-	limiters          []pidStats            // Guarded by mu
-	calibrations      *pidCalibrationWindow // Guarded by mu
-	// integralEWMA      util.MovingAverage
+	limiters          []pidStats // Guarded by mu
+	// calibrations      *pidCalibrationWindow // Guarded by mu
+	integralEWMA  util.MovingAverage
 	digest        *tdigest.TDigest // Guarded by mu
 	rejectionRate float64          // Guarded by mu
 }
@@ -153,26 +155,19 @@ func (p *prioritizer) RejectionRate() float64 {
 
 func (p *prioritizer) Calibrate() {
 	p.mu.Lock()
-	mostOverloaded, in, out, errorValue := p.mostOverloadedLimiter()
-
-	// Update calibrations and compute PI
-	integralSum := p.calibrations.add(in, out, errorValue)
-	pValue := p.kp * errorValue
-	iValue := p.ki * integralSum
-	pi := pValue + iValue
-
-	// Instead of adding full PI to current rate, limit how much we can change per calibration
-	oldRate := p.rejectionRate
-	maxChange := 0.1 // Max 10% change per calibration
-
-	// Scale change by how far PI wants to move
-	changeScale := math.Abs(pi) / (math.Abs(pi) + 1) // Asymptotic scaling
-	actualChange := maxChange * changeScale * math.Copysign(1, pi)
-
-	newRate := max(0.0, min(1.0, oldRate+actualChange))
+	mostOverloaded, in, out, qError, tpError := p.mostOverloadedLimiter()
+	// queued := mostOverloaded.Blocked()
+	// newRate := 0.0
+	// if queued > 2*mostOverloaded.Limit() {
+	// 	newRate = 1
+	// }
+	newRate := computeRejectionRate(mostOverloaded.Blocked(), mostOverloaded.Limit())
+	// newRate = computeRejectionRate(mostOverloaded.Blocked(), mostOverloaded.Limit(), in, out)
+	// newRate := p.integralEWMA.Add(qError + tpError)
 
 	// Apply limits to get actual output
-	// newRate := max(0.0, min(1.0, unboundedOutput))
+	// preNormalizedRate := newRate
+	// newRate = max(0.0, min(1.0, preNormalizedRate))
 	p.rejectionRate = newRate
 
 	// Compute priority threshold
@@ -182,14 +177,16 @@ func (p *prioritizer) Calibrate() {
 
 	if p.logger != nil && p.logger.Enabled(nil, slog.LevelDebug) {
 		p.logger.Debug("prioritizer calibration",
+			// "preNormalizedRate", fmt.Sprintf("%.2f", preNormalizedRate),
 			"newRate", fmt.Sprintf("%.2f", newRate),
 			"newThresh", newThresh,
 			"mostOverloaded", mostOverloaded.name(),
-			"errorValue", fmt.Sprintf("%.2f", errorValue),
+			"queueError", fmt.Sprintf("%.2f", qError),
+			"throughputError", fmt.Sprintf("%.2f", tpError),
 			"in", in,
 			"out", out,
 			"blocked", mostOverloaded.Blocked(),
-			"pi", fmt.Sprintf("%.2f", pi),
+			// "pi", fmt.Sprintf("%.2f", pi),
 			"newThresh", newThresh,
 		)
 	}
@@ -202,23 +199,89 @@ func (p *prioritizer) Calibrate() {
 	}
 }
 
-func (p *prioritizer) mostOverloadedLimiter() (pidStats, int, int, float64) {
-	var maxError float64
+func computeRejectionRate(queueSize int, limit int) float64 {
+	targetQueueSize := float64(2 * limit)
+	currentQueueSize := float64(queueSize)
+
+	if currentQueueSize <= targetQueueSize {
+		return 0.0 // Accept everything when building queue
+	}
+
+	// Linear rejection rate above target
+	excessRequests := currentQueueSize - targetQueueSize
+	return math.Min(1.0, excessRequests/targetQueueSize)
+}
+
+// func computeRejectionRate(queueSize int, limit int, in, out int) float64 {
+// 	targetQueueSize := 2 * limit
+//
+// 	if queueSize <= targetQueueSize {
+// 		return 0.0
+// 	}
+//
+// 	// Base rate on how far we are above target
+// 	baseRate := float64(queueSize-targetQueueSize) / float64(targetQueueSize)
+//
+// 	// Also consider flow rate when above target
+// 	flowRate := 0.0
+// 	if in > 0 {
+// 		flowRate = float64(in-out) / float64(in)
+// 	}
+//
+// 	// Take max of the two rates
+// 	return math.Max(0.0, math.Min(1.0, math.Max(baseRate, flowRate)))
+// }
+
+func (p *prioritizer) mostOverloadedLimiter() (pidStats, int, int, float64, float64) {
+	var maxError, maxQE, maxTPE float64
 	var mostOverloaded pidStats
 	var mostOverloadedIn, mostOverloadedOut int
 	for _, limiter := range p.limiters {
 		// Reset stats
 		in, out := limiter.getAndResetStats()
 		freeInflight := limiter.Limit() - limiter.Inflight()
-		errorValue := computeError(in, out, freeInflight, limiter.Limit())
+		qError, tpError := computeError(in, out, freeInflight, limiter.Limit(), limiter.Blocked())
 
-		if mostOverloaded == nil || errorValue > maxError {
-			maxError = errorValue
+		if mostOverloaded == nil || qError+tpError > maxError {
+			maxError = qError + tpError
+			maxQE, maxTPE = qError, tpError
 			mostOverloaded = limiter
 			mostOverloadedIn, mostOverloadedOut = in, out
 		}
 	}
-	return mostOverloaded, mostOverloadedIn, mostOverloadedOut, maxError
+	return mostOverloaded, mostOverloadedIn, mostOverloadedOut, maxQE, maxTPE
+}
+
+// Computes an error for a calibration period.
+// A positive error indicates overloaded. A negative error indicates underloaded.
+func computeError(in, out, freeInflight int, limit int, queueSize int) (float64, float64) {
+
+	normalizer := out
+	if normalizer == 0 {
+		normalizer = limit
+	}
+
+	// targetQueueSize := float64(5 * limit)
+	targetQueueSize := float64(2 * limit)
+
+	// More aggressive queue error when we exceed target
+	queueError := (float64(queueSize) - targetQueueSize) / float64(limit)
+	// queueRatio := (float64(queueSize) - targetQueueSize) / float64(limit)
+	//
+	// var queueError float64
+	// if queueRatio > 1.0 {
+	// 	// Log scale for queue size above target to prevent huge error values
+	// 	queueError = 1.0 + math.Log1p(queueRatio-1.0)
+	// } else {
+	// 	// Linear scale when building up queue or below target
+	// 	queueError = queueRatio
+	// }
+
+	throughputError := float64(in-(out+freeInflight)) / float64(normalizer)
+	// if queueSize > int(targetQueueSize) {
+	// 	return 0.2 * (queueError + throughputError)
+	// }
+	return queueError, throughputError
 }
 
 func (p *prioritizer) ScheduleCalibrations(ctx context.Context, interval time.Duration) context.CancelFunc {
