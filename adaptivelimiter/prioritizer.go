@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,37 +11,8 @@ import (
 	"github.com/influxdata/tdigest"
 )
 
-type Priority int
-
-const (
-	PriorityVeryLow Priority = iota
-	PriorityLow
-	PriorityMedium
-	PriorityHigh
-	PriorityVeryHigh
-)
-
-// priorityRange provides a wider range of priorities that allow for rejecting a subset of requests within a Priority.
-type priorityRange struct {
-	lower, upper int
-}
-
-// Defining the priority ranges as a map
-var priorityRanges = map[Priority]priorityRange{
-	PriorityVeryLow:  {0, 99},
-	PriorityLow:      {100, 199},
-	PriorityMedium:   {200, 299},
-	PriorityHigh:     {300, 399},
-	PriorityVeryHigh: {400, 499},
-}
-
-func generateGranularPriority(priority Priority) int {
-	r := priorityRanges[priority]
-	return rand.Intn(r.upper-r.lower+1) + r.lower
-}
-
-// Prioritizer computes a rejection rate and priority threshold for priority limiters, which can be used to control
-// rejection of prioritized executions across multiple priority limiters.
+// Prioritizer computes a rejection rate and priority threshold for one or more priority limiters, which can be used to
+// determine whether to accept or reject an execution.
 type Prioritizer interface {
 	// RejectionRate returns the current rate, from 0 to 1, at which the limiter will reject requests, based on recent
 	// execution times.
@@ -54,7 +24,7 @@ type Prioritizer interface {
 	// ScheduleCalibrations runs calibration on the interval until the ctx is done or the returned CancelFunc is called.
 	ScheduleCalibrations(ctx context.Context, interval time.Duration) context.CancelFunc
 
-	register(limiter rttEstimator)
+	register(limiter limiterStats)
 	recordPriority(priority int)
 	threshold() int
 }
@@ -63,8 +33,8 @@ type Prioritizer interface {
 //
 // This type is not concurrency safe.
 type PrioritizerBuilder interface {
-	// OnPriorityChanged configures a listener to be called with the priority threshold changes.
-	OnPriorityChanged(listener func(event PriorityChangedEvent)) PrioritizerBuilder
+	// OnThresholdChanged configures a listener to be called with the priority threshold for rejection changes.
+	OnThresholdChanged(listener func(event ThresholdChangedEvent)) PrioritizerBuilder
 
 	// WithLogger configures a logger which provides debug logging of calibrations.
 	WithLogger(logger *slog.Logger) PrioritizerBuilder
@@ -73,31 +43,26 @@ type PrioritizerBuilder interface {
 	Build() Prioritizer
 }
 
-// PriorityChangedEvent indicates an Prioritizer's priority threshold has changed.
-type PriorityChangedEvent struct {
+// ThresholdChangedEvent indicates an Prioritizer's priority threshold has changed.
+type ThresholdChangedEvent struct {
 	OldPriorityThreshold uint
 	NewPriorityThreshold uint
 }
 
 type prioritizerConfig struct {
-	logger             *slog.Logger
-	listener           func(event PriorityChangedEvent)
-	rejectionThreshold time.Duration
-	maxExecutionTime   time.Duration
+	logger   *slog.Logger
+	listener func(event ThresholdChangedEvent)
 }
 
 var _ PrioritizerBuilder = &prioritizerConfig{}
 
-func NewPrioritizer(rejectionThreshold time.Duration, maxExecutionTime time.Duration) Prioritizer {
-	return NewPrioritizerBuilder(rejectionThreshold, maxExecutionTime).Build()
+func NewPrioritizer() Prioritizer {
+	return NewPrioritizerBuilder().Build()
 }
 
 // NewPrioritizerBuilder returns a PrioritizerBuilder.
-func NewPrioritizerBuilder(rejectionThreshold time.Duration, maxExecutionTime time.Duration) PrioritizerBuilder {
-	return &prioritizerConfig{
-		rejectionThreshold: rejectionThreshold,
-		maxExecutionTime:   maxExecutionTime,
-	}
+func NewPrioritizerBuilder() PrioritizerBuilder {
+	return &prioritizerConfig{}
 }
 
 func (c *prioritizerConfig) WithLogger(logger *slog.Logger) PrioritizerBuilder {
@@ -105,7 +70,7 @@ func (c *prioritizerConfig) WithLogger(logger *slog.Logger) PrioritizerBuilder {
 	return c
 }
 
-func (c *prioritizerConfig) OnPriorityChanged(listener func(event PriorityChangedEvent)) PrioritizerBuilder {
+func (c *prioritizerConfig) OnThresholdChanged(listener func(event ThresholdChangedEvent)) PrioritizerBuilder {
 	c.listener = listener
 	return c
 }
@@ -118,9 +83,9 @@ func (c *prioritizerConfig) Build() Prioritizer {
 	}
 }
 
-type rttEstimator interface {
-	averageRTT() float64
-	estimateRTT() time.Duration
+// Define limiter operations that don't depend on a result type.
+type limiterStats interface {
+	getAndResetStats() (in, out, limit, inflight, queued, maxQueue int)
 }
 
 type prioritizer struct {
@@ -129,75 +94,78 @@ type prioritizer struct {
 	// Mutable state
 	priorityThreshold atomic.Int32
 	mu                sync.Mutex
-	limiters          []rttEstimator   // Guarded by mu
+	limiters          []limiterStats   // Guarded by mu
 	digest            *tdigest.TDigest // Guarded by mu
 	rejectionRate     float64          // Guarded by mu
 }
 
-func (p *prioritizer) register(limiter rttEstimator) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.limiters = append(p.limiters, limiter)
+func (r *prioritizer) register(limiter limiterStats) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.limiters = append(r.limiters, limiter)
 }
 
-func (p *prioritizer) RejectionRate() float64 {
-	p.mu.Lock()
-	p.mu.Unlock()
-	return p.rejectionRate
+func (r *prioritizer) RejectionRate() float64 {
+	r.mu.Lock()
+	r.mu.Unlock()
+	return r.rejectionRate
 }
 
-// Calibrate computes a rejection rate and priority threshold based on the rtt from the most overloaded limiter.
-func (p *prioritizer) Calibrate() {
-	p.mu.Lock()
-	mostOverloaded := p.mostOverloadedLimiter()
-	if mostOverloaded == nil {
-		p.mu.Unlock()
-		return
+func (r *prioritizer) Calibrate() {
+	r.mu.Lock()
+
+	// Compute queue stats across all registered limiters
+	var totalIn, totalOut, totalLimit, totalQueued, totalFreeInflight, totalMaxQueue int
+	for _, limiter := range r.limiters {
+		in, out, limit, inflight, queued, maxQueue := limiter.getAndResetStats()
+		totalIn += in
+		totalOut += out
+		totalFreeInflight += limit - inflight
+		totalLimit += limit
+		totalQueued += queued
+		totalMaxQueue += maxQueue
 	}
 
-	// Compute rejection rate
-	rtt := mostOverloaded.estimateRTT()
-	rejectionRate := computeRejectionRate(rtt, p.rejectionThreshold, p.maxExecutionTime)
-	p.rejectionRate = rejectionRate
-
-	// Compute priority threshold
+	// Update rejection rate and priority threshold
+	errorValue := computeError(totalIn, totalOut, totalFreeInflight, totalQueued, totalMaxQueue)
+	newRate := computeRejectionRate(totalQueued, totalMaxQueue)
+	r.rejectionRate = newRate
 	var newThresh int32
-	if rejectionRate != 0 {
-		newThresh = int32(p.digest.Quantile(rejectionRate))
+	if newRate > 0 {
+		newThresh = int32(r.digest.Quantile(newRate))
 	}
-	p.mu.Unlock()
-	oldThresh := p.priorityThreshold.Swap(newThresh)
+	r.mu.Unlock()
+	oldThresh := r.priorityThreshold.Swap(newThresh)
 
-	if p.logger != nil && p.logger.Enabled(nil, slog.LevelDebug) {
-		p.logger.Debug("prioritizer calibration",
-			"rtt", rtt.Round(time.Microsecond),
-			"rejectionRate", fmt.Sprintf("%.2f", rejectionRate),
-			"priorityThresh", newThresh,
+	if r.logger != nil && r.logger.Enabled(nil, slog.LevelDebug) {
+		r.logger.Debug("prioritizer calibration",
+			"newRate", fmt.Sprintf("%.2f", newRate),
+			"newThresh", newThresh,
+			"in", totalIn,
+			"out", totalOut,
+			"limit", totalLimit,
+			"blocked", totalQueued,
+			"error", fmt.Sprintf("%.2f", errorValue),
 		)
 	}
 
-	if oldThresh != newThresh && p.listener != nil {
-		p.listener(PriorityChangedEvent{
+	if oldThresh != newThresh && r.listener != nil {
+		r.listener(ThresholdChangedEvent{
 			OldPriorityThreshold: uint(oldThresh),
 			NewPriorityThreshold: uint(newThresh),
 		})
 	}
 }
 
-func (p *prioritizer) mostOverloadedLimiter() rttEstimator {
-	var maxRTT float64
-	var mostOverloaded rttEstimator
-	for _, limiter := range p.limiters {
-		rtt := limiter.averageRTT()
-		if mostOverloaded == nil || rtt > maxRTT {
-			mostOverloaded = limiter
-			maxRTT = rtt
-		}
-	}
-	return mostOverloaded
+// Computes an error for the queue stats. A positive error indicates overloaded. A negative error indicates underloaded.
+func computeError(in, out, freeInflight int, queueSize, maxQueueSize int) float64 {
+	load := float64(queueSize + (in - out))
+	capacity := float64(maxQueueSize + freeInflight)
+	excessLoad := load - capacity
+	return excessLoad / capacity
 }
 
-func (p *prioritizer) ScheduleCalibrations(ctx context.Context, interval time.Duration) context.CancelFunc {
+func (r *prioritizer) ScheduleCalibrations(ctx context.Context, interval time.Duration) context.CancelFunc {
 	ticker := time.NewTicker(interval)
 	done := make(chan struct{})
 
@@ -210,7 +178,7 @@ func (p *prioritizer) ScheduleCalibrations(ctx context.Context, interval time.Du
 			case <-done:
 				return
 			case <-ticker.C:
-				p.Calibrate()
+				r.Calibrate()
 			}
 		}
 	}()
@@ -220,12 +188,12 @@ func (p *prioritizer) ScheduleCalibrations(ctx context.Context, interval time.Du
 	}
 }
 
-func (p *prioritizer) recordPriority(priority int) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.digest.Add(float64(priority), 1.0)
+func (r *prioritizer) recordPriority(priority int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.digest.Add(float64(priority), 1.0)
 }
 
-func (p *prioritizer) threshold() int {
-	return int(p.priorityThreshold.Load())
+func (r *prioritizer) threshold() int {
+	return int(r.priorityThreshold.Load())
 }

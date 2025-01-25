@@ -125,7 +125,7 @@ func (s *DynamicSemaphore) Release() {
 func (s *DynamicSemaphore) IsFull() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.cur == s.size
+	return s.cur >= s.size
 }
 
 // BlockedSince returns the time since the semaphore has been blocked, if any.

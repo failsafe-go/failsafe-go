@@ -2,11 +2,42 @@ package adaptivelimiter
 
 import (
 	"context"
+	"math/rand"
 	"sync"
+	"sync/atomic"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/policy"
 )
+
+type Priority int
+
+const (
+	PriorityVeryLow Priority = iota
+	PriorityLow
+	PriorityMedium
+	PriorityHigh
+	PriorityVeryHigh
+)
+
+// priorityRange provides a wider range of priorities that allow for rejecting a subset of requests within a Priority.
+type priorityRange struct {
+	lower, upper int
+}
+
+// Defining the priority ranges as a map
+var priorityRanges = map[Priority]priorityRange{
+	PriorityVeryLow:  {0, 99},
+	PriorityLow:      {100, 199},
+	PriorityMedium:   {200, 299},
+	PriorityHigh:     {300, 399},
+	PriorityVeryHigh: {400, 499},
+}
+
+func randomGranularPriority(priority Priority) int {
+	r := priorityRanges[priority]
+	return rand.Intn(r.upper-r.lower+1) + r.lower
+}
 
 type key int
 
@@ -26,57 +57,43 @@ type PriorityLimiter[R any] interface {
 	CanAcquirePermit(priority Priority) bool
 }
 
-/*
-PriorityLimiterBuilder builds PriorityLimiterBuilder instances.
-
-This type is not concurrency safe.
-*/
-type PriorityLimiterBuilder[R any] interface {
-	BaseBuilder[R]
-
-	// Build returns a new PriorityLimiter using the builder's configuration.
-	Build() PriorityLimiter[R]
-}
-
-type priorityConfig[R any] struct {
-	*config[R]
-	prioritizer Prioritizer
-}
-
-func (c *priorityConfig[R]) Build() PriorityLimiter[R] {
-	limiter := &priorityLimiter[R]{
-		adaptiveLimiter: c.config.Build().(*adaptiveLimiter[R]),
-		priorityConfig:  c,
-	}
-	c.prioritizer.register(limiter)
-	return limiter
-}
-
 type priorityLimiter[R any] struct {
 	*adaptiveLimiter[R]
-	*priorityConfig[R]
 
-	mu sync.Mutex
+	inCount  atomic.Uint32 // Requests received in current calibration period
+	outCount atomic.Uint32 // Requests permitted in current calibration period
+	mu       sync.Mutex
 }
 
 func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context, priority Priority) (Permit, error) {
-	// Try without waiting first
-	if permit, ok := l.adaptiveLimiter.TryAcquirePermit(); ok {
-		return permit, nil
-	}
-
 	// Generate a granular priority for the request and compare it to the prioritizer threshold
-	granularPriority := generateGranularPriority(priority)
-	l.prioritizer.recordPriority(granularPriority)
+	granularPriority := randomGranularPriority(priority)
 	if granularPriority < l.prioritizer.threshold() {
 		return nil, ErrExceeded
 	}
 
+	// Maintain queue stats
+	l.inCount.Add(1)
+	defer l.outCount.Add(1)
+
+	l.prioritizer.recordPriority(granularPriority)
 	return l.adaptiveLimiter.AcquirePermit(ctx)
 }
 
 func (l *priorityLimiter[R]) CanAcquirePermit(priority Priority) bool {
-	return generateGranularPriority(priority) >= l.prioritizer.threshold()
+	return randomGranularPriority(priority) >= l.prioritizer.threshold()
+}
+
+func (l *priorityLimiter[R]) RejectionRate() float64 {
+	return l.prioritizer.RejectionRate()
+}
+
+func (l *priorityLimiter[R]) getAndResetStats() (in, out, limit, inflight, queued, maxQueue int) {
+	in = int(l.inCount.Swap(0))
+	out = int(l.outCount.Swap(0))
+	limit = l.Limit()
+	maxQueue = int(float64(limit) * l.maxBlockingFactor)
+	return in, out, limit, l.Inflight(), l.Blocked(), maxQueue
 }
 
 func (l *priorityLimiter[R]) ToExecutor(_ R) any {
