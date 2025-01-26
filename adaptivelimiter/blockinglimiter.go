@@ -31,8 +31,9 @@ func (l *blockingLimiter[R]) CanAcquirePermit() bool {
 	}
 
 	l.mu.Lock()
-	maxQueueSize := int(l.limit * l.maxBlockingFactor)
-	rejectionRate := computeRejectionRate(l.Blocked(), maxQueueSize)
+	rejectionThreshold := int(l.limit * l.initialRejectionFactor)
+	maxQueueSize := int(l.limit * l.maxRejectionFactor)
+	rejectionRate := computeRejectionRate(l.Blocked(), rejectionThreshold, maxQueueSize)
 	l.rejectionRate = rejectionRate
 	l.mu.Unlock()
 
@@ -45,10 +46,14 @@ func (l *blockingLimiter[R]) CanAcquirePermit() bool {
 	return true
 }
 
-// Computes a rejection rate based on the current and max queue sizes.
-func computeRejectionRate(queueSize, maxQueueSize int) float64 {
-	excessRequests := queueSize - maxQueueSize
-	return max(0, min(1, float64(excessRequests)/float64(maxQueueSize)))
+func computeRejectionRate(queueSize, rejectionThreshold, maxQueueSize int) float64 {
+	if queueSize <= rejectionThreshold {
+		return 0
+	}
+	if queueSize >= maxQueueSize {
+		return 1
+	}
+	return float64(queueSize-rejectionThreshold) / float64(maxQueueSize-rejectionThreshold)
 }
 
 func (l *blockingLimiter[R]) RejectionRate() float64 {
