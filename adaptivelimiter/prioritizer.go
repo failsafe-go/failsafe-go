@@ -85,7 +85,7 @@ func (c *prioritizerConfig) Build() Prioritizer {
 
 // Define limiter operations that don't depend on a result type.
 type limiterStats interface {
-	getAndResetStats() (in, out, limit, inflight, queued, maxQueue int)
+	getAndResetStats() (in, out, limit, inflight, queued, rejectionThreshold, maxQueue int)
 }
 
 type prioritizer struct {
@@ -115,20 +115,21 @@ func (r *prioritizer) Calibrate() {
 	r.mu.Lock()
 
 	// Compute queue stats across all registered limiters
-	var totalIn, totalOut, totalLimit, totalQueued, totalFreeInflight, totalMaxQueue int
+	var totalIn, totalOut, totalLimit, totalQueued, totalFreeInflight, totalRejectionThresh, totalMaxQueue int
 	for _, limiter := range r.limiters {
-		in, out, limit, inflight, queued, maxQueue := limiter.getAndResetStats()
+		in, out, limit, inflight, queued, rejectionThresh, maxQueue := limiter.getAndResetStats()
 		totalIn += in
 		totalOut += out
 		totalFreeInflight += limit - inflight
 		totalLimit += limit
 		totalQueued += queued
+		totalRejectionThresh += rejectionThresh
 		totalMaxQueue += maxQueue
 	}
 
 	// Update rejection rate and priority threshold
 	errorValue := computeError(totalIn, totalOut, totalFreeInflight, totalQueued, totalMaxQueue)
-	newRate := computeRejectionRate(totalQueued, totalMaxQueue)
+	newRate := computeRejectionRate(totalQueued, totalRejectionThresh, totalMaxQueue)
 	r.rejectionRate = newRate
 	var newThresh int32
 	if newRate > 0 {

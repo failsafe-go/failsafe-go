@@ -124,16 +124,19 @@ type Builder[R any] interface {
 
 	// WithBlocking enables blocking of executions rather than rejecting them when the limiter is full. Blocking allows
 	// short execution spikes to be absorbed without strictly rejecting executions. When blocking is enabled, the max amount
-	// of blocking is 2 times the current limit, by default. WithMaxBlockingFactor can be used to adjust this.
+	// of blocking before rejection begins is 2 times the current limit, by default. WithRejectionFactor can be used to
+	// adjust this.
 	//
 	// Blocking is disabled by default, which means no executions will block when the limiter is full.
 	WithBlocking() Builder[R]
 
-	// WithMaxBlockingFactor enables blocking of executions up to the current limit times the maxBlockingFactor. Blocking
-	// allows short execution spikes to be absorbed without strictly rejecting executions.
+	// WithRejectionFactors enables blocking of executions up to the current limit times the initialRejectionFactor, after
+	// which point they will gradually start to be rejected up to the limit times the maxRejectionFactor. This allows
+	// rejection to gradually adjust based on how many requests are blocking, relative to the limit. Blocking allows short
+	// execution spikes to be absorbed without strictly rejecting executions.
 	//
 	// Blocking is disabled by default, which means no executions will block when the limiter is full.
-	WithMaxBlockingFactor(maxBlockingFactor float32) Builder[R]
+	WithRejectionFactors(initialRejectionFactor, maxRejectionFactor float32) Builder[R]
 
 	// WithLogger configures a logger which provides debug logging of limit adjustments.
 	WithLogger(logger *slog.Logger) Builder[R]
@@ -148,7 +151,7 @@ type Builder[R any] interface {
 	// prioritized rejections of executions when the limiter is full, where executions block while waiting for a permit.
 	// Enabling this allows short execution spikes to be absorbed without strictly rejecting executions when the limiter is
 	// full. Rejections are performed using the Prioritizer, which sets a rejection threshold baesd on the most overloaded
-	// limiters being used by the Prioritizer. The amount of blocking can be configured via WithMaxBlockingFactor, and
+	// limiters being used by the Prioritizer. The amount of blocking can be configured via WithRejectionFactor, and
 	// defaults to two times the current limit.
 	//
 	// Prioritized rejection is disabled by default, which means no executions will block when the limiter is full.
@@ -171,19 +174,17 @@ type config[R any] struct {
 	correlationWindowSize   uint
 	stabilizationWindowSize uint
 
-	minLimit       float64
-	maxLimit       float64
-	initialLimit   uint
-	maxLimitFactor float64
+	minLimit, maxLimit float64
+	initialLimit       uint
+	maxLimitFactor     float64
 
-	// Blocking config
-	maxBlockingFactor float64
-	prioritizer       Prioritizer
+	// Rejection config
+	initialRejectionFactor float64
+	maxRejectionFactor     float64
+	prioritizer            Prioritizer
 
-	alphaFunc    func(int) int
-	betaFunc     func(int) int
-	increaseFunc func(int) int
-	decreaseFunc func(int) int
+	alphaFunc, betaFunc        func(int) int
+	increaseFunc, decreaseFunc func(int) int
 
 	limitChangedListener func(LimitChangedEvent)
 }
@@ -252,14 +253,16 @@ func (c *config[R]) WithStabilizationWindow(size uint) Builder[R] {
 }
 
 func (c *config[R]) WithBlocking() Builder[R] {
-	if c.maxBlockingFactor == 0 {
-		c.maxBlockingFactor = 2
+	if c.initialRejectionFactor == 0 && c.maxRejectionFactor == 0 {
+		c.initialRejectionFactor = 2
+		c.maxRejectionFactor = 3
 	}
 	return c
 }
 
-func (c *config[R]) WithMaxBlockingFactor(maxBlockingFactor float32) Builder[R] {
-	c.maxBlockingFactor = float64(maxBlockingFactor)
+func (c *config[R]) WithRejectionFactors(initialRejectionFactor, maxRejectionFactor float32) Builder[R] {
+	c.initialRejectionFactor = float64(initialRejectionFactor)
+	c.maxRejectionFactor = float64(maxRejectionFactor)
 	return c
 }
 
@@ -286,7 +289,7 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 		rttWindow:             util.NewRollingSum(c.stabilizationWindowSize),
 		inflightWindow:        util.NewRollingSum(c.stabilizationWindowSize),
 	}
-	if c.maxBlockingFactor != 0 && c.prioritizer == nil {
+	if c.initialRejectionFactor != 0 && c.maxRejectionFactor != 0 && c.prioritizer == nil {
 		return &blockingLimiter[R]{adaptiveLimiter: limiter}
 	}
 	return limiter
@@ -444,13 +447,13 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 
 	if decrease {
 		// Consider the limit stable if RTT is stable and inflight recently decreased
-		// if rttCV < 0.05 && inflightSlope < 0 {
-		// 	direction = "leaving"
-		// 	reason = "stable"
-		// } else {
-		direction = "decreased"
-		newLimit = l.limit - float64(l.decreaseFunc(int(l.limit)))
-		// }
+		if rttCV < 0.05 && inflightSlope < 0 {
+			direction = "leaving"
+			reason = "stable"
+		} else {
+			direction = "decreased"
+			newLimit = l.limit - float64(l.decreaseFunc(int(l.limit)))
+		}
 	}
 
 	// Decrease the limit if needed, based on the max limit factor
@@ -475,7 +478,7 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 		newLimit = l.minLimit
 	}
 
-	l.logLimit(direction, reason, newLimit, gradient, queueSize, inflight, shortRTT, longRTT, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputCV, overloaded)
+	l.logLimit(direction, reason, newLimit, gradient, queueSize, inflight, shortRTT, longRTT, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputCV)
 
 	if uint(l.limit) != uint(newLimit) && l.limitChangedListener != nil {
 		l.limitChangedListener(LimitChangedEvent{
@@ -488,7 +491,7 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 	l.limit = newLimit
 }
 
-func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, gradient float64, queueSize, inflight int, shortRTT, longRTT, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputCV float64, overloaded bool) {
+func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, gradient float64, queueSize, inflight int, shortRTT, longRTT, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputCV float64) {
 	if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
 		l.logger.Debug("limit update",
 			"direction", direction,
@@ -499,7 +502,6 @@ func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, g
 			"inflight", inflight,
 			"shortRTT", time.Duration(shortRTT).Round(time.Microsecond),
 			"longRTT", time.Duration(longRTT).Round(time.Microsecond),
-			"overloaded", overloaded,
 			"thrpt", fmt.Sprintf("%.2f", throughput),
 			"thrptCorr", fmt.Sprintf("%.2f", throughputCorr),
 			"rttCV", fmt.Sprintf("%.3f", rttCV),
