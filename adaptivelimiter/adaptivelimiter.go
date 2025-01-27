@@ -198,7 +198,7 @@ func NewBuilder[R any]() Builder[R] {
 		shortWindowMinSamples:   1,
 		longWindowSize:          60,
 		quantile:                0.9,
-		correlationWindowSize:   20,
+		correlationWindowSize:   50,
 		stabilizationWindowSize: 20,
 
 		minLimit:       1,
@@ -429,8 +429,13 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 		// This condition prevents runaway limit increases during moderate overload where inflight is increasing but throughput is decreasing
 		reason = "thrptCorr"
 		decrease = true
-	} else if overloaded && throughputCV < .15 && rttCorr > .7 {
-		// This condition prevents runaway limit increases during moderate overload where throughputCorr is positive and stable but rttCorr is high
+	} else if overloaded && throughputCorr < .3 && rttCorr > .5 {
+		// This condition prevents runaway limit increases during moderate overload where throughputCorr is weak and rttCorr is high
+		// This indicates overload since latency is increasing with inflight, but throughput is not
+		reason = "thrptCorrRtt"
+		decrease = true
+	} else if overloaded && throughputCV < .2 && rttCorr > .5 {
+		// This condition prevents runaway limit increases during moderate overload where throughputCV low and rttCorr is high
 		// This indicates overload since latency is increasing with inflight, but throughput is not
 		reason = "thrptCV"
 		decrease = true
