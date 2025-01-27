@@ -117,11 +117,6 @@ type Builder[R any] interface {
 	// The default value is 20.
 	WithCorrelationWindow(size uint) Builder[R]
 
-	// WithStabilizationWindow configures the size of the windows tracking recent response times and inflight numbers to
-	// determine when recent response times are stable.
-	// The default value is 10.
-	WithStabilizationWindow(size uint) Builder[R]
-
 	// WithBlocking enables blocking of executions rather than rejecting them when the limiter is full. Blocking allows
 	// short execution spikes to be absorbed without strictly rejecting executions. When blocking is enabled, the max amount
 	// of blocking before rejection begins is 2 times the current limit, by default. WithRejectionFactor can be used to
@@ -165,14 +160,13 @@ type LimitChangedEvent struct {
 }
 
 type config[R any] struct {
-	logger                  *slog.Logger
-	shortWindowMinDuration  time.Duration
-	shortWindowMaxDuration  time.Duration
-	shortWindowMinSamples   uint
-	longWindowSize          uint
-	quantile                float64
-	correlationWindowSize   uint
-	stabilizationWindowSize uint
+	logger                 *slog.Logger
+	shortWindowMinDuration time.Duration
+	shortWindowMaxDuration time.Duration
+	shortWindowMinSamples  uint
+	longWindowSize         uint
+	quantile               float64
+	correlationWindowSize  uint
 
 	minLimit, maxLimit float64
 	initialLimit       uint
@@ -193,13 +187,12 @@ var _ Builder[any] = &config[any]{}
 
 func NewBuilder[R any]() Builder[R] {
 	return &config[R]{
-		shortWindowMinDuration:  time.Second,
-		shortWindowMaxDuration:  time.Second,
-		shortWindowMinSamples:   1,
-		longWindowSize:          60,
-		quantile:                0.9,
-		correlationWindowSize:   50,
-		stabilizationWindowSize: 20,
+		shortWindowMinDuration: time.Second,
+		shortWindowMaxDuration: time.Second,
+		shortWindowMinSamples:  1,
+		longWindowSize:         60,
+		quantile:               0.9,
+		correlationWindowSize:  50,
 
 		minLimit:       1,
 		maxLimit:       200,
@@ -247,11 +240,6 @@ func (c *config[R]) WithCorrelationWindow(size uint) Builder[R] {
 	return c
 }
 
-func (c *config[R]) WithStabilizationWindow(size uint) Builder[R] {
-	c.stabilizationWindowSize = size
-	return c
-}
-
 func (c *config[R]) WithBlocking() Builder[R] {
 	if c.initialRejectionFactor == 0 && c.maxRejectionFactor == 0 {
 		c.initialRejectionFactor = 2
@@ -286,8 +274,6 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 		nextUpdateTime:        time.Now(),
 		rttCorrelation:        util.NewCorrelationWindow(c.correlationWindowSize, warmupSamples),
 		throughputCorrelation: util.NewCorrelationWindow(c.correlationWindowSize, warmupSamples),
-		rttWindow:             util.NewRollingSum(c.stabilizationWindowSize),
-		inflightWindow:        util.NewRollingSum(c.stabilizationWindowSize),
 	}
 	if c.initialRejectionFactor != 0 && c.maxRejectionFactor != 0 && c.prioritizer == nil {
 		return &blockingLimiter[R]{adaptiveLimiter: limiter}
@@ -302,7 +288,13 @@ func (c *config[R]) BuildPrioritized(prioritizer Prioritizer) PriorityLimiter[R]
 	return limiter
 }
 
-const overloadThreshold = 5 * time.Second
+type limitChange int
+
+const (
+	increase limitChange = iota
+	decrease
+	hold
+)
 
 type adaptiveLimiter[R any] struct {
 	*config[R]
@@ -319,8 +311,6 @@ type adaptiveLimiter[R any] struct {
 
 	throughputCorrelation *util.CorrelationWindow // Tracks the correlation between concurrency and throughput
 	rttCorrelation        *util.CorrelationWindow // Tracks the correlation between concurrency and round trip times (RTT)
-	rttWindow             *util.RollingSum        // Tracks the variation of recent RTT
-	inflightWindow        *util.RollingSum        // Tracks the slope of recent inflight executions
 }
 
 func (l *adaptiveLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
@@ -407,83 +397,49 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 	throughputCorr, _, throughputCV := l.throughputCorrelation.Add(float64(inflight), throughput)
 	rttCorr, _, _ := l.rttCorrelation.Add(float64(inflight), shortRTT)
 
-	// Calculate the RTT CV and inflight slope
-	// These are used to detect when RTT has stabilized after a recent decrease
-	l.rttWindow.Add(shortRTT)
-	rttCV, _, _ := l.rttWindow.CalculateCV()
-	l.inflightWindow.Add(float64(inflight))
-	inflightSlope := l.inflightWindow.CalculateSlope()
-
-	newLimit := l.limit
+	// Additional values for thresholding the limit
 	overloaded := l.semaphore.IsFull()
 	alpha := l.alphaFunc(int(l.limit)) // alpha is the queueSize threshold below which we increase
 	beta := l.betaFunc(int(l.limit))   // beta is the queueSize threshold above which we decrease
-	var direction, reason string
-	decrease := false
 
-	if queueSize > beta {
-		// This condition handles severe overload where recent RTT significantly exceeds the baseline
-		reason = "queue"
-		decrease = true
-	} else if overloaded && throughputCorr < 0 {
-		// This condition prevents runaway limit increases during moderate overload where inflight is increasing but throughput is decreasing
-		reason = "thrptCorr"
-		decrease = true
-	} else if overloaded && throughputCorr < .3 && rttCorr > .5 {
-		// This condition prevents runaway limit increases during moderate overload where throughputCorr is weak and rttCorr is high
-		// This indicates overload since latency is increasing with inflight, but throughput is not
-		reason = "thrptCorrRtt"
-		decrease = true
-	} else if overloaded && throughputCV < .2 && rttCorr > .5 {
-		// This condition prevents runaway limit increases during moderate overload where throughputCV low and rttCorr is high
-		// This indicates overload since latency is increasing with inflight, but throughput is not
-		reason = "thrptCV"
-		decrease = true
-	} else if queueSize < alpha {
-		// If our queue size is sufficiently small, increase until we detect overload
-		direction = "increased"
-		reason = "queue"
+	change, reason := computeChange(queueSize, alpha, beta, overloaded, throughputCorr, throughputCV, rttCorr)
+
+	newLimit := l.limit
+	var direction string
+	switch change {
+	case decrease:
+		direction = "decrease"
+		newLimit = l.limit - float64(l.decreaseFunc(int(l.limit)))
+	case increase:
+		direction = "increase"
 		newLimit = l.limit + float64(l.increaseFunc(int(l.limit)))
-	} else {
-		// If queueSize is between alpha and beta, leave the limit unchanged
-		direction = "leaving"
-		reason = "queue"
-	}
-
-	if decrease {
-		// Consider the limit stable if RTT is stable and inflight recently decreased
-		if rttCV < 0.05 && inflightSlope < 0 {
-			direction = "leaving"
-			reason = "stable"
-		} else {
-			direction = "decreased"
-			newLimit = l.limit - float64(l.decreaseFunc(int(l.limit)))
-		}
+	default:
+		direction = "hold"
 	}
 
 	// Decrease the limit if needed, based on the max limit factor
 	if newLimit > float64(inflight)*l.maxLimitFactor {
-		direction = "decreased"
-		reason = "maxed"
+		direction = "decrease"
+		reason = "max"
 		newLimit = l.limit - float64(l.decreaseFunc(int(l.limit)))
 	}
 
 	// Clamp the limit
 	if newLimit > l.maxLimit {
 		if l.limit == l.maxLimit {
-			direction = "leaving"
+			direction = "hold"
 			reason = "max"
 		}
 		newLimit = l.maxLimit
 	} else if newLimit < l.minLimit {
 		if l.limit == l.minLimit {
-			direction = "leaving"
+			direction = "hold"
 			reason = "min"
 		}
 		newLimit = l.minLimit
 	}
 
-	l.logLimit(direction, reason, newLimit, gradient, queueSize, inflight, shortRTT, longRTT, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputCV)
+	l.logLimit(direction, reason, newLimit, gradient, queueSize, inflight, shortRTT, longRTT, rttCorr, throughput, throughputCorr, throughputCV)
 
 	if uint(l.limit) != uint(newLimit) && l.limitChangedListener != nil {
 		l.limitChangedListener(LimitChangedEvent{
@@ -496,7 +452,31 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 	l.limit = newLimit
 }
 
-func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, gradient float64, queueSize, inflight int, shortRTT, longRTT, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputCV float64) {
+func computeChange(queueSize, alpha, beta int, overloaded bool, throughputCorr, throughputCV, rttCorr float64) (change limitChange, reason string) {
+	if queueSize > beta {
+		// This condition handles severe overload where recent RTT significantly exceeds the baseline
+		return decrease, "queue"
+	} else if overloaded && throughputCorr < 0 {
+		// This condition prevents runaway limit increases during moderate overload where inflight is increasing but throughput is decreasing
+		return decrease, "thrptCorr"
+	} else if overloaded && throughputCorr < .3 && rttCorr > .5 {
+		// This condition prevents runaway limit increases during moderate overload where throughputCorr is weak and rttCorr is high
+		// This indicates overload since latency is increasing with inflight, but throughput is not
+		return decrease, "thrptCorrRtt"
+	} else if overloaded && throughputCV < .2 && rttCorr > .5 {
+		// This condition prevents runaway limit increases during moderate overload where throughputCV low and rttCorr is high
+		// This indicates overload since latency is increasing with inflight, but throughput is not
+		return decrease, "thrptCV"
+	} else if queueSize < alpha {
+		// If our queue size is sufficiently small, increase until we detect overload
+		return increase, "queue"
+	} else {
+		// If queueSize is between alpha and beta, leave the limit unchanged
+		return hold, "queue"
+	}
+}
+
+func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, gradient float64, queueSize, inflight int, shortRTT, longRTT, rttCorr, throughput, throughputCorr, throughputCV float64) {
 	if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
 		l.logger.Debug("limit update",
 			"direction", direction,
@@ -509,8 +489,6 @@ func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, g
 			"longRTT", time.Duration(longRTT).Round(time.Microsecond),
 			"thrpt", fmt.Sprintf("%.2f", throughput),
 			"thrptCorr", fmt.Sprintf("%.2f", throughputCorr),
-			"rttCV", fmt.Sprintf("%.3f", rttCV),
-			"inflightSlp", fmt.Sprintf("%.2f", inflightSlope),
 			"thrptCV", fmt.Sprintf("%.2f", throughputCV),
 			"rttCorr", fmt.Sprintf("%.2f", rttCorr))
 	}
