@@ -134,6 +134,10 @@ func NewCorrelationWindow(capacity uint, warmupSamples uint8) *CorrelationWindow
 // Returns a value between -1 and 0 when a correlation between increasing x and decreasing y values is present.
 // Returns 0 values if < warmup or low CV (< .01)
 func (w *CorrelationWindow) Add(x, y float64) (correlation, cvX, cvY float64) {
+	if math.IsInf(x, 0) || math.IsInf(y, 0) {
+		return 0, 0, 0
+	}
+
 	oldX, full := w.XSamples.Add(x)
 	oldY, _ := w.YSamples.Add(y)
 	cvX, meanX, varX := w.XSamples.CalculateCV()
@@ -151,7 +155,7 @@ func (w *CorrelationWindow) Add(x, y float64) (correlation, cvX, cvY float64) {
 		return 0, 0, 0
 	}
 
-	// Ignore weak correlations
+	// Ignore warmups
 	if w.XSamples.size < int(w.warmupSamples) {
 		return 0, 0, 0
 	}

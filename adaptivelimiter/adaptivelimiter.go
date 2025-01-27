@@ -198,7 +198,7 @@ func NewBuilder[R any]() Builder[R] {
 		shortWindowMinSamples:   1,
 		longWindowSize:          60,
 		quantile:                0.9,
-		correlationWindowSize:   20,
+		correlationWindowSize:   50,
 		stabilizationWindowSize: 20,
 
 		minLimit:       1,
@@ -282,6 +282,8 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 		semaphore:             util.NewDynamicSemaphore(int64(c.initialLimit)),
 		limit:                 float64(c.initialLimit),
 		shortRTT:              &util.TD{TDigest: tdigest.NewWithCompression(100)},
+		medianFilter:          util.NewMedianFilter(5),
+		smoothedShortRTT:      util.NewEWMA(5, warmupSamples),
 		longRTT:               util.NewEWMA(c.longWindowSize, warmupSamples),
 		nextUpdateTime:        time.Now(),
 		rttCorrelation:        util.NewCorrelationWindow(c.correlationWindowSize, warmupSamples),
@@ -302,8 +304,6 @@ func (c *config[R]) BuildPrioritized(prioritizer Prioritizer) PriorityLimiter[R]
 	return limiter
 }
 
-const overloadThreshold = 5 * time.Second
-
 type adaptiveLimiter[R any] struct {
 	*config[R]
 
@@ -312,10 +312,12 @@ type adaptiveLimiter[R any] struct {
 	mu        sync.Mutex
 
 	// Guarded by mu
-	limit          float64            // The current concurrency limit
-	shortRTT       *util.TD           // Short term execution times in milliseconds
-	longRTT        util.MovingAverage // Tracks long term average execution time in milliseconds
-	nextUpdateTime time.Time          // Tracks when the limit can next be updated
+	limit            float64  // The current concurrency limit
+	shortRTT         *util.TD // Short term execution times in milliseconds
+	medianFilter     *util.MedianFilter
+	smoothedShortRTT util.MovingAverage
+	longRTT          util.MovingAverage // Tracks long term average execution time in milliseconds
+	nextUpdateTime   time.Time          // Tracks when the limit can next be updated
 
 	throughputCorrelation *util.CorrelationWindow // Tracks the correlation between concurrency and throughput
 	rttCorrelation        *util.CorrelationWindow // Tracks the correlation between concurrency and round trip times (RTT)
@@ -381,7 +383,12 @@ func (l *adaptiveLimiter[R]) record(startTime time.Time, inflight int, dropped b
 	}
 
 	if now.After(l.nextUpdateTime) && l.shortRTT.Size >= l.shortWindowMinSamples {
-		l.updateLimit(l.shortRTT.Quantile(l.quantile), inflight)
+		quantile := l.shortRTT.Quantile(l.quantile)
+		// filteredRTT := quantile
+		filteredRTT := l.medianFilter.Add(quantile)
+		smoothedRTT := l.smoothedShortRTT.Add(filteredRTT)
+		// smoothedRTT := quantile
+		l.updateLimit(smoothedRTT, inflight)
 		minRTT := l.shortRTT.MinRTT
 		l.shortRTT.Reset()
 		minWindowTime := max(minRTT*2, l.shortWindowMinDuration)
@@ -406,6 +413,7 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 	throughput := float64(inflight) / (shortRTT / 1e9) // Convert to RPS
 	throughputCorr, _, throughputCV := l.throughputCorrelation.Add(float64(inflight), throughput)
 	rttCorr, _, _ := l.rttCorrelation.Add(float64(inflight), shortRTT)
+	rttIncrease := (shortRTT - longRTT) / longRTT
 
 	// Calculate the RTT CV and inflight slope
 	// These are used to detect when RTT has stabilized after a recent decrease
@@ -429,7 +437,13 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 		// This condition prevents runaway limit increases during moderate overload where inflight is increasing but throughput is decreasing
 		reason = "thrptCorr"
 		decrease = true
-	} else if overloaded && throughputCV < .15 && rttCorr > .7 {
+		// } else if overloaded && throughputCV < .2 && (rttCorr > .7 || rttIncrease > .15) {
+	} else if overloaded && throughputCorr < .3 && rttCorr > .5 {
+		// This condition prevents runaway limit increases during moderate overload where throughputCorr is positive and stable but rttCorr is high
+		// This indicates overload since latency is increasing with inflight, but throughput is not
+		reason = "thrptCorrRtt"
+		decrease = true
+	} else if overloaded && throughputCV < .2 && rttCorr > .5 {
 		// This condition prevents runaway limit increases during moderate overload where throughputCorr is positive and stable but rttCorr is high
 		// This indicates overload since latency is increasing with inflight, but throughput is not
 		reason = "thrptCV"
@@ -447,13 +461,13 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 
 	if decrease {
 		// Consider the limit stable if RTT is stable and inflight recently decreased
-		if rttCV < 0.05 && inflightSlope < 0 {
-			direction = "leaving"
-			reason = "stable"
-		} else {
-			direction = "decreased"
-			newLimit = l.limit - float64(l.decreaseFunc(int(l.limit)))
-		}
+		// if rttCV < 0.05 && inflightSlope < 0 {
+		// 	direction = "leaving"
+		// 	reason = "stable"
+		// } else {
+		direction = "decreased"
+		newLimit = l.limit - float64(l.decreaseFunc(int(l.limit)))
+		// }
 	}
 
 	// Decrease the limit if needed, based on the max limit factor
@@ -478,7 +492,7 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 		newLimit = l.minLimit
 	}
 
-	l.logLimit(direction, reason, newLimit, gradient, queueSize, inflight, shortRTT, longRTT, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputCV)
+	l.logLimit(direction, reason, newLimit, gradient, queueSize, inflight, shortRTT, longRTT, rttIncrease, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputCV)
 
 	if uint(l.limit) != uint(newLimit) && l.limitChangedListener != nil {
 		l.limitChangedListener(LimitChangedEvent{
@@ -491,7 +505,7 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 	l.limit = newLimit
 }
 
-func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, gradient float64, queueSize, inflight int, shortRTT, longRTT, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputCV float64) {
+func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, gradient float64, queueSize, inflight int, shortRTT, longRTT, rttIncrease, inflightSlope, rttCorr, rttCV, throughput, throughputCorr, throughputCV float64) {
 	if l.logger != nil && l.logger.Enabled(nil, slog.LevelDebug) {
 		l.logger.Debug("limit update",
 			"direction", direction,
@@ -502,10 +516,11 @@ func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, g
 			"inflight", inflight,
 			"shortRTT", time.Duration(shortRTT).Round(time.Microsecond),
 			"longRTT", time.Duration(longRTT).Round(time.Microsecond),
+			"rttIncrease", fmt.Sprintf("%.2f", rttIncrease),
 			"thrpt", fmt.Sprintf("%.2f", throughput),
 			"thrptCorr", fmt.Sprintf("%.2f", throughputCorr),
-			"rttCV", fmt.Sprintf("%.3f", rttCV),
-			"inflightSlp", fmt.Sprintf("%.2f", inflightSlope),
+			//	"rttCV", fmt.Sprintf("%.3f", rttCV),
+			// "inflightSlp", fmt.Sprintf("%.2f", inflightSlope),
 			"thrptCV", fmt.Sprintf("%.2f", throughputCV),
 			"rttCorr", fmt.Sprintf("%.2f", rttCorr))
 	}
