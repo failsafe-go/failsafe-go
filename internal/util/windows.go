@@ -8,16 +8,19 @@ import (
 )
 
 type TD struct {
-	MinRTT time.Duration
-	Size   uint
+	MinRTT      time.Duration
+	MaxInflight int
+	Size        uint
 	*tdigest.TDigest
 }
 
-func (td *TD) Add(rtt time.Duration) {
+func (td *TD) Add(rtt time.Duration, inflight int) {
 	if td.Size == 0 {
 		td.MinRTT = rtt
+		td.MaxInflight = inflight
 	} else {
 		td.MinRTT = min(td.MinRTT, rtt)
+		td.MaxInflight = max(td.MaxInflight, inflight)
 	}
 	td.Size++
 	td.TDigest.Add(float64(rtt), 1)
@@ -26,6 +29,7 @@ func (td *TD) Add(rtt time.Duration) {
 func (td *TD) Reset() {
 	td.TDigest.Reset()
 	td.MinRTT = 0
+	td.MaxInflight = 0
 	td.Size = 0
 }
 

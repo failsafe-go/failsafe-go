@@ -201,8 +201,8 @@ func NewBuilder[R any]() Builder[R] {
 
 		alphaFunc:    util.Log10RootFunction(3),
 		betaFunc:     util.Log10RootFunction(6),
-		increaseFunc: util.Log10RootFunction(0),
-		decreaseFunc: util.Log10RootFunction(0),
+		increaseFunc: util.Log10RootFunction(1),
+		decreaseFunc: util.Log10RootFunction(1),
 	}
 }
 
@@ -274,6 +274,8 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 		nextUpdateTime:        time.Now(),
 		rttCorrelation:        util.NewCorrelationWindow(c.correlationWindowSize, warmupSamples),
 		throughputCorrelation: util.NewCorrelationWindow(c.correlationWindowSize, warmupSamples),
+		medianFilter:          util.NewMedianFilter(5),
+		smoothedShortRTT:      util.NewEWMA(5, warmupSamples),
 	}
 	if c.initialRejectionFactor != 0 && c.maxRejectionFactor != 0 && c.prioritizer == nil {
 		return &blockingLimiter[R]{adaptiveLimiter: limiter}
@@ -304,10 +306,12 @@ type adaptiveLimiter[R any] struct {
 	mu        sync.Mutex
 
 	// Guarded by mu
-	limit          float64            // The current concurrency limit
-	shortRTT       *util.TD           // Short term execution times in milliseconds
-	longRTT        util.MovingAverage // Tracks long term average execution time in milliseconds
-	nextUpdateTime time.Time          // Tracks when the limit can next be updated
+	limit            float64  // The current concurrency limit
+	shortRTT         *util.TD // Short term execution times
+	medianFilter     *util.MedianFilter
+	smoothedShortRTT util.MovingAverage
+	longRTT          util.MovingAverage // Tracks long term average execution time
+	nextUpdateTime   time.Time          // Tracks when the limit can next be updated
 
 	throughputCorrelation *util.CorrelationWindow // Tracks the correlation between concurrency and throughput
 	rttCorrelation        *util.CorrelationWindow // Tracks the correlation between concurrency and round trip times (RTT)
@@ -367,11 +371,14 @@ func (l *adaptiveLimiter[R]) record(startTime time.Time, inflight int, dropped b
 	defer l.mu.Unlock()
 	now := time.Now()
 	if !dropped {
-		l.shortRTT.Add(now.Sub(startTime))
+		l.shortRTT.Add(now.Sub(startTime), inflight)
 	}
 
 	if now.After(l.nextUpdateTime) && l.shortRTT.Size >= l.shortWindowMinSamples {
-		l.updateLimit(l.shortRTT.Quantile(l.quantile), inflight)
+		quantile := l.shortRTT.Quantile(l.quantile)
+		filteredRTT := l.medianFilter.Add(quantile)
+		smoothedRTT := l.smoothedShortRTT.Add(filteredRTT)
+		l.updateLimit(smoothedRTT, l.shortRTT.MaxInflight)
 		minRTT := l.shortRTT.MinRTT
 		l.shortRTT.Reset()
 		minWindowTime := max(minRTT*2, l.shortWindowMinDuration)

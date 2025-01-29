@@ -18,6 +18,9 @@ type Prioritizer interface {
 	// execution times.
 	RejectionRate() float64
 
+	// The priority threshold below which requests will be rejected, based on their priority, from 0 to 499.
+	RejectionThreshold() int
+
 	// Calibrate calibrates the RejectionRate based on recent execution times from registered limiters.
 	Calibrate()
 
@@ -26,7 +29,6 @@ type Prioritizer interface {
 
 	register(limiter limiterStats)
 	recordPriority(priority int)
-	threshold() int
 }
 
 // PrioritizerBuilder builds Prioritizer instances.
@@ -111,6 +113,10 @@ func (r *prioritizer) RejectionRate() float64 {
 	return r.rejectionRate
 }
 
+func (r *prioritizer) RejectionThreshold() int {
+	return int(r.priorityThreshold.Load())
+}
+
 func (r *prioritizer) Calibrate() {
 	r.mu.Lock()
 
@@ -193,8 +199,4 @@ func (r *prioritizer) recordPriority(priority int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.digest.Add(float64(priority), 1.0)
-}
-
-func (r *prioritizer) threshold() int {
-	return int(r.priorityThreshold.Load())
 }

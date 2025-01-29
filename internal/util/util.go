@@ -128,20 +128,20 @@ func Smooth(oldValue, newValue, factor float64) float64 {
 	return oldValue*(1-factor) + newValue*factor
 }
 
-var log10RootLookup []int
+var log10Values []int
 
-func Log10RootFunction(baseline int) func(limit int) int {
+func Log10RootFunction(factor int) func(limit int) int {
 	return func(limit int) int {
-		if limit < len(log10RootLookup) {
-			return baseline + log10RootLookup[limit]
+		if limit < len(log10Values) {
+			return factor * log10Values[limit]
 		}
-		return baseline + int(math.Log10(float64(limit)))
+		return factor * int(math.Log10(float64(limit)))
 	}
 }
 
 func init() {
 	for i := 0; i < 1000; i++ {
-		log10RootLookup = append(log10RootLookup, int(max(1, float64(int(math.Log10(float64(i)))))))
+		log10Values = append(log10Values, int(max(1, float64(int(math.Log10(float64(i)))))))
 	}
 }
 
