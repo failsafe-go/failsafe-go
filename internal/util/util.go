@@ -130,7 +130,7 @@ func Smooth(oldValue, newValue, factor float64) float64 {
 
 var log10Values []int
 
-func Log10RootFunction(factor int) func(limit int) int {
+func Log10Func(factor int) func(limit int) int {
 	return func(limit int) int {
 		if limit < len(log10Values) {
 			return factor * log10Values[limit]

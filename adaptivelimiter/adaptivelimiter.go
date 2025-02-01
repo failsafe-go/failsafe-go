@@ -199,10 +199,10 @@ func NewBuilder[R any]() Builder[R] {
 		initialLimit:   20,
 		maxLimitFactor: 5.0,
 
-		alphaFunc:    util.Log10RootFunction(3),
-		betaFunc:     util.Log10RootFunction(6),
-		increaseFunc: util.Log10RootFunction(1),
-		decreaseFunc: util.Log10RootFunction(1),
+		alphaFunc:    util.Log10Func(3),
+		betaFunc:     util.Log10Func(6),
+		increaseFunc: util.Log10Func(1),
+		decreaseFunc: util.Log10Func(1),
 	}
 }
 
@@ -270,12 +270,12 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 		semaphore:             util.NewDynamicSemaphore(int64(c.initialLimit)),
 		limit:                 float64(c.initialLimit),
 		shortRTT:              &util.TD{TDigest: tdigest.NewWithCompression(100)},
-		longRTT:               util.NewEWMA(c.longWindowSize, warmupSamples),
+		longRTT:               util.NewEwma(c.longWindowSize, warmupSamples),
 		nextUpdateTime:        time.Now(),
 		rttCorrelation:        util.NewCorrelationWindow(c.correlationWindowSize, warmupSamples),
 		throughputCorrelation: util.NewCorrelationWindow(c.correlationWindowSize, warmupSamples),
 		medianFilter:          util.NewMedianFilter(5),
-		smoothedShortRTT:      util.NewEWMA(5, warmupSamples),
+		smoothedShortRTT:      util.NewEwma(5, warmupSamples),
 	}
 	if c.initialRejectionFactor != 0 && c.maxRejectionFactor != 0 && c.prioritizer == nil {
 		return &blockingLimiter[R]{adaptiveLimiter: limiter}
@@ -309,9 +309,9 @@ type adaptiveLimiter[R any] struct {
 	limit            float64  // The current concurrency limit
 	shortRTT         *util.TD // Short term execution times
 	medianFilter     *util.MedianFilter
-	smoothedShortRTT util.MovingAverage
-	longRTT          util.MovingAverage // Tracks long term average execution time
-	nextUpdateTime   time.Time          // Tracks when the limit can next be updated
+	smoothedShortRTT util.Ewma
+	longRTT          util.Ewma // Tracks long term average execution time
+	nextUpdateTime   time.Time // Tracks when the limit can next be updated
 
 	throughputCorrelation *util.CorrelationWindow // Tracks the correlation between concurrency and throughput
 	rttCorrelation        *util.CorrelationWindow // Tracks the correlation between concurrency and round trip times (RTT)

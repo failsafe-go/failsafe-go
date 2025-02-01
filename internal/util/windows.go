@@ -120,16 +120,16 @@ func (r *RollingSum) CalculateSlope() float64 {
 
 type CorrelationWindow struct {
 	warmupSamples uint8
-	XSamples      *RollingSum
-	YSamples      *RollingSum
+	xSamples      *RollingSum
+	ySamples      *RollingSum
 	corrSumXY     float64
 }
 
 func NewCorrelationWindow(capacity uint, warmupSamples uint8) *CorrelationWindow {
 	return &CorrelationWindow{
 		warmupSamples: warmupSamples,
-		XSamples:      NewRollingSum(capacity),
-		YSamples:      NewRollingSum(capacity),
+		xSamples:      NewRollingSum(capacity),
+		ySamples:      NewRollingSum(capacity),
 	}
 }
 
@@ -142,10 +142,10 @@ func (w *CorrelationWindow) Add(x, y float64) (correlation, cvX, cvY float64) {
 		return 0, 0, 0
 	}
 
-	oldX, full := w.XSamples.Add(x)
-	oldY, _ := w.YSamples.Add(y)
-	cvX, meanX, varX := w.XSamples.CalculateCV()
-	cvY, meanY, varY := w.YSamples.CalculateCV()
+	oldX, full := w.xSamples.Add(x)
+	oldY, _ := w.ySamples.Add(y)
+	cvX, meanX, varX := w.xSamples.CalculateCV()
+	cvY, meanY, varY := w.ySamples.CalculateCV()
 
 	if full {
 		// Remove old value
@@ -160,7 +160,7 @@ func (w *CorrelationWindow) Add(x, y float64) (correlation, cvX, cvY float64) {
 	}
 
 	// Ignore warmup
-	if w.XSamples.size < int(w.warmupSamples) {
+	if w.xSamples.size < int(w.warmupSamples) {
 		return 0, 0, 0
 	}
 
@@ -170,7 +170,7 @@ func (w *CorrelationWindow) Add(x, y float64) (correlation, cvX, cvY float64) {
 		return 0, cvX, cvY
 	}
 
-	covariance := (w.corrSumXY / float64(w.XSamples.size)) - (meanX * meanY)
+	covariance := (w.corrSumXY / float64(w.xSamples.size)) - (meanX * meanY)
 	correlation = covariance / (math.Sqrt(varX) * math.Sqrt(varY))
 
 	return correlation, cvX, cvY
