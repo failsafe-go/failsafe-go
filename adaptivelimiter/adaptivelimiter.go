@@ -199,10 +199,10 @@ func NewBuilder[R any]() Builder[R] {
 		initialLimit:   20,
 		maxLimitFactor: 5.0,
 
-		alphaFunc:    util.Log10RootFunction(3),
-		betaFunc:     util.Log10RootFunction(6),
-		increaseFunc: util.Log10RootFunction(0),
-		decreaseFunc: util.Log10RootFunction(0),
+		alphaFunc:    util.Log10Func(3),
+		betaFunc:     util.Log10Func(6),
+		increaseFunc: util.Log10Func(1),
+		decreaseFunc: util.Log10Func(1),
 	}
 }
 
@@ -269,11 +269,13 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 		config:                c,
 		semaphore:             util.NewDynamicSemaphore(int64(c.initialLimit)),
 		limit:                 float64(c.initialLimit),
-		shortRTT:              &util.TD{TDigest: tdigest.NewWithCompression(100)},
-		longRTT:               util.NewEWMA(c.longWindowSize, warmupSamples),
+		shortRTT:              &util.TDigest{TDigest: tdigest.NewWithCompression(100)},
+		longRTT:               util.NewEwma(c.longWindowSize, warmupSamples),
 		nextUpdateTime:        time.Now(),
 		rttCorrelation:        util.NewCorrelationWindow(c.correlationWindowSize, warmupSamples),
 		throughputCorrelation: util.NewCorrelationWindow(c.correlationWindowSize, warmupSamples),
+		medianFilter:          util.NewMedianFilter(5),
+		smoothedShortRTT:      util.NewEwma(5, warmupSamples),
 	}
 	if c.initialRejectionFactor != 0 && c.maxRejectionFactor != 0 && c.prioritizer == nil {
 		return &blockingLimiter[R]{adaptiveLimiter: limiter}
@@ -304,10 +306,12 @@ type adaptiveLimiter[R any] struct {
 	mu        sync.Mutex
 
 	// Guarded by mu
-	limit          float64            // The current concurrency limit
-	shortRTT       *util.TD           // Short term execution times in milliseconds
-	longRTT        util.MovingAverage // Tracks long term average execution time in milliseconds
-	nextUpdateTime time.Time          // Tracks when the limit can next be updated
+	limit            float64       // The current concurrency limit
+	shortRTT         *util.TDigest // Short term execution times
+	medianFilter     *util.MedianFilter
+	smoothedShortRTT util.Ewma
+	longRTT          util.Ewma // Tracks long term average execution time
+	nextUpdateTime   time.Time // Tracks when the limit can next be updated
 
 	throughputCorrelation *util.CorrelationWindow // Tracks the correlation between concurrency and throughput
 	rttCorrelation        *util.CorrelationWindow // Tracks the correlation between concurrency and round trip times (RTT)
@@ -362,16 +366,18 @@ func (l *adaptiveLimiter[R]) RejectionRate() float64 {
 }
 
 // Records the duration of a completed execution, updating the concurrency limit if the short shortRTT window is full.
-func (l *adaptiveLimiter[R]) record(startTime time.Time, inflight int, dropped bool) {
+func (l *adaptiveLimiter[R]) record(now time.Time, rtt time.Duration, inflight int, dropped bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	now := time.Now()
 	if !dropped {
-		l.shortRTT.Add(now.Sub(startTime))
+		l.shortRTT.Add(rtt, inflight)
 	}
 
 	if now.After(l.nextUpdateTime) && l.shortRTT.Size >= l.shortWindowMinSamples {
-		l.updateLimit(l.shortRTT.Quantile(l.quantile), inflight)
+		quantile := l.shortRTT.Quantile(l.quantile)
+		filteredRTT := l.medianFilter.Add(quantile)
+		smoothedRTT := l.smoothedShortRTT.Add(filteredRTT)
+		l.updateLimit(smoothedRTT, l.shortRTT.MaxInflight)
 		minRTT := l.shortRTT.MinRTT
 		l.shortRTT.Reset()
 		minWindowTime := max(minRTT*2, l.shortWindowMinDuration)
@@ -389,7 +395,7 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 	// This is the primary signal that we threshold off of to detect overload
 	longRTT := l.longRTT.Add(shortRTT)
 	gradient := longRTT / shortRTT
-	queueSize := int(math.Ceil(float64(inflight) * (1 - gradient)))
+	queueSize := int(math.Ceil(l.limit * (1 - gradient)))
 
 	// Calculate throughput correlation, throughput CV, and RTT correlation
 	// These are the secondary signals that we threshold off of to detect overload
@@ -510,9 +516,11 @@ type recordingPermit[R any] struct {
 }
 
 func (p *recordingPermit[R]) Record() {
-	p.limiter.record(p.startTime, p.currentInflight, false)
+	now := time.Now()
+	p.limiter.record(now, now.Sub(p.startTime), p.currentInflight, false)
 }
 
 func (p *recordingPermit[R]) Drop() {
-	p.limiter.record(p.startTime, p.currentInflight, true)
+	now := time.Now()
+	p.limiter.record(now, now.Sub(p.startTime), p.currentInflight, true)
 }

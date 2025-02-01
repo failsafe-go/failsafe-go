@@ -40,7 +40,7 @@ func TestEWMA_AddAndValue(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ma := NewEWMA(tc.windowSize, tc.warmupSamples)
+			ma := NewEwma(tc.windowSize, tc.warmupSamples)
 			for _, v := range tc.values {
 				ma.Add(v)
 			}
@@ -50,14 +50,14 @@ func TestEWMA_AddAndValue(t *testing.T) {
 }
 
 func TestEWMA_SetAndValue(t *testing.T) {
-	ma := NewEWMA(5, 3)
+	ma := NewEwma(5, 3)
 	ma.Set(50.0)
 
 	assert.Equal(t, 50.0, math.Round(ma.Value()))
 }
 
 func TestEWMA_AddAfterSet(t *testing.T) {
-	ma := NewEWMA(5, 1)
+	ma := NewEwma(5, 1)
 	ma.Set(50.0)
 	result := ma.Add(100.0)
 

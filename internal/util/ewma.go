@@ -1,7 +1,7 @@
 package util
 
-// MovingAverage is not concurrency safe.
-type MovingAverage interface {
+// Ewma is not concurrency safe.
+type Ewma interface {
 	// Add adds a value to the series and updates the moving average.
 	Add(float64) float64
 
@@ -12,10 +12,10 @@ type MovingAverage interface {
 	Set(float64)
 }
 
-// NewEWMA creates a new exponentially weighted moving average for the windowSize and warmupSamples.
-// windowSize controls how many samples are effectively stored in the EWMA before they decay out.
+// NewEwma creates a new exponentially weighted moving average for the windowSize and warmupSamples.
+// windowSize controls how many samples are effectively stored in the Ewma before they decay out.
 // warmupSamples controls how many samples must be recorded before decay begins.
-func NewEWMA(windowSize uint, warmupSamples uint8) MovingAverage {
+func NewEwma(windowSize uint, warmupSamples uint8) Ewma {
 	return &ewma{
 		warmupSamples:   warmupSamples,
 		smoothingFactor: 2 / (float64(windowSize) + 1),
@@ -30,7 +30,7 @@ type ewma struct {
 	sum             float64
 }
 
-// Add decays the EWMA value via (oldValue * (1 - smoothingFactor)) + (newValue * smoothingFactor)
+// Add decays the Ewma value via (oldValue * (1 - smoothingFactor)) + (newValue * smoothingFactor)
 func (e *ewma) Add(newValue float64) float64 {
 	switch {
 	case e.count < e.warmupSamples:

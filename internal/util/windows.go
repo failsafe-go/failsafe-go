@@ -7,25 +7,29 @@ import (
 	"github.com/influxdata/tdigest"
 )
 
-type TD struct {
-	MinRTT time.Duration
-	Size   uint
+type TDigest struct {
+	MinRTT      time.Duration
+	MaxInflight int
+	Size        uint
 	*tdigest.TDigest
 }
 
-func (td *TD) Add(rtt time.Duration) {
+func (td *TDigest) Add(rtt time.Duration, inflight int) {
 	if td.Size == 0 {
 		td.MinRTT = rtt
+		td.MaxInflight = inflight
 	} else {
 		td.MinRTT = min(td.MinRTT, rtt)
+		td.MaxInflight = max(td.MaxInflight, inflight)
 	}
 	td.Size++
 	td.TDigest.Add(float64(rtt), 1)
 }
 
-func (td *TD) Reset() {
+func (td *TDigest) Reset() {
 	td.TDigest.Reset()
 	td.MinRTT = 0
+	td.MaxInflight = 0
 	td.Size = 0
 }
 
@@ -116,16 +120,16 @@ func (r *RollingSum) CalculateSlope() float64 {
 
 type CorrelationWindow struct {
 	warmupSamples uint8
-	XSamples      *RollingSum
-	YSamples      *RollingSum
+	xSamples      *RollingSum
+	ySamples      *RollingSum
 	corrSumXY     float64
 }
 
 func NewCorrelationWindow(capacity uint, warmupSamples uint8) *CorrelationWindow {
 	return &CorrelationWindow{
 		warmupSamples: warmupSamples,
-		XSamples:      NewRollingSum(capacity),
-		YSamples:      NewRollingSum(capacity),
+		xSamples:      NewRollingSum(capacity),
+		ySamples:      NewRollingSum(capacity),
 	}
 }
 
@@ -138,10 +142,10 @@ func (w *CorrelationWindow) Add(x, y float64) (correlation, cvX, cvY float64) {
 		return 0, 0, 0
 	}
 
-	oldX, full := w.XSamples.Add(x)
-	oldY, _ := w.YSamples.Add(y)
-	cvX, meanX, varX := w.XSamples.CalculateCV()
-	cvY, meanY, varY := w.YSamples.CalculateCV()
+	oldX, full := w.xSamples.Add(x)
+	oldY, _ := w.ySamples.Add(y)
+	cvX, meanX, varX := w.xSamples.CalculateCV()
+	cvY, meanY, varY := w.ySamples.CalculateCV()
 
 	if full {
 		// Remove old value
@@ -156,7 +160,7 @@ func (w *CorrelationWindow) Add(x, y float64) (correlation, cvX, cvY float64) {
 	}
 
 	// Ignore warmup
-	if w.XSamples.size < int(w.warmupSamples) {
+	if w.xSamples.size < int(w.warmupSamples) {
 		return 0, 0, 0
 	}
 
@@ -166,7 +170,7 @@ func (w *CorrelationWindow) Add(x, y float64) (correlation, cvX, cvY float64) {
 		return 0, cvX, cvY
 	}
 
-	covariance := (w.corrSumXY / float64(w.XSamples.size)) - (meanX * meanY)
+	covariance := (w.corrSumXY / float64(w.xSamples.size)) - (meanX * meanY)
 	correlation = covariance / (math.Sqrt(varX) * math.Sqrt(varY))
 
 	return correlation, cvX, cvY
