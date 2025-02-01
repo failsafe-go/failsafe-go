@@ -68,7 +68,7 @@ type priorityLimiter[R any] struct {
 func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context, priority Priority) (Permit, error) {
 	// Generate a granular priority for the request and compare it to the prioritizer threshold
 	granularPriority := randomGranularPriority(priority)
-	if granularPriority < l.prioritizer.threshold() {
+	if granularPriority < l.prioritizer.RejectionThreshold() {
 		return nil, ErrExceeded
 	}
 
@@ -81,7 +81,7 @@ func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context, priority Priorit
 }
 
 func (l *priorityLimiter[R]) CanAcquirePermit(priority Priority) bool {
-	return randomGranularPriority(priority) >= l.prioritizer.threshold()
+	return randomGranularPriority(priority) >= l.prioritizer.RejectionThreshold()
 }
 
 func (l *priorityLimiter[R]) RejectionRate() float64 {

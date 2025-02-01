@@ -26,7 +26,7 @@ func (l *blockingLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) 
 }
 
 func (l *blockingLimiter[R]) CanAcquirePermit() bool {
-	if !l.semaphore.IsFull() {
+	if l.adaptiveLimiter.CanAcquirePermit() {
 		return true
 	}
 

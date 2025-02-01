@@ -18,6 +18,9 @@ type Prioritizer interface {
 	// execution times.
 	RejectionRate() float64
 
+	// The priority threshold below which requests will be rejected, based on their priority, from 0 to 499.
+	RejectionThreshold() int
+
 	// Calibrate calibrates the RejectionRate based on recent execution times from registered limiters.
 	Calibrate()
 
@@ -26,7 +29,6 @@ type Prioritizer interface {
 
 	register(limiter limiterStats)
 	recordPriority(priority int)
-	threshold() int
 }
 
 // PrioritizerBuilder builds Prioritizer instances.
@@ -111,6 +113,10 @@ func (r *prioritizer) RejectionRate() float64 {
 	return r.rejectionRate
 }
 
+func (r *prioritizer) RejectionThreshold() int {
+	return int(r.priorityThreshold.Load())
+}
+
 func (r *prioritizer) Calibrate() {
 	r.mu.Lock()
 
@@ -128,7 +134,6 @@ func (r *prioritizer) Calibrate() {
 	}
 
 	// Update rejection rate and priority threshold
-	errorValue := computeError(totalIn, totalOut, totalFreeInflight, totalQueued, totalMaxQueue)
 	newRate := computeRejectionRate(totalQueued, totalRejectionThresh, totalMaxQueue)
 	r.rejectionRate = newRate
 	var newThresh int32
@@ -145,9 +150,7 @@ func (r *prioritizer) Calibrate() {
 			"in", totalIn,
 			"out", totalOut,
 			"limit", totalLimit,
-			"blocked", totalQueued,
-			"error", fmt.Sprintf("%.2f", errorValue),
-		)
+			"blocked", totalQueued)
 	}
 
 	if oldThresh != newThresh && r.listener != nil {
@@ -156,14 +159,6 @@ func (r *prioritizer) Calibrate() {
 			NewPriorityThreshold: uint(newThresh),
 		})
 	}
-}
-
-// Computes an error for the queue stats. A positive error indicates overloaded. A negative error indicates underloaded.
-func computeError(in, out, freeInflight int, queueSize, maxQueueSize int) float64 {
-	load := float64(queueSize + (in - out))
-	capacity := float64(maxQueueSize + freeInflight)
-	excessLoad := load - capacity
-	return excessLoad / capacity
 }
 
 func (r *prioritizer) ScheduleCalibrations(ctx context.Context, interval time.Duration) context.CancelFunc {
@@ -193,8 +188,4 @@ func (r *prioritizer) recordPriority(priority int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.digest.Add(float64(priority), 1.0)
-}
-
-func (r *prioritizer) threshold() int {
-	return int(r.priorityThreshold.Load())
 }

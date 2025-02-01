@@ -1,54 +1,51 @@
 package adaptivelimiter
 
 import (
+	"context"
 	"testing"
+	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestComputeError(t *testing.T) {
-	testCases := []struct {
-		name          string
-		in            int
-		out           int
-		freeInflight  int
-		queueSize     int
-		maxQueueSize  int
-		expectedError float64
-	}{
-		{
-			name:          "No excess load",
-			in:            5,
-			out:           5,
-			freeInflight:  10,
-			queueSize:     0,
-			maxQueueSize:  10,
-			expectedError: -1.0,
-		},
-		{
-			name:          "Positive excess load",
-			in:            15,
-			out:           5,
-			freeInflight:  5,
-			queueSize:     5,
-			maxQueueSize:  10,
-			expectedError: 0.0,
-		},
-		{
-			name:          "Negative excess load",
-			in:            3,
-			out:           7,
-			freeInflight:  15,
-			queueSize:     2,
-			maxQueueSize:  20,
-			expectedError: -1.057,
-		},
+// Tests that a rejection rate is computed as expected based on queue in/out stats.
+func TestPrioritizer_Calibrate(t *testing.T) {
+	p := NewPrioritizer().(*prioritizer)
+	limiter := NewBuilder[any]().
+		WithLimits(1, 10, 1).
+		WithShortWindow(time.Second, time.Second, 10).
+		WithRejectionFactors(2, 4).
+		BuildPrioritized(p).(*priorityLimiter[any])
+
+	acquireBlocking := func() {
+		go limiter.AcquirePermit(context.Background(), PriorityLow)
+	}
+	assertBlocked := func(blocked int) {
+		require.Eventually(t, func() bool {
+			return limiter.Blocked() == blocked
+		}, 300*time.Millisecond, 10*time.Millisecond)
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result := computeError(tc.in, tc.out, tc.freeInflight, tc.queueSize, tc.maxQueueSize)
-			assert.InDelta(t, tc.expectedError, result, 1e-3)
-		})
-	}
+	permit, err := limiter.AcquirePermit(context.Background(), PriorityLow)
+	require.NoError(t, err)
+	require.Equal(t, 1, int(limiter.inCount.Load()))
+	require.Equal(t, 1, int(limiter.outCount.Load()))
+	acquireBlocking()
+	assertBlocked(1)
+	acquireBlocking()
+	assertBlocked(2)
+	acquireBlocking()
+	assertBlocked(3)
+	acquireBlocking()
+	assertBlocked(4)
+	permit.Record()
+	require.Equal(t, 5, int(limiter.inCount.Load()))
+	// Wait for blocked permit to be acquired
+	require.Eventually(t, func() bool {
+		return limiter.outCount.Load() == 2
+	}, 300*time.Millisecond, 10*time.Millisecond)
+
+	p.Calibrate()
+	require.Equal(t, .5, limiter.RejectionRate())
+	require.True(t, p.priorityThreshold.Load() > 0 && p.priorityThreshold.Load() < 200, "low priority execution should be rejected")
 }
