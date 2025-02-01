@@ -28,7 +28,8 @@ func TestIssue65(t *testing.T) {
 		resp, err := client.Get(server.URL)
 		assert.NoError(t, err)
 		defer resp.Body.Close()
-		_, err = io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		assert.Equal(t, "foo", string(body))
 		assert.NoError(t, err)
 	}
 

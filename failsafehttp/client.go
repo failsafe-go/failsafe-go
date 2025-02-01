@@ -81,8 +81,9 @@ func doRequest(request *http.Request, executor failsafe.Executor[*http.Response]
 		// Merge the latest execution context into the request for each attempt
 		ctxInner, cancelInner := util.MergeContexts(request.Context(), exec.Context())
 		defer cancelInner(nil)
+		req := request
 		if ctxInner != request.Context() {
-			request = request.WithContext(ctxInner)
+			req = request.WithContext(ctxInner)
 		}
 
 		// Get new body for each attempt
@@ -91,14 +92,14 @@ func doRequest(request *http.Request, executor failsafe.Executor[*http.Response]
 				return nil, err
 			} else {
 				if c, ok := body.(io.ReadCloser); ok {
-					request.Body = c
+					req.Body = c
 				} else {
-					request.Body = io.NopCloser(body)
+					req.Body = io.NopCloser(body)
 				}
 			}
 		}
 
-		return reqFn(request)
+		return reqFn(req)
 	})
 }
 
