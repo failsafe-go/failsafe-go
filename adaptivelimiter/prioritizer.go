@@ -109,7 +109,7 @@ func (r *prioritizer) register(limiter limiterStats) {
 
 func (r *prioritizer) RejectionRate() float64 {
 	r.mu.Lock()
-	r.mu.Unlock()
+	defer r.mu.Unlock()
 	return r.rejectionRate
 }
 

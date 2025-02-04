@@ -3,7 +3,6 @@ package adaptivelimiter
 import (
 	"context"
 	"math/rand"
-	"sync"
 	"sync/atomic"
 
 	"github.com/failsafe-go/failsafe-go"
@@ -62,7 +61,6 @@ type priorityLimiter[R any] struct {
 
 	inCount  atomic.Uint32 // Requests received in current calibration period
 	outCount atomic.Uint32 // Requests permitted in current calibration period
-	mu       sync.Mutex
 }
 
 func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context, priority Priority) (Permit, error) {
