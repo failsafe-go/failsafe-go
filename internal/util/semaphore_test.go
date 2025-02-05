@@ -74,6 +74,54 @@ func checkAcquire(t *testing.T, sem *DynamicSemaphore, wantAcquire bool) {
 	}
 }
 
+func TestDynamicSemaphore_SetSize(t *testing.T) {
+	t.Parallel()
+
+	t.Run("should wake waiter when setting larger size", func(t *testing.T) {
+		s := NewDynamicSemaphore(1)
+		require.NoError(t, s.Acquire(context.Background()))
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			_ = s.Acquire(context.Background())
+			wg.Done()
+		}()
+		go func() {
+			_ = s.Acquire(context.Background())
+			wg.Done()
+		}()
+
+		assert.Eventually(t, func() bool {
+			return s.Waiters() == 2
+		}, 100*time.Millisecond, 10*time.Millisecond)
+		require.Equal(t, 2, s.Waiters())
+
+		// Increase size which should release waiters
+		s.SetSize(3)
+		wg.Wait()
+		assert.Equal(t, 0, s.Waiters())
+	})
+
+	t.Run("should block acquires when setting smaller size", func(t *testing.T) {
+		s := NewDynamicSemaphore(3)
+		for i := 0; i < 3; i++ {
+			require.NoError(t, s.Acquire(context.Background()))
+		}
+
+		s.SetSize(1)
+		for i := 0; i < 3; i++ {
+			s.Release()
+		}
+
+		require.NoError(t, s.Acquire(context.Background()))
+
+		// Should timeout while acquiring permit
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		require.Error(t, s.Acquire(ctx))
+	})
+}
+
 func TestDynamicSemaphore_Acquire(t *testing.T) {
 	t.Parallel()
 
@@ -230,7 +278,7 @@ func TestDynamicSemaphore_BlockedSince(t *testing.T) {
 		assert.False(t, isOverloaded(s, overloadDuration))
 	})
 
-	t.Run("should Reset overload timeout", func(t *testing.T) {
+	t.Run("should reset overload timeout", func(t *testing.T) {
 		s := NewDynamicSemaphore(1)
 
 		err := s.Acquire(context.Background())
@@ -260,22 +308,20 @@ func TestDynamicSemaphore_BlockedSince(t *testing.T) {
 }
 
 func TestDynamicSemaphore_Waiters(t *testing.T) {
-	overloadDuration := 100 * time.Millisecond
 	s := NewDynamicSemaphore(1)
 	err := s.Acquire(context.Background())
 	require.NoError(t, err)
 
-	// When
 	go func() {
-		s.Acquire(context.Background())
+		_ = s.Acquire(context.Background())
 	}()
 	go func() {
-		s.Acquire(context.Background())
+		_ = s.Acquire(context.Background())
 	}()
 
-	time.Sleep(overloadDuration)
-	assert.True(t, time.Since(s.blockedSince) > overloadDuration)
-	assert.Equal(t, 2, s.Waiters())
+	assert.Eventually(t, func() bool {
+		return s.Waiters() == 2
+	}, 100*time.Millisecond, 10*time.Millisecond)
 	s.Release()
 	assert.Equal(t, 1, s.Waiters())
 	s.Release()
