@@ -1,7 +1,7 @@
 package util
 
 import (
-	"sort"
+	"slices"
 )
 
 type MedianFilter struct {
@@ -28,9 +28,7 @@ func (f *MedianFilter) Add(value float64) float64 {
 	}
 
 	copy(f.sorted, f.values)
-	sort.Slice(f.sorted, func(i, j int) bool {
-		return f.sorted[i] < f.sorted[j]
-	})
+	slices.Sort(f.sorted)
 	return f.Median()
 }
 
