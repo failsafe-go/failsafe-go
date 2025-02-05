@@ -328,7 +328,7 @@ func (l *adaptiveLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) 
 	return &recordingPermit[R]{
 		limiter:         l,
 		startTime:       time.Now(),
-		currentInflight: l.semaphore.Inflight(),
+		currentInflight: l.semaphore.Used(),
 	}, nil
 }
 
@@ -339,7 +339,7 @@ func (l *adaptiveLimiter[R]) TryAcquirePermit() (Permit, bool) {
 	return &recordingPermit[R]{
 		limiter:         l,
 		startTime:       time.Now(),
-		currentInflight: l.semaphore.Inflight(),
+		currentInflight: l.semaphore.Used(),
 	}, true
 }
 
@@ -354,7 +354,7 @@ func (l *adaptiveLimiter[R]) Limit() int {
 }
 
 func (l *adaptiveLimiter[R]) Inflight() int {
-	return l.semaphore.Inflight()
+	return l.semaphore.Used()
 }
 
 func (l *adaptiveLimiter[R]) Blocked() int {
