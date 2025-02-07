@@ -189,7 +189,7 @@ func NewBuilder[R any]() Builder[R] {
 	return &config[R]{
 		shortWindowMinDuration: time.Second,
 		shortWindowMaxDuration: time.Second,
-		shortWindowMinSamples:  1,
+		shortWindowMinSamples:  50,
 		longWindowSize:         60,
 		quantile:               0.9,
 		correlationWindowSize:  50,
