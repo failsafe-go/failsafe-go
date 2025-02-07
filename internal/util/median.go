@@ -4,6 +4,9 @@ import (
 	"slices"
 )
 
+// MedianFilter provides the median value over a rolling window.
+//
+// This type is not concurrency safe.
 type MedianFilter struct {
 	values []float64
 	sorted []float64
@@ -18,6 +21,7 @@ func NewMedianFilter(size int) *MedianFilter {
 	}
 }
 
+// Add adds a value to the filter, sorts the values, and returns the current median.
 func (f *MedianFilter) Add(value float64) float64 {
 	f.values[f.index] = value
 	f.index = (f.index + 1) % len(f.values)
@@ -32,6 +36,7 @@ func (f *MedianFilter) Add(value float64) float64 {
 	return f.Median()
 }
 
+// Median returns the current median, else 0 if the filter isn't full yet.
 func (f *MedianFilter) Median() float64 {
 	if f.size < len(f.values)-1 {
 		return 0
