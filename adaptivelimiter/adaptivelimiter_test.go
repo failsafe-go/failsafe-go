@@ -83,6 +83,7 @@ func TestAdaptiveLimiter_record(t *testing.T) {
 		limiter := NewBuilder[any]().Build().(*adaptiveLimiter[any])
 		now := time.UnixMilli(0)
 		limiter.nextUpdateTime = now
+		limiter.WithShortWindow(time.Second, time.Second, 1)
 		for i := 0; i < warmupSamples; i++ {
 			limiter.longRTT.Add(float64(time.Second))
 		}
