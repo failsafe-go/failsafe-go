@@ -87,7 +87,7 @@ func (c *prioritizerConfig) Build() Prioritizer {
 
 // Define limiter operations that don't depend on a result type.
 type limiterStats interface {
-	getAndResetStats() (in, out, limit, inflight, queued, rejectionThreshold, maxQueue int)
+	getAndResetStats() (limit, inflight, queued, rejectionThreshold, maxQueue int)
 }
 
 type prioritizer struct {
@@ -121,11 +121,9 @@ func (r *prioritizer) Calibrate() {
 	r.mu.Lock()
 
 	// Compute queue stats across all registered limiters
-	var totalIn, totalOut, totalLimit, totalQueued, totalFreeInflight, totalRejectionThresh, totalMaxQueue int
+	var totalLimit, totalQueued, totalFreeInflight, totalRejectionThresh, totalMaxQueue int
 	for _, limiter := range r.limiters {
-		in, out, limit, inflight, queued, rejectionThresh, maxQueue := limiter.getAndResetStats()
-		totalIn += in
-		totalOut += out
+		limit, inflight, queued, rejectionThresh, maxQueue := limiter.getAndResetStats()
 		totalFreeInflight += limit - inflight
 		totalLimit += limit
 		totalQueued += queued
@@ -145,12 +143,10 @@ func (r *prioritizer) Calibrate() {
 
 	if r.logger != nil && r.logger.Enabled(nil, slog.LevelDebug) {
 		r.logger.Debug("prioritizer calibration",
-			"newRate", fmt.Sprintf("%.2f", newRate),
-			"newThresh", newThresh,
-			"in", totalIn,
-			"out", totalOut,
+			"rejectionRate", fmt.Sprintf("%.2f", newRate),
+			"priorityThresh", newThresh,
 			"limit", totalLimit,
-			"blocked", totalQueued)
+			"queued", totalQueued)
 	}
 
 	if oldThresh != newThresh && r.listener != nil {

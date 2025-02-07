@@ -3,7 +3,6 @@ package adaptivelimiter
 import (
 	"context"
 	"math/rand"
-	"sync/atomic"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/policy"
@@ -58,9 +57,6 @@ type PriorityLimiter[R any] interface {
 
 type priorityLimiter[R any] struct {
 	*adaptiveLimiter[R]
-
-	inCount  atomic.Uint32 // Requests received in current calibration period
-	outCount atomic.Uint32 // Requests permitted in current calibration period
 }
 
 func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context, priority Priority) (Permit, error) {
@@ -69,10 +65,6 @@ func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context, priority Priorit
 	if granularPriority < l.prioritizer.RejectionThreshold() {
 		return nil, ErrExceeded
 	}
-
-	// Maintain queue stats
-	l.inCount.Add(1)
-	defer l.outCount.Add(1)
 
 	l.prioritizer.recordPriority(granularPriority)
 	return l.adaptiveLimiter.AcquirePermit(ctx)
@@ -86,13 +78,11 @@ func (l *priorityLimiter[R]) RejectionRate() float64 {
 	return l.prioritizer.RejectionRate()
 }
 
-func (l *priorityLimiter[R]) getAndResetStats() (in, out, limit, inflight, queued, rejectionThreshold, maxQueue int) {
-	in = int(l.inCount.Swap(0))
-	out = int(l.outCount.Swap(0))
+func (l *priorityLimiter[R]) getAndResetStats() (limit, inflight, queued, rejectionThreshold, maxQueue int) {
 	limit = l.Limit()
 	rejectionThreshold = int(float64(limit) * l.initialRejectionFactor)
 	maxQueue = int(float64(limit) * l.maxRejectionFactor)
-	return in, out, limit, l.Inflight(), l.Blocked(), rejectionThreshold, maxQueue
+	return limit, l.Inflight(), l.Blocked(), rejectionThreshold, maxQueue
 }
 
 func (l *priorityLimiter[R]) ToExecutor(_ R) any {
