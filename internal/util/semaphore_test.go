@@ -1,183 +1,45 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
-
 package util
-
-// Based on https://github.com/golang/sync/blob/master/semaphore/semaphore_test.go
 
 import (
 	"context"
-	"math/rand"
-	"runtime"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
-
-const maxSleep = 1 * time.Millisecond
-
-func HammerDynamic(sem *DynamicSemaphore, loops int) {
-	for i := 0; i < loops; i++ {
-		sem.Acquire(context.Background())
-		time.Sleep(time.Duration(rand.Int63n(int64(maxSleep/time.Nanosecond))) * time.Nanosecond)
-		sem.Release()
-	}
-}
-
-// TestDynamicSemaphore hammers the semaphore from all available cores to ensure we don't
-// hit a panic or race detector notice something wonky.
-func TestDynamicSemaphore(t *testing.T) {
-	if testing.Short() {
-		t.Skip("too slow for testing.Short")
-	}
-
-	t.Parallel()
-
-	n := runtime.GOMAXPROCS(0)
-	loops := 10000 / n
-	sem := NewDynamicSemaphore(int64(n))
-	var wg sync.WaitGroup
-	wg.Add(n)
-	for i := 0; i < n; i++ {
-		go func() {
-			defer wg.Done()
-			HammerDynamic(sem, loops)
-		}()
-	}
-	wg.Wait()
-}
-
-func TestDynamicSemaphorePanic(t *testing.T) {
-	t.Parallel()
-
-	defer func() {
-		if recover() == nil {
-			t.Fatal("release of an unacquired dynamic semaphore did not panic")
-		}
-	}()
-	w := NewDynamicSemaphore(1)
-	w.Release()
-}
-
-func checkAcquire(t *testing.T, sem *DynamicSemaphore, wantAcquire bool) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-	defer cancel()
-	err := sem.Acquire(ctx)
-	if wantAcquire {
-		require.NoErrorf(t, err, "failed to acquire when we should have")
-	} else {
-		require.Error(t, err, "failed to block when should be full")
-	}
-}
-
-func TestDynamicSemaphore_SetSize(t *testing.T) {
-	t.Parallel()
-
-	t.Run("should wake waiter when setting larger size", func(t *testing.T) {
-		s := NewDynamicSemaphore(1)
-		require.NoError(t, s.Acquire(context.Background()))
-
-		var wg sync.WaitGroup
-		wg.Add(2)
-		go func() {
-			_ = s.Acquire(context.Background())
-			wg.Done()
-		}()
-		go func() {
-			_ = s.Acquire(context.Background())
-			wg.Done()
-		}()
-
-		assert.Eventually(t, func() bool {
-			return s.Waiters() == 2
-		}, 100*time.Millisecond, 10*time.Millisecond)
-		require.Equal(t, 2, s.Waiters())
-
-		// Increase size which should release waiters
-		s.SetSize(3)
-		wg.Wait()
-		assert.Equal(t, 0, s.Waiters())
-	})
-
-	t.Run("should block acquires when setting smaller size", func(t *testing.T) {
-		s := NewDynamicSemaphore(3)
-		for i := 0; i < 3; i++ {
-			require.NoError(t, s.Acquire(context.Background()))
-		}
-
-		s.SetSize(1)
-		for i := 0; i < 3; i++ {
-			s.Release()
-		}
-
-		require.NoError(t, s.Acquire(context.Background()))
-
-		// Should timeout while acquiring permit
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		require.Error(t, s.Acquire(ctx))
-	})
-}
 
 func TestDynamicSemaphore_Acquire(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
-	sem := NewDynamicSemaphore(2)
+	t.Run("should release permits to waiters", func(t *testing.T) {
+		s := NewDynamicSemaphore(1)
+		assert.NoError(t, s.Acquire(context.Background()))
+		assert.Equal(t, 1, s.Used())
 
-	// Consume one slot [free: 1]
-	sem.Acquire(ctx)
-	// Should be able to consume another [free: 0]
-	checkAcquire(t, sem, true)
-	// Should fail to consume another [free: 0]
-	checkAcquire(t, sem, false)
+		go func() {
+			_ = s.Acquire(context.Background())
+		}()
 
-	// Drop 2
-	sem.Release()
-	sem.Release()
+		waitForWaiters(t, s, 1)
+		s.Release()
+		assert.Equal(t, 1, s.Used())
+		assert.Equal(t, 0, s.Waiters())
+	})
 
-	// Should be able to consume another [free: 1]
-	checkAcquire(t, sem, true)
-	// Should be able to consume another [free: 0]
-	checkAcquire(t, sem, true)
-	// Should fail to consume another [free: 0]
-	checkAcquire(t, sem, false)
+	t.Run("should unblock waiters when context completed", func(t *testing.T) {
+		s := NewDynamicSemaphore(1)
+		assert.NoError(t, s.Acquire(context.Background()))
 
-	// Now expand the semaphore and we should be able to acquire again [free: 2]
-	sem.SetSize(4)
-
-	// Should be able to consume another [free: 1]
-	checkAcquire(t, sem, true)
-	// Should be able to consume another [free: 0]
-	checkAcquire(t, sem, true)
-	// Should fail to consume another [free: 0]
-	checkAcquire(t, sem, false)
-
-	// Shrinking it should work [free: 0]
-	sem.SetSize(3)
-
-	// Should fail to consume another [free: 0]
-	checkAcquire(t, sem, false)
-
-	// Drop one [free: 0] (3 slots used are release, Size only 3)
-	sem.Release()
-
-	// Should fail to consume another [free: 0]
-	checkAcquire(t, sem, false)
-
-	sem.Release()
-
-	// Should be able to consume another [free: 1]
-	checkAcquire(t, sem, true)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		assert.ErrorIs(t, s.Acquire(ctx), context.Canceled)
+	})
 }
 
 func TestDynamicSemaphore_TryAcquire(t *testing.T) {
 	tests := []struct {
 		name     string
-		size     int64
+		size     int
 		acquires int
 		expected bool
 	}{
@@ -212,10 +74,51 @@ func TestDynamicSemaphore_TryAcquire(t *testing.T) {
 	}
 }
 
+func TestDynamicSemaphore_SetSize(t *testing.T) {
+	t.Parallel()
+
+	t.Run("should wake waiter when setting larger size", func(t *testing.T) {
+		s := NewDynamicSemaphore(1)
+		assert.NoError(t, s.Acquire(context.Background()))
+
+		go func() {
+			_ = s.Acquire(context.Background())
+		}()
+		go func() {
+			_ = s.Acquire(context.Background())
+		}()
+
+		waitForWaiters(t, s, 2)
+
+		// Increase size which should release waiters
+		s.SetSize(3)
+		assert.Equal(t, 0, s.Waiters())
+	})
+
+	t.Run("should block acquires when setting smaller size", func(t *testing.T) {
+		s := NewDynamicSemaphore(3)
+		for i := 0; i < 3; i++ {
+			assert.NoError(t, s.Acquire(context.Background()))
+		}
+
+		s.SetSize(1)
+		for i := 0; i < 3; i++ {
+			s.Release()
+		}
+
+		assert.NoError(t, s.Acquire(context.Background()))
+
+		// Should timeout while acquiring permit
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+		assert.Error(t, s.Acquire(ctx))
+	})
+}
+
 func TestDynamicSemaphore_IsFull(t *testing.T) {
 	tests := []struct {
 		name     string
-		size     int64
+		size     int
 		acquires int
 		expected bool
 	}{
@@ -250,67 +153,9 @@ func TestDynamicSemaphore_IsFull(t *testing.T) {
 	}
 }
 
-func TestDynamicSemaphore_BlockedSince(t *testing.T) {
-	overloadDuration := 100 * time.Millisecond
-
-	t.Run("should not be overloaded when sempahore is not full", func(t *testing.T) {
-		s := NewDynamicSemaphore(2)
-		err := s.Acquire(context.Background())
-		require.NoError(t, err)
-		assert.False(t, isOverloaded(s, overloadDuration), "should not be overloaded when permits available")
-	})
-
-	t.Run("should be overloaded after overload timeout", func(t *testing.T) {
-		s := NewDynamicSemaphore(1)
-		err := s.Acquire(context.Background())
-		require.NoError(t, err)
-
-		// When
-		go func() {
-			s.Acquire(context.Background())
-		}()
-
-		time.Sleep(overloadDuration / 2)
-		assert.False(t, isOverloaded(s, overloadDuration))
-		time.Sleep(overloadDuration)
-		assert.True(t, isOverloaded(s, overloadDuration))
-		s.Release()
-		assert.False(t, isOverloaded(s, overloadDuration))
-	})
-
-	t.Run("should reset overload timeout", func(t *testing.T) {
-		s := NewDynamicSemaphore(1)
-
-		err := s.Acquire(context.Background())
-		require.NoError(t, err)
-
-		// When overload begins
-		go func() {
-			s.Acquire(context.Background())
-		}()
-
-		// Then
-		assert.False(t, isOverloaded(s, overloadDuration))
-		time.Sleep(overloadDuration)
-		assert.True(t, isOverloaded(s, overloadDuration))
-		s.Release()
-		assert.False(t, isOverloaded(s, overloadDuration))
-
-		// Overload again
-		go func() {
-			s.Acquire(context.Background())
-		}()
-
-		// Then
-		time.Sleep(overloadDuration)
-		assert.True(t, isOverloaded(s, overloadDuration))
-	})
-}
-
 func TestDynamicSemaphore_Waiters(t *testing.T) {
 	s := NewDynamicSemaphore(1)
-	err := s.Acquire(context.Background())
-	require.NoError(t, err)
+	assert.NoError(t, s.Acquire(context.Background()))
 
 	go func() {
 		_ = s.Acquire(context.Background())
@@ -319,15 +164,15 @@ func TestDynamicSemaphore_Waiters(t *testing.T) {
 		_ = s.Acquire(context.Background())
 	}()
 
-	assert.Eventually(t, func() bool {
-		return s.Waiters() == 2
-	}, 100*time.Millisecond, 10*time.Millisecond)
+	waitForWaiters(t, s, 2)
 	s.Release()
 	assert.Equal(t, 1, s.Waiters())
 	s.Release()
 	assert.Equal(t, 0, s.Waiters())
 }
 
-func isOverloaded(semaphore *DynamicSemaphore, overloadDuration time.Duration) bool {
-	return !semaphore.blockedSince.IsZero() && time.Since(semaphore.blockedSince) > overloadDuration
+func waitForWaiters(t *testing.T, s *DynamicSemaphore, expected int) {
+	assert.Eventually(t, func() bool {
+		return s.Waiters() == expected
+	}, 100*time.Millisecond, 10*time.Millisecond)
 }

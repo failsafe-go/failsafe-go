@@ -78,11 +78,11 @@ func (l *priorityLimiter[R]) RejectionRate() float64 {
 	return l.prioritizer.RejectionRate()
 }
 
-func (l *priorityLimiter[R]) getAndResetStats() (limit, inflight, queued, rejectionThreshold, maxQueue int) {
-	limit = l.Limit()
-	rejectionThreshold = int(float64(limit) * l.initialRejectionFactor)
-	maxQueue = int(float64(limit) * l.maxRejectionFactor)
-	return limit, l.Inflight(), l.Blocked(), rejectionThreshold, maxQueue
+func (l *priorityLimiter[R]) getAndResetStats() (queued, rejectionThreshold, maxQueue int) {
+	limit := float64(l.Limit())
+	rejectionThreshold = int(limit * l.initialRejectionFactor)
+	maxQueue = int(limit * l.maxRejectionFactor)
+	return l.Blocked(), rejectionThreshold, maxQueue
 }
 
 func (l *priorityLimiter[R]) ToExecutor(_ R) any {

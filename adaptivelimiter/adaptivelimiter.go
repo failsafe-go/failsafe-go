@@ -267,7 +267,7 @@ func (c *config[R]) OnLimitChanged(listener func(event LimitChangedEvent)) Build
 func (c *config[R]) Build() AdaptiveLimiter[R] {
 	limiter := &adaptiveLimiter[R]{
 		config:                c,
-		semaphore:             util.NewDynamicSemaphore(int64(c.initialLimit)),
+		semaphore:             util.NewDynamicSemaphore(int(c.initialLimit)),
 		limit:                 float64(c.initialLimit),
 		shortRTT:              &util.TDigest{TDigest: tdigest.NewWithCompression(100)},
 		longRTT:               util.NewEwma(c.longWindowSize, warmupSamples),
@@ -454,7 +454,7 @@ func (l *adaptiveLimiter[R]) updateLimit(shortRTT float64, inflight int) {
 		})
 	}
 
-	l.semaphore.SetSize(int64(newLimit))
+	l.semaphore.SetSize(int(newLimit))
 	l.limit = newLimit
 }
 

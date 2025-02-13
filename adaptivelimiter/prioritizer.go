@@ -18,7 +18,7 @@ type Prioritizer interface {
 	// execution times.
 	RejectionRate() float64
 
-	// The priority threshold below which requests will be rejected, based on their priority, from 0 to 499.
+	// RejectionThreshold is the threshold below which requests will be rejected, based on their priority, from 0 to 499.
 	RejectionThreshold() int
 
 	// Calibrate calibrates the RejectionRate based on recent execution times from registered limiters.
@@ -87,7 +87,7 @@ func (c *prioritizerConfig) Build() Prioritizer {
 
 // Define limiter operations that don't depend on a result type.
 type limiterStats interface {
-	getAndResetStats() (limit, inflight, queued, rejectionThreshold, maxQueue int)
+	getAndResetStats() (queued, rejectionThreshold, maxQueue int)
 }
 
 type prioritizer struct {
@@ -121,11 +121,9 @@ func (r *prioritizer) Calibrate() {
 	r.mu.Lock()
 
 	// Compute queue stats across all registered limiters
-	var totalLimit, totalQueued, totalFreeInflight, totalRejectionThresh, totalMaxQueue int
+	var totalQueued, totalRejectionThresh, totalMaxQueue int
 	for _, limiter := range r.limiters {
-		limit, inflight, queued, rejectionThresh, maxQueue := limiter.getAndResetStats()
-		totalFreeInflight += limit - inflight
-		totalLimit += limit
+		queued, rejectionThresh, maxQueue := limiter.getAndResetStats()
 		totalQueued += queued
 		totalRejectionThresh += rejectionThresh
 		totalMaxQueue += maxQueue
@@ -145,8 +143,7 @@ func (r *prioritizer) Calibrate() {
 		r.logger.Debug("prioritizer calibration",
 			"rejectionRate", fmt.Sprintf("%.2f", newRate),
 			"priorityThresh", newThresh,
-			"limit", totalLimit,
-			"queued", totalQueued)
+			"totalQueued", totalQueued)
 	}
 
 	if oldThresh != newThresh && r.listener != nil {
