@@ -98,7 +98,6 @@ func (s *burstyStats[R]) acquirePermits(requestedPermits int, maxWaitTime time.D
 	waitTime := 0 * time.Second
 	if requestedPermits > s.availablePermits {
 		nextPeriodTime := time.Duration(s.currentPeriod+1) * s.period
-		timeToNextPeriod := nextPeriodTime - currentTime
 		permitDeficit := requestedPermits - s.availablePermits
 		additionalPeriods := permitDeficit / s.periodPermits
 		additionalUnits := permitDeficit % s.periodPermits
@@ -109,6 +108,7 @@ func (s *burstyStats[R]) acquirePermits(requestedPermits int, maxWaitTime time.D
 		}
 
 		// The time to wait until the beginning of the next period that will have free permits
+		timeToNextPeriod := nextPeriodTime - currentTime
 		waitTime = timeToNextPeriod + (time.Duration(additionalPeriods) * s.period)
 		if exceedsMaxWaitTime(waitTime, maxWaitTime) {
 			return -1
