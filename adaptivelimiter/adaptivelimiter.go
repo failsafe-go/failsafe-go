@@ -278,7 +278,9 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 		smoothedShortRTT:      util.NewEwma(5, warmupSamples),
 	}
 	if c.initialRejectionFactor != 0 && c.maxRejectionFactor != 0 && c.prioritizer == nil {
-		return &blockingLimiter[R]{adaptiveLimiter: limiter}
+		bLimiter := &blockingLimiter[R]{adaptiveLimiter: limiter}
+		bLimiter.rejectionRate.Store(&zero)
+		return bLimiter
 	}
 	return limiter
 }
@@ -303,7 +305,7 @@ type adaptiveLimiter[R any] struct {
 
 	// Mutable state
 	semaphore *util.DynamicSemaphore
-	mu        sync.Mutex
+	mu        sync.RWMutex
 
 	// Guarded by mu
 	limit            float64       // The current concurrency limit
@@ -348,8 +350,8 @@ func (l *adaptiveLimiter[R]) CanAcquirePermit() bool {
 }
 
 func (l *adaptiveLimiter[R]) Limit() int {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	l.mu.RLock()
+	defer l.mu.RUnlock()
 	return int(l.limit)
 }
 
@@ -498,6 +500,13 @@ func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, g
 			"thrptCV", fmt.Sprintf("%.2f", throughputCV),
 			"rttCorr", fmt.Sprintf("%.2f", rttCorr))
 	}
+}
+
+func (l *adaptiveLimiter[R]) queueStats() (limit, queued, rejectionThreshold, maxQueue int) {
+	limit = l.Limit()
+	rejectionThreshold = int(float64(limit) * l.initialRejectionFactor)
+	maxQueue = int(float64(limit) * l.maxRejectionFactor)
+	return limit, l.Blocked(), rejectionThreshold, maxQueue
 }
 
 func (l *adaptiveLimiter[R]) ToExecutor(_ R) any {

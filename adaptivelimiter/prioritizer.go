@@ -87,7 +87,7 @@ func (c *prioritizerConfig) Build() Prioritizer {
 
 // Define limiter operations that don't depend on a result type.
 type limiterStats interface {
-	getAndResetStats() (queued, rejectionThreshold, maxQueue int)
+	queueStats() (limit, queued, rejectionThreshold, maxQueue int)
 }
 
 type prioritizer struct {
@@ -121,9 +121,10 @@ func (r *prioritizer) Calibrate() {
 	r.mu.Lock()
 
 	// Compute queue stats across all registered limiters
-	var totalQueued, totalRejectionThresh, totalMaxQueue int
+	var totalLimit, totalQueued, totalRejectionThresh, totalMaxQueue int
 	for _, limiter := range r.limiters {
-		queued, rejectionThresh, maxQueue := limiter.getAndResetStats()
+		limit, queued, rejectionThresh, maxQueue := limiter.queueStats()
+		totalLimit += limit
 		totalQueued += queued
 		totalRejectionThresh += rejectionThresh
 		totalMaxQueue += maxQueue
@@ -143,6 +144,7 @@ func (r *prioritizer) Calibrate() {
 		r.logger.Debug("prioritizer calibration",
 			"rejectionRate", fmt.Sprintf("%.2f", newRate),
 			"priorityThresh", newThresh,
+			"limit", totalLimit,
 			"totalQueued", totalQueued)
 	}
 
