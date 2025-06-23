@@ -53,6 +53,9 @@ type PriorityLimiter[R any] interface {
 
 	// CanAcquirePermit returns whether it's currently possible to acquire a permit for the priority.
 	CanAcquirePermit(priority Priority) bool
+
+	// Reset resets the limiter to its initial limit.
+	Reset()
 }
 
 type priorityLimiter[R any] struct {
@@ -77,16 +80,12 @@ func (l *priorityLimiter[R]) CanAcquirePermit(priority Priority) bool {
 func (l *priorityLimiter[R]) canAcquirePermit(granularPriority int) bool {
 	// Threshold against the limiter's max capacity
 	_, _, _, maxBlocked := l.queueStats()
-	if l.adaptiveLimiter.Blocked() >= maxBlocked {
+	if l.Blocked() >= maxBlocked {
 		return false
 	}
 
 	// Threshold against the prioritizer's rejection threshold
 	return granularPriority >= l.prioritizer.RejectionThreshold()
-}
-
-func (l *priorityLimiter[R]) RejectionRate() float64 {
-	return l.prioritizer.RejectionRate()
 }
 
 func (l *priorityLimiter[R]) ToExecutor(_ R) any {

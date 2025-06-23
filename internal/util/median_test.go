@@ -41,3 +41,14 @@ func TestMedianFilter(t *testing.T) {
 		assert.Equal(t, 5.0, median)
 	})
 }
+
+func TestMedianFilter_Reset(t *testing.T) {
+	filter := NewMedianFilter(3)
+	filter.Add(5.0)
+	filter.Add(2.0)
+	filter.Add(8.0)
+	assert.NotEqual(t, 0.0, filter.Median())
+
+	filter.Reset()
+	assert.Equal(t, 0.0, filter.Median())
+}

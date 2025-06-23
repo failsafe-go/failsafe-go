@@ -3,20 +3,14 @@ package adaptivelimiter
 import (
 	"context"
 	"math/rand"
-	"sync/atomic"
 
 	"github.com/failsafe-go/failsafe-go/policy"
 )
-
-var zero = float64(0)
 
 // blockingLimiter wraps an adaptiveLimiter and blocks some portion of requests when the adaptiveLimiter is at its
 // limit.
 type blockingLimiter[R any] struct {
 	*adaptiveLimiter[R]
-
-	// Mutable state
-	rejectionRate atomic.Pointer[float64]
 }
 
 func (l *blockingLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
@@ -30,19 +24,10 @@ func (l *blockingLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) 
 
 func (l *blockingLimiter[R]) CanAcquirePermit() bool {
 	if l.adaptiveLimiter.CanAcquirePermit() {
-		// Check if we need to reset the rejection rate
-		rejectionRate := *l.rejectionRate.Load()
-		if rejectionRate != 0 {
-			l.rejectionRate.Store(&zero)
-		}
 		return true
 	}
-	
-	rejectionThreshold := int(l.limit * l.initialRejectionFactor)
-	maxQueueSize := int(l.limit * l.maxRejectionFactor)
-	rejectionRate := computeRejectionRate(l.Blocked(), rejectionThreshold, maxQueueSize)
-	l.rejectionRate.Store(&rejectionRate)
 
+	rejectionRate := l.computeRejectionRate()
 	if rejectionRate == 0 {
 		return true
 	}
@@ -50,6 +35,11 @@ func (l *blockingLimiter[R]) CanAcquirePermit() bool {
 		return false
 	}
 	return true
+}
+
+func (l *blockingLimiter[R]) computeRejectionRate() float64 {
+	_, blocked, rejectionThreshold, maxQueueSize := l.queueStats()
+	return computeRejectionRate(blocked, rejectionThreshold, maxQueueSize)
 }
 
 func computeRejectionRate(queueSize, rejectionThreshold, maxQueueSize int) float64 {
@@ -60,10 +50,6 @@ func computeRejectionRate(queueSize, rejectionThreshold, maxQueueSize int) float
 		return 1
 	}
 	return float64(queueSize-rejectionThreshold) / float64(maxQueueSize-rejectionThreshold)
-}
-
-func (l *blockingLimiter[R]) RejectionRate() float64 {
-	return *l.rejectionRate.Load()
 }
 
 func (l *blockingLimiter[R]) ToExecutor(_ R) any {

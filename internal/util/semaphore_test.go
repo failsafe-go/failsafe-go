@@ -2,6 +2,7 @@ package util
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -33,6 +34,8 @@ func TestDynamicSemaphore_Acquire(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		assert.ErrorIs(t, s.Acquire(ctx), context.Canceled)
+		assert.Equal(t, 1, s.Used())
+		assert.Equal(t, 0, s.Waiters())
 	})
 }
 
@@ -112,6 +115,8 @@ func TestDynamicSemaphore_SetSize(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		defer cancel()
 		assert.Error(t, s.Acquire(ctx))
+		assert.Equal(t, 1, s.Used())
+		assert.Equal(t, 0, s.Waiters())
 	})
 }
 
@@ -157,11 +162,15 @@ func TestDynamicSemaphore_Waiters(t *testing.T) {
 	s := NewDynamicSemaphore(1)
 	assert.NoError(t, s.Acquire(context.Background()))
 
+	wg := sync.WaitGroup{}
+	wg.Add(2)
 	go func() {
 		_ = s.Acquire(context.Background())
+		wg.Done()
 	}()
 	go func() {
 		_ = s.Acquire(context.Background())
+		wg.Done()
 	}()
 
 	waitForWaiters(t, s, 2)
@@ -169,6 +178,7 @@ func TestDynamicSemaphore_Waiters(t *testing.T) {
 	assert.Equal(t, 1, s.Waiters())
 	s.Release()
 	assert.Equal(t, 0, s.Waiters())
+	wg.Wait()
 }
 
 func waitForWaiters(t *testing.T, s *DynamicSemaphore, expected int) {

@@ -2,36 +2,7 @@ package util
 
 import (
 	"math"
-	"time"
-
-	"github.com/influxdata/tdigest"
 )
-
-type TDigest struct {
-	MinRTT      time.Duration
-	MaxInflight int
-	Size        uint
-	*tdigest.TDigest
-}
-
-func (td *TDigest) Add(rtt time.Duration, inflight int) {
-	if td.Size == 0 {
-		td.MinRTT = rtt
-		td.MaxInflight = inflight
-	} else {
-		td.MinRTT = min(td.MinRTT, rtt)
-		td.MaxInflight = max(td.MaxInflight, inflight)
-	}
-	td.Size++
-	td.TDigest.Add(float64(rtt), 1)
-}
-
-func (td *TDigest) Reset() {
-	td.TDigest.Reset()
-	td.MinRTT = 0
-	td.MaxInflight = 0
-	td.Size = 0
-}
 
 func NewRollingSum(capacity uint) *RollingSum {
 	return &RollingSum{samples: make([]float64, capacity)}
@@ -46,11 +17,6 @@ type RollingSum struct {
 	// Rolling sum fields
 	sumY       float64 // Y values are the samples
 	sumSquares float64
-
-	// Rolling regression fields
-	sumX  float64 // X values are the sample indexes
-	sumXX float64
-	sumXY float64
 }
 
 // Add adds the value to the window if it's non-zero, updates the sums, and returns the old value along with whether the
@@ -64,14 +30,7 @@ func (r *RollingSum) Add(value float64) (oldValue float64, full bool) {
 			oldValue = r.samples[r.index]
 			r.sumY -= oldValue
 			r.sumSquares -= oldValue * oldValue
-
-			// Shift all values left (via telescoping series)
-			r.sumXY = r.sumXY - r.sumY
-
-			// Add new value at the end
-			r.sumXY += float64(len(r.samples)-1) * value
 		} else {
-			r.sumXY += float64(r.size) * value
 			r.size++
 		}
 
@@ -106,23 +65,24 @@ func (r *RollingSum) CalculateCV() (cv, mean, variance float64) {
 	return cv, mean, variance
 }
 
-func (r *RollingSum) CalculateSlope() float64 {
-	if r.size < 2 {
-		return math.NaN()
+// Reset resets the sum to its initial state.
+func (r *RollingSum) Reset() {
+	for i := range r.samples {
+		r.samples[i] = 0
 	}
-
-	// Calculate slope using least squares
-	n := float64(r.size)
-	sumX := n * (n - 1) / 2
-	sumXSquared := n * (n - 1) * (2*n - 1) / 6
-	return (n*r.sumXY - sumX*r.sumY) / (n*sumXSquared - sumX*sumX)
+	r.size = 0
+	r.index = 0
+	r.sumY = 0
+	r.sumSquares = 0
 }
 
 type CorrelationWindow struct {
 	warmupSamples uint8
-	xSamples      *RollingSum
-	ySamples      *RollingSum
-	corrSumXY     float64
+
+	// Mutable state
+	xSamples  *RollingSum
+	ySamples  *RollingSum
+	corrSumXY float64
 }
 
 func NewCorrelationWindow(capacity uint, warmupSamples uint8) *CorrelationWindow {
@@ -174,4 +134,11 @@ func (w *CorrelationWindow) Add(x, y float64) (correlation, cvX, cvY float64) {
 	correlation = covariance / (math.Sqrt(varX) * math.Sqrt(varY))
 
 	return correlation, cvX, cvY
+}
+
+// Reset resets the window to its initial state.
+func (w *CorrelationWindow) Reset() {
+	w.xSamples.Reset()
+	w.ySamples.Reset()
+	w.corrSumXY = 0
 }

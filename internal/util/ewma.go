@@ -8,8 +8,8 @@ type Ewma interface {
 	// Value gets the current value of the moving average.
 	Value() float64
 
-	// Set sets a value for the moving average.
-	Set(float64)
+	// Reset resets the value of the moving average and requires a new warmup if one was configured.
+	Reset()
 }
 
 // NewEwma creates a new exponentially weighted moving average for the windowSize and warmupSamples.
@@ -24,10 +24,12 @@ func NewEwma(windowSize uint, warmupSamples uint8) Ewma {
 
 type ewma struct {
 	warmupSamples   uint8
-	count           uint8
 	smoothingFactor float64
-	value           float64
-	sum             float64
+
+	// Mutable state
+	count uint8
+	value float64
+	sum   float64
 }
 
 // Add decays the Ewma value via (oldValue * (1 - smoothingFactor)) + (newValue * smoothingFactor)
@@ -47,10 +49,8 @@ func (e *ewma) Value() float64 {
 	return e.value
 }
 
-func (e *ewma) Set(value float64) {
-	e.value = value
-	// Skip any incomplete warmup
-	if e.count < e.warmupSamples {
-		e.count = e.warmupSamples
-	}
+func (e *ewma) Reset() {
+	e.count = 0
+	e.value = 0
+	e.sum = 0
 }

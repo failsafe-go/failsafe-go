@@ -39,7 +39,7 @@ func TestPrioritizer_Calibrate(t *testing.T) {
 	permit.Record()
 
 	p.Calibrate()
-	require.Equal(t, .5, limiter.RejectionRate())
+	require.Equal(t, .5, p.RejectionRate())
 	require.True(t, p.priorityThreshold.Load() > 0 && p.priorityThreshold.Load() < 200, "low priority execution should be rejected")
 }
 

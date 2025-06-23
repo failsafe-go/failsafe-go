@@ -130,18 +130,21 @@ func Smooth(oldValue, newValue, factor float64) float64 {
 
 var log10Values []int
 
+func init() {
+	for i := 0; i < 100; i++ {
+		log10Values = append(log10Values, 1)
+	}
+	for i := 100; i < 1000; i++ {
+		log10Values = append(log10Values, 2)
+	}
+}
+
 func Log10Func(factor int) func(limit int) int {
 	return func(limit int) int {
 		if limit < len(log10Values) {
 			return factor * log10Values[limit]
 		}
 		return factor * int(math.Log10(float64(limit)))
-	}
-}
-
-func init() {
-	for i := 0; i < 1000; i++ {
-		log10Values = append(log10Values, int(max(1, float64(int(math.Log10(float64(i)))))))
 	}
 }
 

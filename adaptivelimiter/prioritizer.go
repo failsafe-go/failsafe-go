@@ -142,10 +142,10 @@ func (r *prioritizer) Calibrate() {
 
 	if r.logger != nil && r.logger.Enabled(nil, slog.LevelDebug) {
 		r.logger.Debug("prioritizer calibration",
-			"rejectionRate", fmt.Sprintf("%.2f", newRate),
-			"priorityThresh", newThresh,
+			"newRate", fmt.Sprintf("%.2f", newRate),
+			"newThresh", newThresh,
 			"limit", totalLimit,
-			"totalQueued", totalQueued)
+			"queued", totalQueued)
 	}
 
 	if oldThresh != newThresh && r.listener != nil {

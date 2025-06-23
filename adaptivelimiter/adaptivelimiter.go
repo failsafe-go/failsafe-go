@@ -19,7 +19,10 @@ import (
 // ErrExceeded is returned when an execution exceeds the current limit.
 var ErrExceeded = errors.New("limit exceeded")
 
-const warmupSamples = 10
+const (
+	warmupSamples   = 10
+	smoothedSamples = 5
+)
 
 // AdaptiveLimiter is a concurrency limiter that adjusts its limit up or down based on execution time trends:
 //  - When recent execution times are trending up relative to longer term execution times, the concurrency limit is decreased.
@@ -52,6 +55,9 @@ type AdaptiveLimiter[R any] interface {
 
 	// CanAcquirePermit returns whether it's currently possible to acquire a permit.
 	CanAcquirePermit() bool
+
+	// Reset resets the limiter to its initial limit.
+	Reset()
 }
 
 // Metrics provides info about the adaptive limiter.
@@ -66,10 +72,6 @@ type Metrics interface {
 
 	// Blocked returns the current number of blocked executions.
 	Blocked() int
-
-	// RejectionRate for blocking limiters returns the current rate, from 0 to 1, at which the limiter will reject requests.
-	// Returns 0 for limiters that are not blocking.
-	RejectionRate() float64
 }
 
 // Permit is a permit to perform an execution that must be completed by calling Record or Drop.
@@ -269,18 +271,16 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 		config:                c,
 		semaphore:             util.NewDynamicSemaphore(int(c.initialLimit)),
 		limit:                 float64(c.initialLimit),
-		shortRTT:              &util.TDigest{TDigest: tdigest.NewWithCompression(100)},
+		shortRTT:              &TDigestSample{TDigest: tdigest.NewWithCompression(100)},
+		medianFilter:          util.NewMedianFilter(smoothedSamples),
+		smoothedShortRTT:      util.NewEwma(smoothedSamples, warmupSamples),
 		longRTT:               util.NewEwma(c.longWindowSize, warmupSamples),
 		nextUpdateTime:        time.Now(),
 		rttCorrelation:        util.NewCorrelationWindow(c.correlationWindowSize, warmupSamples),
 		throughputCorrelation: util.NewCorrelationWindow(c.correlationWindowSize, warmupSamples),
-		medianFilter:          util.NewMedianFilter(5),
-		smoothedShortRTT:      util.NewEwma(5, warmupSamples),
 	}
 	if c.initialRejectionFactor != 0 && c.maxRejectionFactor != 0 && c.prioritizer == nil {
-		bLimiter := &blockingLimiter[R]{adaptiveLimiter: limiter}
-		bLimiter.rejectionRate.Store(&zero)
-		return bLimiter
+		return &blockingLimiter[R]{adaptiveLimiter: limiter}
 	}
 	return limiter
 }
@@ -300,6 +300,32 @@ const (
 	hold
 )
 
+type TDigestSample struct {
+	MinRTT      time.Duration
+	MaxInflight int
+	Size        uint
+	*tdigest.TDigest
+}
+
+func (td *TDigestSample) Add(rtt time.Duration, inflight int) {
+	if td.Size == 0 {
+		td.MinRTT = rtt
+		td.MaxInflight = inflight
+	} else {
+		td.MinRTT = min(td.MinRTT, rtt)
+		td.MaxInflight = max(td.MaxInflight, inflight)
+	}
+	td.Size++
+	td.TDigest.Add(float64(rtt), 1)
+}
+
+func (td *TDigestSample) Reset() {
+	td.TDigest.Reset()
+	td.MinRTT = 0
+	td.MaxInflight = 0
+	td.Size = 0
+}
+
 type adaptiveLimiter[R any] struct {
 	*config[R]
 
@@ -308,13 +334,12 @@ type adaptiveLimiter[R any] struct {
 	mu        sync.RWMutex
 
 	// Guarded by mu
-	limit            float64       // The current concurrency limit
-	shortRTT         *util.TDigest // Short term execution times
-	medianFilter     *util.MedianFilter
-	smoothedShortRTT util.Ewma
-	longRTT          util.Ewma // Tracks long term average execution time
-	nextUpdateTime   time.Time // Tracks when the limit can next be updated
-
+	limit                 float64        // The current concurrency limit
+	shortRTT              *TDigestSample // Short term execution times
+	medianFilter          *util.MedianFilter
+	smoothedShortRTT      util.Ewma
+	longRTT               util.Ewma               // Tracks long term average execution time
+	nextUpdateTime        time.Time               // Tracks when the limit can next be updated
 	throughputCorrelation *util.CorrelationWindow // Tracks the correlation between concurrency and throughput
 	rttCorrelation        *util.CorrelationWindow // Tracks the correlation between concurrency and round trip times (RTT)
 }
@@ -363,8 +388,18 @@ func (l *adaptiveLimiter[R]) Blocked() int {
 	return l.semaphore.Waiters()
 }
 
-func (l *adaptiveLimiter[R]) RejectionRate() float64 {
-	return 0
+func (l *adaptiveLimiter[R]) Reset() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.semaphore.SetSize(int(l.config.initialLimit))
+	l.limit = float64(l.config.initialLimit)
+	l.shortRTT.Reset()
+	l.medianFilter.Reset()
+	l.smoothedShortRTT.Reset()
+	l.longRTT.Reset()
+	l.nextUpdateTime = time.Now()
+	l.rttCorrelation.Reset()
+	l.throughputCorrelation.Reset()
 }
 
 // Records the duration of a completed execution, updating the concurrency limit if the short shortRTT window is full.

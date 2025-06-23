@@ -1,119 +1,12 @@
 package util
 
 import (
-	"fmt"
 	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
-
-func TestRollingSum_CalculateSlope(t *testing.T) {
-	tests := []struct {
-		name      string
-		values    []float64
-		capacity  uint
-		expected  float64
-		shouldNaN bool
-	}{
-		{
-			name:      "empty window",
-			values:    []float64{},
-			shouldNaN: true,
-		},
-		{
-			name:      "single value",
-			values:    []float64{1.0},
-			shouldNaN: true,
-		},
-		{
-			name:     "flat slope with positive values",
-			values:   []float64{1.0, 1.0, 1.0},
-			expected: 0.0,
-		},
-		{
-			name:     "flat slope with zeros",
-			values:   []float64{1.0, 1.0, 1.0},
-			expected: 0.0,
-		},
-		{
-			name:     "mixed positive and negative values",
-			values:   []float64{-1.0, 2.0},
-			expected: 3.0,
-		},
-		{
-			name:     "positive slope",
-			values:   []float64{1.0, 2.0, 3.0},
-			expected: 1.0,
-		},
-		{
-			name:     "negative slope",
-			values:   []float64{4.0, 3.0, 2.0},
-			expected: -1.0,
-		},
-		{
-			name:     "wrapping slope",
-			capacity: 5,
-			values:   []float64{5, 2, 3, 7, 6},
-			expected: .7,
-		},
-		{
-			name:     "wrapping with small window",
-			values:   []float64{5, 2, 3, 7, 6},
-			expected: 1.5,
-		},
-		{
-			name:     "oversized window",
-			capacity: 5,
-			values:   []float64{3, 7, 6},
-			expected: 1.5,
-		},
-		{
-			name:     "decreasing",
-			values:   []float64{5, 4, 3, 2, 1},
-			expected: -1,
-		},
-		{
-			name:     "wrapping positive slope",
-			values:   []float64{0.0, 1.0, 2.0, 3.0, 4.0, 5.0},
-			expected: 1.0,
-		},
-		{
-			name:     "wrapping negative slope",
-			values:   []float64{5.0, 4.0, 3.0, 2.0, 1.0},
-			expected: -1.0,
-		},
-		{
-			name:     "wrapping negative slope with small window",
-			capacity: 19,
-			values:   []float64{20, 18, 18, 17, 16, 14, 14, 13, 12, 11, 7, 7, 6, 7, 6, 6, 7, 6, 15},
-			expected: -.707,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			capacity := tc.capacity
-			if capacity == 0 {
-				capacity = 3
-			}
-			w := NewRollingSum(capacity)
-			for _, v := range tc.values {
-				w.Add(v)
-			}
-
-			slope := w.CalculateSlope()
-			fmt.Println(w.sumY)
-			fmt.Println(w.sumXY)
-
-			if tc.shouldNaN {
-				assert.True(t, math.IsNaN(slope))
-			} else {
-				assert.InDelta(t, tc.expected, slope, 0.0001)
-			}
-		})
-	}
-}
 
 func TestRollingSum(t *testing.T) {
 	tests := []struct {
@@ -258,6 +151,9 @@ func TestCorrelationWindow(t *testing.T) {
 
 			assert.InDelta(t, tc.expectedCorrelation, correlation, 0.0001)
 			assert.Equal(t, tc.expectedSize, w.xSamples.size)
+
+			w.Reset()
+			require.Equal(t, 0.0, w.corrSumXY)
 		})
 	}
 }

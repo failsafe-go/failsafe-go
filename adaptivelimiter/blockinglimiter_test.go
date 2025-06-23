@@ -2,7 +2,6 @@ package adaptivelimiter
 
 import (
 	"context"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -12,8 +11,10 @@ import (
 
 // This test asserts that blocking requests block or are rejected and the rejection rate is updated as expected.
 func TestBlockingLimiter_AcquirePermit(t *testing.T) {
-	rand.Seed(1) // Force consistency with granular priorities
-	limiter := NewBuilder[any]().WithLimits(1, 10, 1).WithRejectionFactors(2, 4).Build()
+	limiter := NewBuilder[any]().
+		WithLimits(1, 10, 1).
+		WithRejectionFactors(2, 4).
+		Build().(*blockingLimiter[any])
 	_, err := limiter.AcquirePermit(context.Background())
 	require.NoError(t, err)
 
@@ -26,22 +27,25 @@ func TestBlockingLimiter_AcquirePermit(t *testing.T) {
 		}, 300*time.Millisecond, 10*time.Millisecond)
 	}
 
-	acquireBlocking()
+	go acquireBlocking()
 	assertBlocked(1)
-	acquireBlocking()
+	go acquireBlocking()
 	assertBlocked(2)
-	acquireBlocking()
+	go acquireBlocking()
 	assertBlocked(3)
-	acquireBlocking()
+	assert.Equal(t, .5, limiter.computeRejectionRate())
+	go acquireBlocking()
 	assertBlocked(4)
-	assert.Equal(t, .5, limiter.RejectionRate())
+	assert.Equal(t, 1.0, limiter.computeRejectionRate())
 
 	// Queue is full
 	permit, err := limiter.AcquirePermit(context.Background())
 	require.Nil(t, permit)
 	require.ErrorIs(t, err, ErrExceeded)
 	assertBlocked(4)
-	assert.Equal(t, 1.0, limiter.RejectionRate())
+	require.Eventually(t, func() bool {
+		return limiter.computeRejectionRate() == 1.0
+	}, 300*time.Millisecond, 10*time.Millisecond)
 }
 
 func TestBlockingLimiter_computeRejectionRate(t *testing.T) {

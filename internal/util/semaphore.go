@@ -7,6 +7,8 @@ import (
 )
 
 // DynamicSemaphore is a semaphore that can be dynamically resized and allows FIFO blocking when full.
+//
+// This type is concurrency safe.
 type DynamicSemaphore struct {
 	mu      sync.Mutex
 	size    int       // Guarded by mu
