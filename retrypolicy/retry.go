@@ -102,7 +102,7 @@ type RetryPolicyBuilder[R any] interface {
 	// WithMaxDuration sets the max duration to perform retries for, else the execution will be failed.
 	WithMaxDuration(maxDuration time.Duration) RetryPolicyBuilder[R]
 
-	// WithBackoff wets the delay between retries, exponentially backing off to the maxDelay and multiplying consecutive
+	// WithBackoff sets the delay between retries, exponentially backing off to the maxDelay and multiplying consecutive
 	// delays by a factor of 2. Replaces any previously configured fixed or random delays.
 	WithBackoff(delay time.Duration, maxDelay time.Duration) RetryPolicyBuilder[R]
 
