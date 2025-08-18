@@ -18,23 +18,6 @@ import (
 	"github.com/failsafe-go/failsafe-go/timeout"
 )
 
-// Asserts that an execution is marked as canceled when a timeout is exceeded.
-// Also asserts that the context provided to an execution is canceled.
-func TestCancelWithTimeoutDuringExecution(t *testing.T) {
-	// Given
-	to := timeout.With[any](100 * time.Millisecond)
-	executor := failsafe.NewExecutor[any](to).WithContext(context.Background())
-
-	// When / Then
-	testutil.Test[any](t).
-		WithExecutor(executor).
-		Run(func(exec failsafe.Execution[any]) error {
-			testutil.WaitAndAssertCanceled(t, time.Second, exec)
-			return nil
-		}).
-		AssertFailure(1, 1, timeout.ErrExceeded)
-}
-
 // Asserts that an execution is marked as canceled when a provided Context is canceled.
 func TestCancelWithContextDuringExecution(t *testing.T) {
 	// Given
@@ -74,13 +57,12 @@ func TestCancelWithContextDeadlineDuringExecution(t *testing.T) {
 
 // Asserts that an execution is marked as canceled when it's canceled via an execution result.
 // Also asserts that the context provided to an execution is canceled.
-func TestCancelWithExecutionResult(t *testing.T) {
+func TestCancelWithExecutionResultDuringExecution(t *testing.T) {
 	// Given
 	rp := retrypolicy.WithDefaults[any]()
 
 	// When
-	executor := failsafe.NewExecutor[any](rp).WithContext(context.Background())
-	result := executor.RunWithExecutionAsync(func(e failsafe.Execution[any]) error {
+	result := failsafe.NewExecutor[any](rp).RunWithExecutionAsync(func(e failsafe.Execution[any]) error {
 		testutil.WaitAndAssertCanceled(t, time.Second, e)
 		return nil
 	})
@@ -93,6 +75,23 @@ func TestCancelWithExecutionResult(t *testing.T) {
 	assert.True(t, result.IsDone())
 	assert.Nil(t, res)
 	assert.ErrorIs(t, err, failsafe.ErrExecutionCanceled)
+}
+
+// Asserts that an execution is marked as canceled when a timeout is exceeded.
+// Also asserts that the context provided to an execution is canceled.
+func TestCancelWithTimeoutDuringExecution(t *testing.T) {
+	// Given
+	to := timeout.With[any](100 * time.Millisecond)
+	executor := failsafe.NewExecutor[any](to).WithContext(context.Background())
+
+	// When / Then
+	testutil.Test[any](t).
+		WithExecutor(executor).
+		Run(func(exec failsafe.Execution[any]) error {
+			testutil.WaitAndAssertCanceled(t, time.Second, exec)
+			return nil
+		}).
+		AssertFailure(1, 1, timeout.ErrExceeded)
 }
 
 // Asserts that when a RetryPolicy is blocked on a delay, canceling the context results in a Canceled error being returned.
@@ -126,7 +125,7 @@ func TestCancelWithContextWithFallback(t *testing.T) {
 		AssertFailure(1, 1, context.Canceled)
 }
 
-// Asserts that waiting on a cancelation works from within a fallback function.
+// Asserts that waiting on a cancelation from a context works from within a fallback function.
 func TestCancelWithContextDuringFallbackFn(t *testing.T) {
 	// Given
 	fb := fallback.WithFunc(func(exec failsafe.Execution[any]) (any, error) {
@@ -141,6 +140,29 @@ func TestCancelWithContextDuringFallbackFn(t *testing.T) {
 		Context(setup).
 		Get(testutil.GetFn[any](nil, testutil.ErrInvalidState)).
 		AssertFailure(1, 1, context.Canceled)
+}
+
+// Asserts that waiting on a cancelation from an ExecutionResult works from within a fallback function.
+func TestCancelWithExecutionResultDuringFallbackFn(t *testing.T) {
+	// Given
+	fb := fallback.WithFunc(func(exec failsafe.Execution[any]) (any, error) {
+		testutil.WaitAndAssertCanceled(t, time.Second, exec)
+		return nil, nil
+	})
+
+	// When
+	result := failsafe.NewExecutor[any](fb).RunAsync(func() error {
+		return testutil.ErrInvalidState
+	})
+	assert.False(t, result.IsDone())
+	time.Sleep(100 * time.Millisecond)
+	result.Cancel()
+
+	// Then
+	res, err := result.Get()
+	assert.True(t, result.IsDone())
+	assert.Nil(t, res)
+	assert.ErrorIs(t, err, failsafe.ErrExecutionCanceled)
 }
 
 // Asserts that when a RateLimiter is blocked on a delay, canceling the context results in a Canceled error being returned.
@@ -172,6 +194,28 @@ func TestCancelWithTimeoutDuringRateLimiterDelay(t *testing.T) {
 		AssertFailure(1, 0, timeout.ErrExceeded)
 }
 
+// Asserts that an execution is marked as canceled when it's canceled via an execution result.
+// Also asserts that the context provided to an execution is canceled.
+func TestCancelWithExecutionResultDuringRateLimiterDelay(t *testing.T) {
+	// Given
+	rl := ratelimiter.SmoothBuilder[any](1, 30*time.Second).WithMaxWaitTime(time.Minute).Build()
+	rl.TryAcquirePermit() // All permits used
+
+	// When
+	result := failsafe.NewExecutor[any](rl).RunAsync(func() error {
+		return nil
+	})
+	assert.False(t, result.IsDone())
+	time.Sleep(100 * time.Millisecond)
+	result.Cancel()
+
+	// Then
+	res, err := result.Get()
+	assert.True(t, result.IsDone())
+	assert.Nil(t, res)
+	assert.ErrorIs(t, err, failsafe.ErrExecutionCanceled)
+}
+
 func TestCancelWithContextDuringBulkheadDelay(t *testing.T) {
 	// Given
 	bh := bulkhead.Builder[any](2).WithMaxWaitTime(200 * time.Millisecond).Build()
@@ -199,6 +243,28 @@ func TestCancelWithTimeoutDuringBulkheadDelay(t *testing.T) {
 		With(to, bh).
 		Get(testutil.GetFn[any](nil, nil)).
 		AssertFailure(1, 0, timeout.ErrExceeded)
+}
+
+// Asserts that waiting on a cancelation from an ExecutionResult works from within a bulkhead function.
+func TestCancelWithExecutionResultDuringBulkheadDelay(t *testing.T) {
+	// Given
+	bh := bulkhead.Builder[any](2).WithMaxWaitTime(time.Second).Build()
+	bh.TryAcquirePermit()
+	bh.TryAcquirePermit() // bulkhead should be full
+
+	// When
+	result := failsafe.NewExecutor[any](bh).RunAsync(func() error {
+		return testutil.ErrInvalidState
+	})
+	assert.False(t, result.IsDone())
+	time.Sleep(100 * time.Millisecond)
+	result.Cancel()
+
+	// Then
+	res, err := result.Get()
+	assert.True(t, result.IsDone())
+	assert.Nil(t, res)
+	assert.ErrorIs(t, err, failsafe.ErrExecutionCanceled)
 }
 
 // Tests canceling an execution that is blocked, before hedges have started.

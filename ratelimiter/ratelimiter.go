@@ -285,14 +285,10 @@ func (r *rateLimiter[R]) AcquirePermits(ctx context.Context, permits uint) error
 }
 
 func (r *rateLimiter[R]) AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) error {
-	return r.acquirePermitsWithMaxWait(ctx, nil, 1, maxWaitTime)
+	return r.AcquirePermitsWithMaxWait(ctx, 1, maxWaitTime)
 }
 
 func (r *rateLimiter[R]) AcquirePermitsWithMaxWait(ctx context.Context, requestedPermits uint, maxWaitTime time.Duration) error {
-	return r.acquirePermitsWithMaxWait(ctx, nil, requestedPermits, maxWaitTime)
-}
-
-func (r *rateLimiter[R]) acquirePermitsWithMaxWait(ctx context.Context, exec failsafe.Execution[R], requestedPermits uint, maxWaitTime time.Duration) error {
 	waitTime := r.stats.acquirePermits(int(requestedPermits), maxWaitTime)
 	if waitTime == -1 {
 		return ErrExceeded
@@ -301,20 +297,11 @@ func (r *rateLimiter[R]) acquirePermitsWithMaxWait(ctx context.Context, exec fai
 		ctx = context.Background()
 	}
 	timer := time.NewTimer(waitTime)
-	if exec == nil {
-		select {
-		case <-timer.C:
-		case <-ctx.Done():
-			timer.Stop()
-			return ctx.Err()
-		}
-	} else {
-		select {
-		case <-timer.C:
-		case <-exec.Canceled():
-			timer.Stop()
-			return exec.LastError()
-		}
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+		timer.Stop()
+		return ctx.Err()
 	}
 	return nil
 }
