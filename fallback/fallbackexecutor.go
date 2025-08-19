@@ -21,12 +21,13 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 		result := innerFn(exec)
 		result = e.PostExecute(execInternal, result)
 		if !result.Success {
+			// Check for cancellation during execution
 			if canceled, cancelResult := execInternal.IsCanceledWithResult(); canceled {
 				return cancelResult
 			}
-
 			// Call fallback fn
 			fallbackResult, fallbackError := e.fn(execInternal.CopyWithResult(result))
+			// Check for cancellation during fallback
 			if canceled, cancelResult := execInternal.IsCanceledWithResult(); canceled {
 				return cancelResult
 			}

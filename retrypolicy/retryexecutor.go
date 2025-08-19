@@ -30,6 +30,7 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 
 		for {
 			result := innerFn(exec)
+			// Check for cancellation during executing
 			if canceled, cancelResult := execInternal.IsCanceledWithResult(); canceled {
 				return cancelResult
 			}
@@ -42,7 +43,7 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 				return result
 			}
 
-			// Record result
+			// Record result and check for cancellation during PostExecute
 			if cancelResult := execInternal.RecordResult(result); cancelResult != nil {
 				return cancelResult
 			}
@@ -62,7 +63,7 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 				timer.Stop()
 			}
 
-			// Prepare for next iteration
+			// Prepare for next iteration and check for cancellation during delay
 			if cancelResult := execInternal.InitializeRetry(); cancelResult != nil {
 				return cancelResult
 			}

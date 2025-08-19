@@ -20,6 +20,7 @@ var _ policy.Executor[any] = &executor[any]{}
 func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		if err := e.AcquirePermitWithMaxWait(exec.Context(), e.maxWaitTime); err != nil {
+			// Check for cancellation while waiting for a permit
 			if canceled, cancelResult := exec.(policy.ExecutionInternal[R]).IsCanceledWithResult(); canceled {
 				return cancelResult
 			}

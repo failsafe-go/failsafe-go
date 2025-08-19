@@ -108,6 +108,26 @@ func TestCancelWithContextDuringPendingRetry(t *testing.T) {
 		AssertFailure(1, 1, context.Canceled)
 }
 
+// Asserts that waiting on a cancelation from an ExecutionResult works from during a retry delay.
+func TestCancelWithExecutionResultDuringPendingRetry(t *testing.T) {
+	// Given
+	rp := policytesting.WithRetryLogs[any](retrypolicy.Builder[any]().WithDelay(time.Second)).Build()
+
+	// When
+	result := failsafe.NewExecutor[any](rp).RunAsync(func() error {
+		return testutil.ErrInvalidState
+	})
+	assert.False(t, result.IsDone())
+	time.Sleep(100 * time.Millisecond)
+	result.Cancel()
+
+	// Then
+	res, err := result.Get()
+	assert.True(t, result.IsDone())
+	assert.Nil(t, res)
+	assert.ErrorIs(t, err, failsafe.ErrExecutionCanceled)
+}
+
 // Asserts that a cancellation with a fallback returns the expected error.
 func TestCancelWithContextWithFallback(t *testing.T) {
 	// Given
