@@ -33,9 +33,10 @@ const (
 // executions in excess of the limit will be rejected with ErrExceeded.
 //
 // By default, an AdaptiveLimiter will converge on a concurrency limit that represents the capacity of the machine it's
-// running on, and avoids having executions block. Since enforcing a limit without allowing for blocking is too strict in
-// some cases and may cause unexpected rejections, optional blocking of executions when the limiter is full can be
-// enabled via WithBlocking, and blocking with prioritized rejection can be enabled via WithPrioritizedRejection.
+// running on, and avoids having executions queue. Since enforcing a limit without allowing for queueing is too strict
+// in some cases and may cause unexpected rejections, optional queueing of executions when the limiter is full can be
+// enabled via WithQueueing. Queueing with prioritized rejections can be enabled via BuildPrioritized, which accepts a
+// Prioritizer that can be shared across multiple limiters.
 //
 // R is the execution result type. This type is concurrency safe.
 type AdaptiveLimiter[R any] interface {
@@ -47,6 +48,10 @@ type AdaptiveLimiter[R any] interface {
 	// Callers must call Record or Drop to release a successfully acquired permit back to the limiter.
 	// ctx may be nil.
 	AcquirePermit(context.Context) (Permit, error)
+
+	// AcquirePermitWithMaxWait attempts to acquire a permit to perform an execution via the limiter, waiting until one is
+	// available, the execution is canceled, or the maxWaitTime is exceeded.
+	AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) (Permit, error)
 
 	// TryAcquirePermit attempts to acquire a permit to perform an execution via the limiter, returning whether the Permit
 	// was acquired or not. This method will not block if the limiter is full. Callers must call Record or Drop to release a
@@ -70,8 +75,8 @@ type Metrics interface {
 	// Inflight returns the current number of inflight executions.
 	Inflight() int
 
-	// Blocked returns the current number of blocked executions.
-	Blocked() int
+	// Queued returns the current number of queyed executions when the limiter is full.
+	Queued() int
 }
 
 // Permit is a permit to perform an execution that must be completed by calling Record or Drop.
@@ -119,37 +124,38 @@ type Builder[R any] interface {
 	// The default value is 20.
 	WithCorrelationWindow(size uint) Builder[R]
 
-	// WithBlocking enables blocking of executions rather than rejecting them when the limiter is full. Blocking allows
-	// short execution spikes to be absorbed without strictly rejecting executions. When blocking is enabled, the max amount
-	// of blocking before rejection begins is 2 times the current limit, by default. WithRejectionFactor can be used to
-	// adjust this.
+	// WithQueueing enables additional queueing of executions when the limiter is full. Queueing allows short execution
+	// spikes to be absorbed without strictly rejecting executions.
 	//
-	// Blocking is disabled by default, which means no executions will block when the limiter is full.
-	WithBlocking() Builder[R]
-
-	// WithRejectionFactors enables blocking of executions up to the current limit times the initialRejectionFactor, after
-	// which point they will gradually start to be rejected up to the limit times the maxRejectionFactor. This allows
-	// rejection to gradually adjust based on how many requests are blocking, relative to the limit. Blocking allows short
-	// execution spikes to be absorbed without strictly rejecting executions.
+	// When queueing is enabled and the limiter is full, requests are queued up to the current limit times the
+	// initialRejectionFactor, after which they will gradually start to be rejected up to the limit times the
+	// maxRejectionFactor. This allows rejection to gradually adjust based on how many requests are queued, relative to the
+	// limit. Queueing allows short execution spikes to be absorbed without strictly rejecting executions.
 	//
-	// Blocking is disabled by default, which means no executions will block when the limiter is full.
-	WithRejectionFactors(initialRejectionFactor, maxRejectionFactor float32) Builder[R]
+	// WithQueueing is disabled by default, which means no executions will queue when the limiter is full.
+	WithQueueing(initialRejectionFactor, maxRejectionFactor float32) Builder[R]
 
-	// WithLogger configures a logger which provides debug logging of limit adjustments.
-	WithLogger(logger *slog.Logger) Builder[R]
+	// WithMaxWaitTime configures the maxWaitTime to wait for a permit to be available, when the limiter is full.
+	WithMaxWaitTime(maxWaitTime time.Duration) Builder[R]
+
+	// OnLimitExceeded registers the listener to be called when the limit is exceeded.
+	OnLimitExceeded(listener func(event failsafe.ExecutionEvent[R])) Builder[R]
 
 	// OnLimitChanged configures a listener to be called with the limit changes.
 	OnLimitChanged(listener func(event LimitChangedEvent)) Builder[R]
 
+	// WithLogger configures a logger which provides debug logging of limit adjustments.
+	WithLogger(logger *slog.Logger) Builder[R]
+
 	// Build returns a new AdaptiveLimiter using the builder's configuration.
 	Build() AdaptiveLimiter[R]
 
-	// BuildPrioritized returns a new PrioritizedLimiter using the builder's configuration. This enables blocking and
+	// BuildPrioritized returns a new PrioritizedLimiter using the builder's configuration. This enables queueing and
 	// prioritized rejections of executions when the limiter is full, where executions block while waiting for a permit.
 	// Enabling this allows short execution spikes to be absorbed without strictly rejecting executions when the limiter is
 	// full. Rejections are performed using the Prioritizer, which sets a rejection threshold baesd on the most overloaded
-	// limiters being used by the Prioritizer. The amount of blocking can be configured via WithRejectionFactor, and
-	// defaults to two times the current limit.
+	// limiters being used by the Prioritizer. The amount of queueing can be configured via WithQueueing, and defaults to an
+	// initialRejectionFactor of 2 times the current limit and a maxRejectionFactor of 3 times the current limit.
 	//
 	// Prioritized rejection is disabled by default, which means no executions will block when the limiter is full.
 	BuildPrioritized(prioritizer Prioritizer) PriorityLimiter[R]
@@ -162,6 +168,7 @@ type LimitChangedEvent struct {
 }
 
 type config[R any] struct {
+	maxWaitTime            time.Duration
 	logger                 *slog.Logger
 	shortWindowMinDuration time.Duration
 	shortWindowMaxDuration time.Duration
@@ -177,11 +184,11 @@ type config[R any] struct {
 	// Rejection config
 	initialRejectionFactor float64
 	maxRejectionFactor     float64
-	prioritizer            Prioritizer
 
 	alphaFunc, betaFunc        func(int) int
 	increaseFunc, decreaseFunc func(int) int
 
+	onExceeded           func(failsafe.ExecutionEvent[R])
 	limitChangedListener func(LimitChangedEvent)
 }
 
@@ -242,22 +249,24 @@ func (c *config[R]) WithCorrelationWindow(size uint) Builder[R] {
 	return c
 }
 
-func (c *config[R]) WithBlocking() Builder[R] {
-	if c.initialRejectionFactor == 0 && c.maxRejectionFactor == 0 {
-		c.initialRejectionFactor = 2
-		c.maxRejectionFactor = 3
-	}
-	return c
-}
-
-func (c *config[R]) WithRejectionFactors(initialRejectionFactor, maxRejectionFactor float32) Builder[R] {
+func (c *config[R]) WithQueueing(initialRejectionFactor, maxRejectionFactor float32) Builder[R] {
 	c.initialRejectionFactor = float64(initialRejectionFactor)
 	c.maxRejectionFactor = float64(maxRejectionFactor)
 	return c
 }
 
+func (c *config[R]) WithMaxWaitTime(maxWaitTime time.Duration) Builder[R] {
+	c.maxWaitTime = maxWaitTime
+	return c
+}
+
 func (c *config[R]) WithLogger(logger *slog.Logger) Builder[R] {
 	c.logger = logger
+	return c
+}
+
+func (c *config[R]) OnLimitExceeded(listener func(event failsafe.ExecutionEvent[R])) Builder[R] {
+	c.onExceeded = listener
 	return c
 }
 
@@ -279,16 +288,22 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 		rttCorrelation:        util.NewCorrelationWindow(c.correlationWindowSize, warmupSamples),
 		throughputCorrelation: util.NewCorrelationWindow(c.correlationWindowSize, warmupSamples),
 	}
-	if c.initialRejectionFactor != 0 && c.maxRejectionFactor != 0 && c.prioritizer == nil {
-		return &blockingLimiter[R]{adaptiveLimiter: limiter}
+	if c.initialRejectionFactor != 0 && c.maxRejectionFactor != 0 {
+		return &queueingLimiter[R]{adaptiveLimiter: limiter}
 	}
 	return limiter
 }
 
 func (c *config[R]) BuildPrioritized(prioritizer Prioritizer) PriorityLimiter[R] {
-	c.prioritizer = prioritizer
-	limiter := &priorityLimiter[R]{adaptiveLimiter: c.WithBlocking().Build().(*adaptiveLimiter[R])}
-	c.prioritizer.register(limiter)
+	if c.initialRejectionFactor == 0 && c.maxRejectionFactor == 0 {
+		c.initialRejectionFactor = 2
+		c.maxRejectionFactor = 3
+	}
+	limiter := &priorityLimiter[R]{
+		queueingLimiter: c.Build().(*queueingLimiter[R]),
+		prioritizer:     prioritizer,
+	}
+	prioritizer.register(limiter)
 	return limiter
 }
 
@@ -345,29 +360,35 @@ type adaptiveLimiter[R any] struct {
 }
 
 func (l *adaptiveLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	err := l.semaphore.Acquire(ctx)
-	if err != nil {
+	if err := l.semaphore.Acquire(ctx); err != nil {
 		return nil, err
 	}
-	return &recordingPermit[R]{
-		limiter:         l,
-		startTime:       time.Now(),
-		currentInflight: l.semaphore.Used(),
-	}, nil
+	return l.newPermit(), nil
+}
+
+func (l *adaptiveLimiter[R]) AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) (Permit, error) {
+	if err := l.semaphore.AcquireWithMaxWait(ctx, maxWaitTime); err != nil {
+		if errors.Is(err, util.ErrWaitExceeded) {
+			err = ErrExceeded
+		}
+		return nil, err
+	}
+	return l.newPermit(), nil
 }
 
 func (l *adaptiveLimiter[R]) TryAcquirePermit() (Permit, bool) {
 	if !l.semaphore.TryAcquire() {
 		return nil, false
 	}
+	return l.newPermit(), true
+}
+
+func (l *adaptiveLimiter[R]) newPermit() Permit {
 	return &recordingPermit[R]{
 		limiter:         l,
 		startTime:       time.Now(),
 		currentInflight: l.semaphore.Used(),
-	}, true
+	}
 }
 
 func (l *adaptiveLimiter[R]) CanAcquirePermit() bool {
@@ -384,7 +405,7 @@ func (l *adaptiveLimiter[R]) Inflight() int {
 	return l.semaphore.Used()
 }
 
-func (l *adaptiveLimiter[R]) Blocked() int {
+func (l *adaptiveLimiter[R]) Queued() int {
 	return l.semaphore.Waiters()
 }
 
@@ -537,17 +558,10 @@ func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, g
 	}
 }
 
-func (l *adaptiveLimiter[R]) queueStats() (limit, queued, rejectionThreshold, maxQueue int) {
-	limit = l.Limit()
-	rejectionThreshold = int(float64(limit) * l.initialRejectionFactor)
-	maxQueue = int(float64(limit) * l.maxRejectionFactor)
-	return limit, l.Blocked(), rejectionThreshold, maxQueue
-}
-
 func (l *adaptiveLimiter[R]) ToExecutor(_ R) any {
 	e := &adaptiveExecutor[R]{
 		BaseExecutor:    &policy.BaseExecutor[R]{},
-		adaptiveLimiter: l,
+		AdaptiveLimiter: l,
 	}
 	e.Executor = e
 	return e

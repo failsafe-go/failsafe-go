@@ -25,7 +25,7 @@ func TestAdaptiveLimiter(t *testing.T) {
 		assert.Equal(t, 0.0, limiter.shortRTT.Count())
 		assert.Equal(t, 0.0, limiter.longRTT.Value())
 		assert.Equal(t, 0, limiter.Inflight())
-		assert.Equal(t, 0, limiter.Blocked())
+		assert.Equal(t, 0, limiter.Queued())
 	})
 }
 
@@ -62,8 +62,8 @@ func TestAdaptiveLimiter_CanAcquirePermit(t *testing.T) {
 	require.True(t, limiter.CanAcquirePermit())
 }
 
-// Asserts that blocking requests are counted.
-func TestAdaptiveLimiter_Blocked(t *testing.T) {
+// Asserts that queued requests are counted.
+func TestAdaptiveLimiter_Queued(t *testing.T) {
 	limiter := NewBuilder[any]().WithLimits(1, 20, 1).Build()
 	permit, err := limiter.AcquirePermit(context.Background())
 	require.NoError(t, err)
@@ -72,10 +72,10 @@ func TestAdaptiveLimiter_Blocked(t *testing.T) {
 		limiter.AcquirePermit(context.Background())
 	}()
 	assert.Eventually(t, func() bool {
-		return limiter.Blocked() == 1
+		return limiter.Queued() == 1
 	}, 100*time.Millisecond, 10*time.Millisecond)
 	permit.Record()
-	require.Equal(t, 0, limiter.Blocked())
+	require.Equal(t, 0, limiter.Queued())
 }
 
 func TestAdaptiveLimiter_record(t *testing.T) {

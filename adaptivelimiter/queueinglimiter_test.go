@@ -9,46 +9,46 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This test asserts that blocking requests block or are rejected and the rejection rate is updated as expected.
-func TestBlockingLimiter_AcquirePermit(t *testing.T) {
+// This test asserts that queued requests block or are rejected and the rejection rate is updated as expected.
+func TestQueueingLimiter_AcquirePermit(t *testing.T) {
 	limiter := NewBuilder[any]().
 		WithLimits(1, 10, 1).
-		WithRejectionFactors(2, 4).
-		Build().(*blockingLimiter[any])
+		WithQueueing(2, 4).
+		Build().(*queueingLimiter[any])
 	_, err := limiter.AcquirePermit(context.Background())
 	require.NoError(t, err)
 
 	acquireBlocking := func() {
 		go limiter.AcquirePermit(context.Background())
 	}
-	assertBlocked := func(blocked int) {
+	assertQueued := func(queued int) {
 		require.Eventually(t, func() bool {
-			return limiter.Blocked() == blocked
+			return limiter.Queued() == queued
 		}, 300*time.Millisecond, 10*time.Millisecond)
 	}
 
 	go acquireBlocking()
-	assertBlocked(1)
+	assertQueued(1)
 	go acquireBlocking()
-	assertBlocked(2)
+	assertQueued(2)
 	go acquireBlocking()
-	assertBlocked(3)
+	assertQueued(3)
 	assert.Equal(t, .5, limiter.computeRejectionRate())
 	go acquireBlocking()
-	assertBlocked(4)
+	assertQueued(4)
 	assert.Equal(t, 1.0, limiter.computeRejectionRate())
 
 	// Queue is full
 	permit, err := limiter.AcquirePermit(context.Background())
 	require.Nil(t, permit)
 	require.ErrorIs(t, err, ErrExceeded)
-	assertBlocked(4)
+	assertQueued(4)
 	require.Eventually(t, func() bool {
 		return limiter.computeRejectionRate() == 1.0
 	}, 300*time.Millisecond, 10*time.Millisecond)
 }
 
-func TestBlockingLimiter_computeRejectionRate(t *testing.T) {
+func TestQueueingLimiter_computeRejectionRate(t *testing.T) {
 	tests := []struct {
 		name               string
 		queueSize          int

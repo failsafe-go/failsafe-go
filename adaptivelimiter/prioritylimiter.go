@@ -59,7 +59,8 @@ type PriorityLimiter[R any] interface {
 }
 
 type priorityLimiter[R any] struct {
-	*adaptiveLimiter[R]
+	*queueingLimiter[R]
+	prioritizer Prioritizer
 }
 
 func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context, priority Priority) (Permit, error) {
@@ -79,8 +80,8 @@ func (l *priorityLimiter[R]) CanAcquirePermit(priority Priority) bool {
 
 func (l *priorityLimiter[R]) canAcquirePermit(granularPriority int) bool {
 	// Threshold against the limiter's max capacity
-	_, _, _, maxBlocked := l.queueStats()
-	if l.Blocked() >= maxBlocked {
+	_, _, _, maxQueue := l.queueStats()
+	if l.Queued() >= maxQueue {
 		return false
 	}
 

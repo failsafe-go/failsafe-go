@@ -14,28 +14,28 @@ func TestPrioritizer_Calibrate(t *testing.T) {
 	limiter := NewBuilder[any]().
 		WithLimits(1, 10, 1).
 		WithShortWindow(time.Second, time.Second, 10).
-		WithRejectionFactors(2, 4).
+		WithQueueing(2, 4).
 		BuildPrioritized(p).(*priorityLimiter[any])
 
 	acquireBlocking := func() {
 		go limiter.AcquirePermit(context.Background(), PriorityLow)
 	}
-	assertBlocked := func(blocked int) {
+	assertQueued := func(queued int) {
 		require.Eventually(t, func() bool {
-			return limiter.Blocked() == blocked
+			return limiter.Queued() == queued
 		}, 300*time.Millisecond, 10*time.Millisecond)
 	}
 
 	permit, err := limiter.AcquirePermit(context.Background(), PriorityLow)
 	require.NoError(t, err)
 	acquireBlocking()
-	assertBlocked(1)
+	assertQueued(1)
 	acquireBlocking()
-	assertBlocked(2)
+	assertQueued(2)
 	acquireBlocking()
-	assertBlocked(3)
+	assertQueued(3)
 	acquireBlocking()
-	assertBlocked(4)
+	assertQueued(4)
 	permit.Record()
 
 	p.Calibrate()

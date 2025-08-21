@@ -3,17 +3,24 @@ package util
 import (
 	"container/list"
 	"context"
+	"errors"
 	"sync"
+	"time"
 )
+
+// ErrWaitExceeded is returned when maxWaitTime is exceeded while waiting on a permit.
+var ErrWaitExceeded = errors.New("wait time exceeded")
 
 // DynamicSemaphore is a semaphore that can be dynamically resized and allows FIFO blocking when full.
 //
 // This type is concurrency safe.
 type DynamicSemaphore struct {
-	mu      sync.Mutex
-	size    int       // Guarded by mu
-	used    int       // Guarded by mu
-	waiters list.List // Guarded by mu
+	mu sync.Mutex
+
+	// Guarded by mu
+	size    int
+	used    int
+	waiters list.List
 }
 
 func NewDynamicSemaphore(size int) *DynamicSemaphore {
@@ -32,26 +39,73 @@ func (s *DynamicSemaphore) Acquire(ctx context.Context) error {
 		return nil
 	}
 
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	// Create a waiter for a permit
 	waiter := make(chan struct{})
 	waiterElem := s.waiters.PushBack(waiter)
 	s.mu.Unlock()
 
 	select {
-	case <-ctx.Done():
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		// Remove waiter if it wasn't fulfilled
-		select {
-		case <-waiter:
-			return nil
-		default:
-			s.waiters.Remove(waiterElem)
-			return ctx.Err()
-		}
-
 	case <-waiter:
 		return nil
+	case <-ctx.Done():
+		return s.drainWaiter(waiter, waiterElem, ctx.Err())
+	}
+}
+
+// AcquireWithMaxWait acquires a permit from the sempahore, blocking until one is made available via Release, the ctx is Done, or
+// the maxWaitTime is hit. Blocking callers are unblocked in FIFO order as permits are released.
+func (s *DynamicSemaphore) AcquireWithMaxWait(ctx context.Context, maxWaitTime time.Duration) error {
+	s.mu.Lock()
+
+	// See if a permit is immediately available
+	if s.used < s.size {
+		s.used++
+		s.mu.Unlock()
+		return nil
+	}
+
+	// If semaphore is full and no wait is possible, return immediately
+	if maxWaitTime == 0 {
+		return ErrWaitExceeded
+	}
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	// Create a waiter for a permit
+	waiter := make(chan struct{})
+	waiterElem := s.waiters.PushBack(waiter)
+	timer := time.NewTimer(maxWaitTime)
+	defer timer.Stop()
+	s.mu.Unlock()
+
+	select {
+	case <-waiter:
+		return nil
+	case <-ctx.Done():
+		return s.drainWaiter(waiter, waiterElem, ctx.Err())
+	case <-timer.C:
+		return s.drainWaiter(waiter, waiterElem, ErrWaitExceeded)
+	}
+}
+
+// drainWaiter drains a waiter when an Acquire attempt times out. Returns nil if the waiter is ready, else the err.
+func (s *DynamicSemaphore) drainWaiter(waiter chan struct{}, waiterElem *list.Element, err error) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	select {
+	case <-waiter:
+		// Ignore err if a waiter is ready
+		return nil
+	default:
+		// Remove waiter if done prematurely
+		s.waiters.Remove(waiterElem)
+		return err
 	}
 }
 
