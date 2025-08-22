@@ -4,10 +4,6 @@ import (
 	"math"
 )
 
-func NewRollingSum(capacity uint) *RollingSum {
-	return &RollingSum{samples: make([]float64, capacity)}
-}
-
 type RollingSum struct {
 	// For variation and covariance
 	samples []float64
@@ -17,6 +13,10 @@ type RollingSum struct {
 	// Rolling sum fields
 	sumY       float64 // Y values are the samples
 	sumSquares float64
+}
+
+func NewRollingSum(capacity uint) *RollingSum {
+	return &RollingSum{samples: make([]float64, capacity)}
 }
 
 // Add adds the value to the window if it's non-zero, updates the sums, and returns the old value along with whether the

@@ -115,7 +115,7 @@ type Builder[R any] interface {
 	// The default values are 1, 1, and 20.
 	WithLimits(minLimit uint, maxLimit uint, initialLimit uint) Builder[R]
 
-	// WithMaxLimitFactor configures a maxLimitFactor which cap the limit as some multiple of the current inflight executions.
+	// WithMaxLimitFactor configures a maxLimitFactor which caps the limit as some multiple of the current inflight executions.
 	// The default value is 5, which means the limit will only rise to 5 times the inflight executions.
 	WithMaxLimitFactor(maxLimitFactor float32) Builder[R]
 
@@ -352,8 +352,8 @@ type adaptiveLimiter[R any] struct {
 	limit                 float64        // The current concurrency limit
 	shortRTT              *TDigestSample // Short term execution times
 	medianFilter          *util.MedianFilter
-	smoothedShortRTT      util.Ewma
-	longRTT               util.Ewma               // Tracks long term average execution time
+	smoothedShortRTT      *util.Ewma
+	longRTT               *util.Ewma              // Tracks long term average execution time
 	nextUpdateTime        time.Time               // Tracks when the limit can next be updated
 	throughputCorrelation *util.CorrelationWindow // Tracks the correlation between concurrency and throughput
 	rttCorrelation        *util.CorrelationWindow // Tracks the correlation between concurrency and round trip times (RTT)
