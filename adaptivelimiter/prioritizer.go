@@ -18,7 +18,7 @@ type Prioritizer interface {
 	// execution times.
 	RejectionRate() float64
 
-	// RejectionThreshold is the threshold below which requests will be rejected, based on their priority, from 0 to 499.
+	// RejectionThreshold is the threshold below which requests will be rejected, based on their level, from 0 to 499.
 	RejectionThreshold() int
 
 	// Calibrate calibrates the RejectionRate based on recent execution times from registered limiters.
@@ -47,8 +47,8 @@ type PrioritizerBuilder interface {
 
 // ThresholdChangedEvent indicates an Prioritizer's priority threshold has changed.
 type ThresholdChangedEvent struct {
-	OldPriorityThreshold uint
-	NewPriorityThreshold uint
+	OldThreshold uint
+	NewThreshold uint
 }
 
 type prioritizerConfig struct {
@@ -94,11 +94,11 @@ type prioritizer struct {
 	*prioritizerConfig
 
 	// Mutable state
-	priorityThreshold atomic.Int32
-	mu                sync.Mutex
-	limiters          []limiterStats   // Guarded by mu
-	digest            *tdigest.TDigest // Guarded by mu
-	rejectionRate     float64          // Guarded by mu
+	levelThreshold atomic.Int32
+	mu             sync.Mutex
+	limiters       []limiterStats   // Guarded by mu
+	digest         *tdigest.TDigest // Guarded by mu
+	rejectionRate  float64          // Guarded by mu
 }
 
 func (r *prioritizer) register(limiter limiterStats) {
@@ -114,7 +114,7 @@ func (r *prioritizer) RejectionRate() float64 {
 }
 
 func (r *prioritizer) RejectionThreshold() int {
-	return int(r.priorityThreshold.Load())
+	return int(r.levelThreshold.Load())
 }
 
 func (r *prioritizer) Calibrate() {
@@ -138,7 +138,7 @@ func (r *prioritizer) Calibrate() {
 		newThresh = int32(r.digest.Quantile(newRate))
 	}
 	r.mu.Unlock()
-	oldThresh := r.priorityThreshold.Swap(newThresh)
+	oldThresh := r.levelThreshold.Swap(newThresh)
 
 	if r.logger != nil && r.logger.Enabled(nil, slog.LevelDebug) {
 		r.logger.Debug("prioritizer calibration",
@@ -150,8 +150,8 @@ func (r *prioritizer) Calibrate() {
 
 	if oldThresh != newThresh && r.listener != nil {
 		r.listener(ThresholdChangedEvent{
-			OldPriorityThreshold: uint(oldThresh),
-			NewPriorityThreshold: uint(newThresh),
+			OldThreshold: uint(oldThresh),
+			NewThreshold: uint(newThresh),
 		})
 	}
 }

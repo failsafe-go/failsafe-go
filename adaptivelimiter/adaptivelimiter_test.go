@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestAdaptiveLimiter(t *testing.T) {
@@ -33,7 +32,7 @@ func TestAdaptiveLimiter_AcquirePermitAndRecord(t *testing.T) {
 	limiter := NewBuilder[any]().WithLimits(1, 20, 1).Build()
 
 	permit, err := limiter.AcquirePermit(context.Background())
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 1, limiter.Inflight())
 	permit.Record()
 	assert.Equal(t, 0, limiter.Inflight())
@@ -43,10 +42,10 @@ func TestAdaptiveLimiter_TryAcquirePermitAndRecord(t *testing.T) {
 	limiter := NewBuilder[any]().WithLimits(1, 20, 1).Build()
 
 	permit, ok := limiter.TryAcquirePermit()
-	require.True(t, ok)
+	assert.True(t, ok)
 	assert.Equal(t, 1, limiter.Inflight())
 	_, ok = limiter.TryAcquirePermit()
-	require.False(t, ok)
+	assert.False(t, ok)
 	permit.Record()
 	assert.Equal(t, 0, limiter.Inflight())
 }
@@ -54,19 +53,19 @@ func TestAdaptiveLimiter_TryAcquirePermitAndRecord(t *testing.T) {
 func TestAdaptiveLimiter_CanAcquirePermit(t *testing.T) {
 	limiter := NewBuilder[any]().WithLimits(1, 20, 1).Build()
 
-	require.True(t, limiter.CanAcquirePermit())
+	assert.True(t, limiter.CanAcquirePermit())
 	permit, err := limiter.AcquirePermit(context.Background())
-	require.NoError(t, err)
-	require.False(t, limiter.CanAcquirePermit())
+	assert.NoError(t, err)
+	assert.False(t, limiter.CanAcquirePermit())
 	permit.Record()
-	require.True(t, limiter.CanAcquirePermit())
+	assert.True(t, limiter.CanAcquirePermit())
 }
 
 // Asserts that queued requests are counted.
 func TestAdaptiveLimiter_Queued(t *testing.T) {
 	limiter := NewBuilder[any]().WithLimits(1, 20, 1).Build()
 	permit, err := limiter.AcquirePermit(context.Background())
-	require.NoError(t, err)
+	assert.NoError(t, err)
 
 	go func() {
 		limiter.AcquirePermit(context.Background())
@@ -75,7 +74,7 @@ func TestAdaptiveLimiter_Queued(t *testing.T) {
 		return limiter.Queued() == 1
 	}, 100*time.Millisecond, 10*time.Millisecond)
 	permit.Record()
-	require.Equal(t, 0, limiter.Queued())
+	assert.Equal(t, 0, limiter.Queued())
 }
 
 func TestAdaptiveLimiter_record(t *testing.T) {
@@ -93,7 +92,7 @@ func TestAdaptiveLimiter_record(t *testing.T) {
 	recordFn := func(limiter *adaptiveLimiter[any], startTime time.Time, rtt time.Duration, inflight int) time.Time {
 		// Simulate recording a sample after 2 seconds
 		now := startTime.Add(2 * time.Second)
-		require.NoError(t, limiter.semaphore.Acquire(context.Background()))
+		assert.NoError(t, limiter.semaphore.Acquire(context.Background()))
 		limiter.record(now, rtt, inflight, false)
 		return now
 	}

@@ -16,12 +16,7 @@ var _ policy.Executor[any] = &priorityLimiterExecutor[any]{}
 
 func (e *priorityLimiterExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
-		priority := PriorityLow
-		if untypedPriority := exec.Context().Value(PriorityKey); untypedPriority != nil {
-			priority, _ = untypedPriority.(Priority)
-		}
-
-		if permit, err := e.AcquirePermit(exec.Context(), priority); err != nil {
+		if permit, err := e.AcquirePermit(exec.Context()); err != nil {
 			return internal.FailureResult[R](err)
 		} else {
 			execInternal := exec.(policy.ExecutionInternal[R])

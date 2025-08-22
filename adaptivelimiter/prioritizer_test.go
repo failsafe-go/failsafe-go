@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 )
 
 // Tests that a rejection rate is computed as expected based on queue sizes.
@@ -18,16 +18,16 @@ func TestPrioritizer_Calibrate(t *testing.T) {
 		BuildPrioritized(p).(*priorityLimiter[any])
 
 	acquireBlocking := func() {
-		go limiter.AcquirePermit(context.Background(), PriorityLow)
+		go limiter.AcquirePermitWithPriority(context.Background(), PriorityLow)
 	}
 	assertQueued := func(queued int) {
-		require.Eventually(t, func() bool {
+		assert.Eventually(t, func() bool {
 			return limiter.Queued() == queued
 		}, 300*time.Millisecond, 10*time.Millisecond)
 	}
 
-	permit, err := limiter.AcquirePermit(context.Background(), PriorityLow)
-	require.NoError(t, err)
+	permit, err := limiter.AcquirePermitWithPriority(context.Background(), PriorityLow)
+	assert.NoError(t, err)
 	acquireBlocking()
 	assertQueued(1)
 	acquireBlocking()
@@ -39,8 +39,8 @@ func TestPrioritizer_Calibrate(t *testing.T) {
 	permit.Record()
 
 	p.Calibrate()
-	require.Equal(t, .5, p.RejectionRate())
-	require.True(t, p.priorityThreshold.Load() > 0 && p.priorityThreshold.Load() < 200, "low priority execution should be rejected")
+	assert.Equal(t, .5, p.RejectionRate())
+	assert.True(t, p.levelThreshold.Load() > 0 && p.levelThreshold.Load() < 200, "low priority execution should be rejected")
 }
 
 func TestComputeRejectionRate(t *testing.T) {
@@ -91,7 +91,7 @@ func TestComputeRejectionRate(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			rate := computeRejectionRate(tc.queueSize, tc.rejectionThreshold, tc.maxQueueSize)
-			require.Equal(t, tc.expectedRate, rate)
+			assert.Equal(t, tc.expectedRate, rate)
 		})
 	}
 }

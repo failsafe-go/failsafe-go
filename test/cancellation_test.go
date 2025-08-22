@@ -111,7 +111,7 @@ func TestCancelWithContextDuringPendingRetry(t *testing.T) {
 // Asserts that waiting on a cancelation from an ExecutionResult works from during a retry delay.
 func TestCancelWithExecutionResultDuringPendingRetry(t *testing.T) {
 	// Given
-	rp := policytesting.WithRetryLogs[any](retrypolicy.Builder[any]().WithDelay(time.Second)).Build()
+	rp := policytesting.WithRetryLogs[any](retrypolicy.NewBuilder[any]().WithDelay(time.Second)).Build()
 
 	// When
 	result := failsafe.NewExecutor[any](rp).RunAsync(func() error {
