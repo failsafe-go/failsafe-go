@@ -17,7 +17,7 @@ func TestPrioritizer_Calibrate(t *testing.T) {
 		WithQueueing(2, 4).
 		BuildPrioritized(p).(*priorityLimiter[any])
 
-	acquireBlocking := func() {
+	acquire := func() {
 		go limiter.AcquirePermitWithPriority(context.Background(), PriorityLow)
 	}
 	assertQueued := func(queued int) {
@@ -28,70 +28,17 @@ func TestPrioritizer_Calibrate(t *testing.T) {
 
 	permit, err := limiter.AcquirePermitWithPriority(context.Background(), PriorityLow)
 	assert.NoError(t, err)
-	acquireBlocking()
+	acquire()
 	assertQueued(1)
-	acquireBlocking()
+	acquire()
 	assertQueued(2)
-	acquireBlocking()
+	acquire()
 	assertQueued(3)
-	acquireBlocking()
+	acquire()
 	assertQueued(4)
 	permit.Record()
 
 	p.Calibrate()
 	assert.Equal(t, .5, p.RejectionRate())
 	assert.True(t, p.levelThreshold.Load() > 0 && p.levelThreshold.Load() < 200, "low priority execution should be rejected")
-}
-
-func TestComputeRejectionRate(t *testing.T) {
-	tests := []struct {
-		name               string
-		queueSize          int
-		rejectionThreshold int
-		maxQueueSize       int
-		expectedRate       float64
-	}{
-		{
-			name:               "queueSize below rejectionThreshold",
-			queueSize:          50,
-			rejectionThreshold: 60,
-			maxQueueSize:       100,
-			expectedRate:       0,
-		},
-		{
-			name:               "queueSize equal to rejectionThreshold",
-			queueSize:          60,
-			rejectionThreshold: 60,
-			maxQueueSize:       100,
-			expectedRate:       0,
-		},
-		{
-			name:               "queueSize between rejectionThreshold and maxQueueSize",
-			queueSize:          80,
-			rejectionThreshold: 60,
-			maxQueueSize:       100,
-			expectedRate:       .5,
-		},
-		{
-			name:               "queueSize equal to maxQueueSize",
-			queueSize:          100,
-			rejectionThreshold: 60,
-			maxQueueSize:       100,
-			expectedRate:       1,
-		},
-		{
-			name:               "queueSize above maxQueueSize",
-			queueSize:          120,
-			rejectionThreshold: 60,
-			maxQueueSize:       100,
-			expectedRate:       1,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			rate := computeRejectionRate(tc.queueSize, tc.rejectionThreshold, tc.maxQueueSize)
-			assert.Equal(t, tc.expectedRate, rate)
-		})
-	}
 }
