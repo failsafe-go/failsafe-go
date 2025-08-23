@@ -102,6 +102,7 @@ type Builder[R any] interface {
 	// WithShortWindow configures the size of a window that is used to determine current, short-term load on the system in
 	// terms of the min and max duration of the window, and the min number of samples that must be recorded in the window.
 	// The default values are 1s, 1s, and 1.
+	// Panics if minDuration is not <= maxDuration.
 	WithShortWindow(minDuration time.Duration, maxDuration time.Duration, minSamples uint) Builder[R]
 
 	// WithLongWindow configures the number of short-term execution measurements that will be stored in an exponentially
@@ -111,14 +112,17 @@ type Builder[R any] interface {
 
 	// WithSampleQuantile configures the quantile of recorded response times to consider when adjusting the concurrency limit.
 	// Defaults to .9 which uses p90 samples.
+	// Panics if quantile is negative.
 	WithSampleQuantile(quantile float32) Builder[R]
 
 	// WithLimits configures min, max, and initial limits.
 	// The default values are 1, 1, and 20.
+	// Panics if minLimit is not <= maxLimit or initialLimit is not between minLimit and maxLimit.
 	WithLimits(minLimit uint, maxLimit uint, initialLimit uint) Builder[R]
 
 	// WithMaxLimitFactor configures a maxLimitFactor which caps the limit as some multiple of the current inflight executions.
 	// The default value is 5, which means the limit will only rise to 5 times the inflight executions.
+	// Panics if maxLimitFactor < 1.
 	WithMaxLimitFactor(maxLimitFactor float32) Builder[R]
 
 	// WithCorrelationWindow configures how many recent limit and execution time measurements are stored to detect whether increases
@@ -135,6 +139,7 @@ type Builder[R any] interface {
 	// limit. Queueing allows short execution spikes to be absorbed without strictly rejecting executions.
 	//
 	// WithQueueing is disabled by default, which means no executions will queue when the limiter is full.
+	// Panics if initialRejectionFactor or maxRejectionFactor are < 1 or if initialRejectionFactor is not <= maxRejectionFactor.
 	WithQueueing(initialRejectionFactor, maxRejectionFactor float32) Builder[R]
 
 	// WithMaxWaitTime configures the maxWaitTime to wait for a permit to be available, when the limiter is full.
@@ -218,6 +223,7 @@ func NewBuilder[R any]() Builder[R] {
 }
 
 func (c *config[R]) WithShortWindow(minDuration time.Duration, maxDuration time.Duration, minSamples uint) Builder[R] {
+	util.Assert(minDuration <= maxDuration, "minDuration must be <= maxDuration")
 	c.shortWindowMinDuration = minDuration
 	c.shortWindowMaxDuration = maxDuration
 	c.shortWindowMinSamples = minSamples
@@ -230,11 +236,14 @@ func (c *config[R]) WithLongWindow(size uint) Builder[R] {
 }
 
 func (c *config[R]) WithSampleQuantile(quantile float32) Builder[R] {
+	util.Assert(quantile >= 0, "quantile must be >= 0")
 	c.quantile = float64(quantile)
 	return c
 }
 
 func (c *config[R]) WithLimits(minLimit uint, maxLimit uint, initialLimit uint) Builder[R] {
+	util.Assert(minLimit <= maxLimit, "minLimit must be <= maxLimit")
+	util.Assert(minLimit <= initialLimit && initialLimit <= maxLimit, "initialLimit must be between minLimit and maxLimit")
 	c.minLimit = float64(max(1, minLimit))
 	c.maxLimit = float64(maxLimit)
 	c.initialLimit = initialLimit
@@ -242,6 +251,7 @@ func (c *config[R]) WithLimits(minLimit uint, maxLimit uint, initialLimit uint) 
 }
 
 func (c *config[R]) WithMaxLimitFactor(maxLimitFactor float32) Builder[R] {
+	util.Assert(maxLimitFactor >= 1, "maxLimitFactor must be >= 1")
 	c.maxLimitFactor = float64(maxLimitFactor)
 	return c
 }
@@ -252,6 +262,9 @@ func (c *config[R]) WithCorrelationWindow(size uint) Builder[R] {
 }
 
 func (c *config[R]) WithQueueing(initialRejectionFactor, maxRejectionFactor float32) Builder[R] {
+	util.Assert(initialRejectionFactor >= 1, "initialRejectionFactor must be >= 1")
+	util.Assert(maxRejectionFactor >= 1, "maxRejectionFactor must be >= 1")
+	util.Assert(initialRejectionFactor <= maxRejectionFactor, "initialRejectionFactor must be <= maxRejectionFactor")
 	c.initialRejectionFactor = float64(initialRejectionFactor)
 	c.maxRejectionFactor = float64(maxRejectionFactor)
 	return c
