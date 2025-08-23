@@ -140,3 +140,64 @@ func TestAdaptiveLimiter_record(t *testing.T) {
 		assert.Equal(t, 20, limiter.Limit())
 	})
 }
+
+func TestAdaptiveLimiter_BuilderValidation(t *testing.T) {
+	t.Run("should panic on invalid WithShortWindow", func(t *testing.T) {
+		assert.Panicsf(t, func() {
+			NewBuilder[any]().WithShortWindow(time.Minute, time.Second, 1)
+		}, "expected panic with invalid short window")
+	})
+
+	t.Run("should panic on invalid WithSampleQuantile", func(t *testing.T) {
+		assert.Panicsf(t, func() {
+			NewBuilder[any]().WithSampleQuantile(-1)
+		}, "expected panic with invalid sample quantile")
+	})
+
+	t.Run("should panic on invalid WithLimits", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			min     uint
+			max     uint
+			initial uint
+		}{
+			{"min greater than max", 2, 2, 1},
+			{"initial less than min", 1, 2, 0},
+			{"initial greater than max", 1, 2, 3},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				assert.Panicsf(t, func() {
+					NewBuilder[any]().WithLimits(tt.min, tt.max, tt.initial)
+				}, "expected panic with invalid limits")
+			})
+		}
+	})
+
+	t.Run("should panic on invalid WithMaxLimitFactor", func(t *testing.T) {
+		assert.Panicsf(t, func() {
+			NewBuilder[any]().WithMaxLimitFactor(.5)
+		}, "expected panic with invalid max limit factor")
+	})
+
+	t.Run("should panic on invalid WithQueueing", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			initial float32
+			max     float32
+		}{
+			{"initial < 1", .5, 2},
+			{"max < 1", 2, .5},
+			{"initial greater than max", 2, 1},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				assert.Panicsf(t, func() {
+					NewBuilder[any]().WithQueueing(tt.initial, tt.max)
+				}, "expected panic with invalid limits")
+			})
+		}
+	})
+}
