@@ -24,7 +24,7 @@ const (
 	smoothedSamples = 5
 )
 
-// AdaptiveLimiter is a concurrency limiter that adjusts its limit up or down based on execution time trends:
+// AdaptiveLimiter is an adaptive concurrency limiter that adjusts its limit up or down based on execution time trends:
 //  - When recent execution times are trending up relative to longer term execution times, the concurrency limit is decreased.
 //  - When recent execution times are trending down relative to longer term execution times, the concurrency limit is increased.
 //
@@ -32,11 +32,13 @@ const (
 // longer-term execution times. Limit increases are additionally controlled to ensure they don't increase execution times. Any
 // executions in excess of the limit will be rejected with ErrExceeded.
 //
-// By default, an AdaptiveLimiter will converge on a concurrency limit that represents the capacity of the machine it's
-// running on, and avoids having executions queue. Since enforcing a limit without allowing for queueing is too strict
-// in some cases and may cause unexpected rejections, optional queueing of executions when the limiter is full can be
-// enabled via WithQueueing. Queueing with prioritized rejections can be enabled via BuildPrioritized, which accepts a
-// Prioritizer that can be shared across multiple limiters.
+// By default, during overload, an AdaptiveLimiter will converge on a concurrency limit that represents the capacity of
+// the machine it's running on, and avoids having executions queue. Since enforcing a limit without allowing for
+// queueing is too strict in some cases and may cause unexpected rejections, optional queueing of executions when the
+// limiter is full can be enabled via WithQueueing.
+//
+// Prioritized rejections can be enabled via BuildPrioritized, which accepts a Prioritizer that regularly determines a
+// rejection threshold based on recent queueing across limiters.
 //
 // R is the execution result type. This type is concurrency safe.
 type AdaptiveLimiter[R any] interface {
@@ -559,9 +561,9 @@ func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, g
 }
 
 func (l *adaptiveLimiter[R]) ToExecutor(_ R) any {
-	e := &adaptiveExecutor[R]{
+	e := &executor[R]{
 		BaseExecutor:    &policy.BaseExecutor[R]{},
-		AdaptiveLimiter: l,
+		blockingLimiter: l,
 	}
 	e.Executor = e
 	return e

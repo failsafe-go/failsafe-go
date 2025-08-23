@@ -11,8 +11,15 @@ import (
 	"github.com/influxdata/tdigest"
 )
 
-// Prioritizer computes a rejection rate and priority threshold for one or more priority limiters, which can be used to
-// determine whether to accept or reject an execution.
+// Prioritizer computes a rejection rate and rejection threshold for one or more priority limiters, which can be used to
+// determine whether to accept or reject an execution. Individual requests through the same limiter can be prioritized
+// differently. A Prioritizer can also be used with multiple limiters, to determine rejection thresholds based on the
+// amount of queueing across limiters.
+//
+// In order to operate correctly, a Prioritizer needs to be regularly calibrated, either by calling Calibrate at regular
+// intervals, or by using ScheduleCalibrations.
+//
+// This type is concurrency safe.
 type Prioritizer interface {
 	// RejectionRate returns the current rate, from 0 to 1, at which the limiter will reject requests, based on recent
 	// execution times.
@@ -24,7 +31,7 @@ type Prioritizer interface {
 	// Calibrate calibrates the RejectionRate based on recent execution times from registered limiters.
 	Calibrate()
 
-	// ScheduleCalibrations runs calibration on the interval until the ctx is done or the returned CancelFunc is called.
+	// ScheduleCalibrations runs Calibrate on the interval until the ctx is done or the returned CancelFunc is called.
 	ScheduleCalibrations(ctx context.Context, interval time.Duration) context.CancelFunc
 
 	register(limiter limiterStats)
@@ -35,7 +42,7 @@ type Prioritizer interface {
 //
 // This type is not concurrency safe.
 type PrioritizerBuilder interface {
-	// OnThresholdChanged configures a listener to be called with the priority threshold for rejection changes.
+	// OnThresholdChanged configures a listener to be called with the rejection threshold for rejection changes.
 	OnThresholdChanged(listener func(event ThresholdChangedEvent)) PrioritizerBuilder
 
 	// WithLogger configures a logger which provides debug logging of calibrations.
@@ -45,7 +52,7 @@ type PrioritizerBuilder interface {
 	Build() Prioritizer
 }
 
-// ThresholdChangedEvent indicates an Prioritizer's priority threshold has changed.
+// ThresholdChangedEvent indicates a Prioritizer's rejection threshold has changed.
 type ThresholdChangedEvent struct {
 	OldThreshold uint
 	NewThreshold uint
@@ -58,11 +65,12 @@ type prioritizerConfig struct {
 
 var _ PrioritizerBuilder = &prioritizerConfig{}
 
+// NewPrioritizer returns a new Prioritizer.
 func NewPrioritizer() Prioritizer {
 	return NewPrioritizerBuilder().Build()
 }
 
-// NewPrioritizerBuilder returns a PrioritizerBuilder.
+// NewPrioritizerBuilder returns a new PrioritizerBuilder.
 func NewPrioritizerBuilder() PrioritizerBuilder {
 	return &prioritizerConfig{}
 }
@@ -94,11 +102,11 @@ type prioritizer struct {
 	*prioritizerConfig
 
 	// Mutable state
-	levelThreshold atomic.Int32
-	mu             sync.Mutex
-	limiters       []limiterStats   // Guarded by mu
-	digest         *tdigest.TDigest // Guarded by mu
-	rejectionRate  float64          // Guarded by mu
+	rejectionThreshold atomic.Int32
+	mu                 sync.Mutex
+	limiters           []limiterStats   // Guarded by mu
+	digest             *tdigest.TDigest // Guarded by mu
+	rejectionRate      float64          // Guarded by mu
 }
 
 func (r *prioritizer) register(limiter limiterStats) {
@@ -114,7 +122,7 @@ func (r *prioritizer) RejectionRate() float64 {
 }
 
 func (r *prioritizer) RejectionThreshold() int {
-	return int(r.levelThreshold.Load())
+	return int(r.rejectionThreshold.Load())
 }
 
 func (r *prioritizer) Calibrate() {
@@ -130,7 +138,7 @@ func (r *prioritizer) Calibrate() {
 		totalMaxQueue += maxQueue
 	}
 
-	// Update rejection rate and priority threshold
+	// Update rejection rate and rejection threshold
 	newRate := computeRejectionRate(totalQueued, totalRejectionThresh, totalMaxQueue)
 	r.rejectionRate = newRate
 	var newThresh int32
@@ -138,7 +146,7 @@ func (r *prioritizer) Calibrate() {
 		newThresh = int32(r.digest.Quantile(newRate))
 	}
 	r.mu.Unlock()
-	oldThresh := r.levelThreshold.Swap(newThresh)
+	oldThresh := r.rejectionThreshold.Swap(newThresh)
 
 	if r.logger != nil && r.logger.Enabled(nil, slog.LevelDebug) {
 		r.logger.Debug("prioritizer calibration",

@@ -1,7 +1,9 @@
 package adaptivelimiter
 
 import (
+	"context"
 	"errors"
+	"time"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/common"
@@ -9,18 +11,22 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// adaptiveExecutor is a policy.Executor that handles failures according to an AdaptiveLimiter.
-type adaptiveExecutor[R any] struct {
-	*policy.BaseExecutor[R]
-	AdaptiveLimiter[R]
+type blockingLimiter[R any] interface {
+	AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) (Permit, error)
 }
 
-var _ policy.Executor[any] = &adaptiveExecutor[any]{}
+// executor is a policy.Executor that handles failures according to an AdaptiveLimiter or PriorityLimiter.
+type executor[R any] struct {
+	*policy.BaseExecutor[R]
+	blockingLimiter[R]
+}
 
-func (e *adaptiveExecutor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
+var _ policy.Executor[any] = &executor[any]{}
+
+func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
-		limiter := e.AdaptiveLimiter.(*adaptiveLimiter[R])
+		limiter := e.blockingLimiter.(*adaptiveLimiter[R])
 		permit, err := e.AcquirePermitWithMaxWait(exec.Context(), limiter.maxWaitTime)
 
 		if err != nil {

@@ -72,9 +72,9 @@ func (l *queueingLimiter[R]) queueStats() (limit, queued, rejectionThreshold, ma
 }
 
 func (l *queueingLimiter[R]) ToExecutor(_ R) any {
-	e := &adaptiveExecutor[R]{
+	e := &executor[R]{
 		BaseExecutor:    &policy.BaseExecutor[R]{},
-		AdaptiveLimiter: l,
+		blockingLimiter: l,
 	}
 	e.Executor = e
 	return e

@@ -40,5 +40,5 @@ func TestPrioritizer_Calibrate(t *testing.T) {
 
 	p.Calibrate()
 	assert.Equal(t, .5, p.RejectionRate())
-	assert.True(t, p.levelThreshold.Load() > 0 && p.levelThreshold.Load() < 200, "low priority execution should be rejected")
+	assert.True(t, p.rejectionThreshold.Load() > 0 && p.rejectionThreshold.Load() < 200, "low priority execution should be rejected")
 }

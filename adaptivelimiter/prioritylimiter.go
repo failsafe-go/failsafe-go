@@ -41,32 +41,34 @@ const PriorityKey key = 0
 const LevelKey key = 1
 
 // PriorityLimiter is an adaptive concurrency limiter that can prioritize request rejections via a Prioritizer.
+//
+// R is the execution result type. This type is concurrency safe.
 type PriorityLimiter[R any] interface {
 	failsafe.Policy[R]
 	Metrics
 
 	// AcquirePermit attempts to acquire a permit for a request at the priority or level contained in the context, waiting
 	// until one is available or the execution is canceled. Returns [context.Canceled] if the ctx is canceled. The request
-	// priority must be greater than the current priority threshold for admission. If a priority and level are both
+	// priority must be greater than the current rejection threshold for admission. If a priority and level are both
 	// provided, the level takes precedent. If no priority or level are provided, level 0 is used. Levels must be between 0
 	// and 499.
 	AcquirePermit(ctx context.Context) (Permit, error)
 
 	// AcquirePermitWithMaxWait attempts to acquire a permit for a request at the priority or level contained in the
 	// context, waiting until one is available, the execution is canceled, or the maxWaitTime is exceeded. Returns
-	// [context.Canceled] if the ctx is canceled. The request priority must be greater than the current priority threshold
+	// [context.Canceled] if the ctx is canceled. The request priority must be greater than the current rejection threshold
 	// for admission. If a priority and level are both provided, the level takes precedent. If no priority or level are
 	// provided, level 0 is used. Levels must be between 0 and 499.
 	AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) (Permit, error)
 
 	// AcquirePermitWithPriority attempts to acquire a permit for a request at the given priority, waiting until one is
 	// available or the execution is canceled. Returns [context.Canceled] if the ctx is canceled. The request priority must
-	// be greater than the current priority threshold for admission.
+	// be greater than the current rejection threshold for admission.
 	AcquirePermitWithPriority(ctx context.Context, priority Priority) (Permit, error)
 
 	// AcquirePermitWithLevel attempts to acquire a permit for a request at the given priority level, waiting until one is
 	// available or the execution is canceled. Returns [context.Canceled] if the ctx is canceled. The request priority level
-	// must be greater than the current priority threshold for admission, and the level must be between 0 and 499.
+	// must be greater than the current rejection threshold for admission, and the level must be between 0 and 499.
 	AcquirePermitWithLevel(ctx context.Context, level int) (Permit, error)
 
 	// CanAcquirePermit returns whether it's currently possible to acquire a permit for the priority or level contained in
@@ -155,9 +157,9 @@ func levelForContext(ctx context.Context) int {
 }
 
 func (l *priorityLimiter[R]) ToExecutor(_ R) any {
-	e := &priorityLimiterExecutor[R]{
+	e := &executor[R]{
 		BaseExecutor:    &policy.BaseExecutor[R]{},
-		priorityLimiter: l,
+		blockingLimiter: l,
 	}
 	e.Executor = e
 	return e
