@@ -33,7 +33,7 @@ func TestHttpWithRetryPolicy(t *testing.T) {
 
 	// Use the RetryPolicy with a failsafe RoundTripper
 	t.Run("with failsafe round tripper", func(t *testing.T) {
-		// Setup a test http server that returns 429 on the first two requests with a 1 second Retry-After header
+		// Before a test http server that returns 429 on the first two requests with a 1 second Retry-After header
 		server := flakyServer(2, 429, time.Second)
 		defer server.Close()
 
@@ -49,7 +49,7 @@ func TestHttpWithRetryPolicy(t *testing.T) {
 
 	// Use the RetryPolicy with an HTTP client via a failsafe execution
 	t.Run("with failsafe execution", func(t *testing.T) {
-		// Setup a test http server that returns 429 on the first two requests with a 1 second Retry-After header
+		// Before a test http server that returns 429 on the first two requests with a 1 second Retry-After header
 		server := flakyServer(2, 429, time.Second)
 		defer server.Close()
 
@@ -66,7 +66,7 @@ func TestHttpWithRetryPolicy(t *testing.T) {
 
 	// Use the RetryPolicy with a failsafehttp.Request
 	t.Run("with failsafehttp.Request", func(t *testing.T) {
-		// Setup a test http server that returns 429 on the first two requests with a 1 second Retry-After header
+		// Before a test http server that returns 429 on the first two requests with a 1 second Retry-After header
 		server := flakyServer(2, 429, time.Second)
 		defer server.Close()
 		client := &http.Client{}
@@ -82,7 +82,7 @@ func TestHttpWithRetryPolicy(t *testing.T) {
 
 // This test demonstrates how to use a RetryPolicy with custom response handling HTTP using a failsafe RoundTripper.
 func TestHttpWithCustomRetryPolicy(t *testing.T) {
-	// Setup a test http server that returns 500 on the first two requests
+	// Before a test http server that returns 500 on the first two requests
 	server := flakyServer(2, 500, 0)
 	defer server.Close()
 
@@ -108,7 +108,7 @@ func TestHttpWithCustomRetryPolicy(t *testing.T) {
 
 // This test demonstrates how to use a CircuitBreaker with HTTP via a RoundTripper.
 func TestHttpWithCircuitBreaker(t *testing.T) {
-	// Setup a test http server that returns 429 on the first request with a 1 second Retry-After header
+	// Before a test http server that returns 429 on the first request with a 1 second Retry-After header
 	server := flakyServer(1, 429, time.Second)
 	defer server.Close()
 
@@ -148,7 +148,7 @@ func TestHttpWithCircuitBreaker(t *testing.T) {
 // will delay 5 seconds before responding to any of the requests. After the first successul response is received by the
 // client, the context for any outstanding requests will be canceled.
 func TestHttpWithHedgePolicy(t *testing.T) {
-	// Setup a test http server that takes 5 seconds to respond
+	// Before a test http server that takes 5 seconds to respond
 	server := slowServer(5 * time.Second)
 	defer server.Close()
 
@@ -187,7 +187,7 @@ func TestHttpWithHedgePolicy(t *testing.T) {
 
 // This test demonstrates how to use a Timeout with HTTP via a RoundTripper.
 func TestHttpWithTimeout(t *testing.T) {
-	// Setup a test http server that takes 5 seconds to respond
+	// Before a test http server that takes 5 seconds to respond
 	server := slowServer(5 * time.Second)
 	defer server.Close()
 

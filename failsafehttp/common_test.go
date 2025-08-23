@@ -37,8 +37,8 @@ func (t *tester) Url(url string) *tester {
 	return t
 }
 
-func (t *tester) Setup(fn func()) *tester {
-	t.tester.Setup(fn)
+func (t *tester) Before(fn func()) *tester {
+	t.tester.Before(fn)
 	return t
 }
 
@@ -89,7 +89,7 @@ func (t *tester) assertResult(expectedAttempts int, expectedExecutions int, expe
 		t.tester.Executor = failsafe.NewExecutor[*http.Response](t.tester.Policies...)
 	}
 
-	executorFn, assertResult := testutil.PrepareTest(t.tester.T, t.tester.SetupFn, nil, t.tester.Executor)
+	executorFn, assertResult := testutil.PrepareTest(t.tester.T, t.tester.BeforeFn, nil, t.tester.Executor)
 	assertHttpResult := func(resp *http.Response, err error) {
 		// Read body
 		var body string

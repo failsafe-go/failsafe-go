@@ -70,6 +70,7 @@ func (s *DynamicSemaphore) AcquireWithMaxWait(ctx context.Context, maxWaitTime t
 
 	// If semaphore is full and no wait is possible, return immediately
 	if maxWaitTime == 0 {
+		s.mu.Unlock()
 		return ErrWaitExceeded
 	}
 

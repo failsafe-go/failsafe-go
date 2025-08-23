@@ -20,8 +20,9 @@ type Resetable interface {
 }
 
 type Tester[R any] struct {
-	T       *testing.T
-	SetupFn func()
+	T        *testing.T
+	BeforeFn func()
+	AfterFn  func()
 	ContextFn
 	Policies []failsafe.Policy[R]
 	Executor failsafe.Executor[R]
@@ -35,8 +36,13 @@ func Test[R any](t *testing.T) *Tester[R] {
 	}
 }
 
-func (t *Tester[R]) Setup(fn func()) *Tester[R] {
-	t.SetupFn = fn
+func (t *Tester[R]) Before(fn func()) *Tester[R] {
+	t.BeforeFn = fn
+	return t
+}
+
+func (t *Tester[R]) After(fn func()) *Tester[R] {
+	t.AfterFn = fn
 	return t
 }
 
@@ -46,7 +52,11 @@ func (t *Tester[R]) Context(fn func() context.Context) *Tester[R] {
 }
 
 func (t *Tester[R]) Reset(stats ...Resetable) *Tester[R] {
-	t.SetupFn = func() {
+	prev := t.BeforeFn
+	t.BeforeFn = func() {
+		if prev != nil {
+			prev()
+		}
 		for _, s := range stats {
 			s.Reset()
 		}
@@ -96,7 +106,7 @@ func (t *Tester[R]) assertResult(expectedAttempts int, expectedExecutions int, e
 		t.Executor = failsafe.NewExecutor[R](t.Policies...)
 	}
 	test := func(async bool) {
-		executorFn, assertFn := PrepareTest(t.T, t.SetupFn, t.ContextFn, t.Executor)
+		executorFn, assertFn := PrepareTest(t.T, t.BeforeFn, t.ContextFn, t.Executor)
 
 		// Execute
 		var result R
@@ -117,6 +127,10 @@ func (t *Tester[R]) assertResult(expectedAttempts int, expectedExecutions int, e
 		}
 
 		assertFn(expectedAttempts, expectedExecutions, expectedResult, result, expectedError, err, expectedSuccess, !expectedSuccess, errorAs, then...)
+
+		if t.AfterFn != nil {
+			t.AfterFn()
+		}
 	}
 
 	// Run sync
@@ -130,14 +144,14 @@ func (t *Tester[R]) assertResult(expectedAttempts int, expectedExecutions int, e
 
 type AssertFunc[R any] func(expectedAttempts int, expectedExecutions int, expectedResult R, result R, expectedErr error, err error, expectedSuccess bool, expectedFailure bool, errorAs bool, thens ...func())
 
-func PrepareTest[R any](t *testing.T, setupFn func(), contextFn ContextFn, executor failsafe.Executor[R]) (executorFn func() failsafe.Executor[R], assertFn AssertFunc[R]) {
+func PrepareTest[R any](t *testing.T, beforeFn func(), contextFn ContextFn, executor failsafe.Executor[R]) (executorFn func() failsafe.Executor[R], assertFn AssertFunc[R]) {
 	var doneEvent atomic.Pointer[failsafe.ExecutionDoneEvent[R]]
 	var onSuccessCalled atomic.Bool
 	var onFailureCalled atomic.Bool
 
 	executorFn = func() failsafe.Executor[R] {
-		if setupFn != nil {
-			setupFn()
+		if beforeFn != nil {
+			beforeFn()
 		}
 		result := executor
 		if contextFn != nil {

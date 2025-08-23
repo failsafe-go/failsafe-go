@@ -67,7 +67,7 @@ func TestClientRetryPolicyWith429ThenSuccess(t *testing.T) {
 
 	// When / Then
 	test(t, server).
-		Setup(setup).
+		Before(setup).
 		With(rp).
 		AssertSuccess(3, 3, 200, "foo")
 }

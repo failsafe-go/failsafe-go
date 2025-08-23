@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/adaptivelimiter"
 	"github.com/failsafe-go/failsafe-go/bulkhead"
 	"github.com/failsafe-go/failsafe-go/cachepolicy"
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
@@ -61,6 +62,21 @@ func withRetryStatsAndLogs[R any](rp retrypolicy.Builder[R], stats *Stats, withL
 	})
 	withStatsAndLogs[retrypolicy.Builder[R], R](rp, stats, withLogging)
 	return rp
+}
+
+func WithAdaptiveLimiterStatsAndLogs[R any](l adaptivelimiter.Builder[R], stats *Stats, withLogging bool) adaptivelimiter.Builder[R] {
+	l.OnLimitChanged(func(event adaptivelimiter.LimitChangedEvent) {
+		if withLogging {
+			stats.limitsChanged.Add(1)
+			fmt.Printf("adaptivelimiter %p changed\n", l)
+		}
+	}).OnLimitExceeded(func(e failsafe.ExecutionEvent[R]) {
+		if withLogging {
+			stats.limitsExceeded.Add(1)
+			fmt.Printf("adaptivelimiter %p exceeded\n", l)
+		}
+	})
+	return l
 }
 
 func WithBreakerStats[R any](cb circuitbreaker.Builder[R], stats *Stats) circuitbreaker.Builder[R] {
@@ -168,6 +184,9 @@ type Stats struct {
 	retriesExceeded atomic.Int32
 	aborts          atomic.Int32
 
+	limitsExceeded atomic.Int32
+	limitsChanged  atomic.Int32
+
 	// Hedge specific stats
 	hedges atomic.Int32
 
@@ -199,6 +218,14 @@ func (s *Stats) Retries() int {
 
 func (s *Stats) RetriesExceeded() int {
 	return int(s.retriesExceeded.Load())
+}
+
+func (s *Stats) LimitsChanged() int {
+	return int(s.limitsChanged.Load())
+}
+
+func (s *Stats) LimitsExceeded() int {
+	return int(s.limitsExceeded.Load())
 }
 
 func (s *Stats) Hedges() int {
@@ -234,6 +261,10 @@ func (s *Stats) Reset() {
 	s.retries.Store(0)
 	s.retriesExceeded.Store(0)
 	s.aborts.Store(0)
+
+	// AdaptiveLimiter specific stats
+	s.limitsExceeded.Store(0)
+	s.limitsChanged.Store(0)
 
 	// Hedge specific stats
 	s.hedges.Store(0)

@@ -14,7 +14,7 @@ import (
 
 // Tests adding and getting an item from the cache. Uses different cache key scenarios, including global, per context,
 // and no cache key.
-func TestCache(t *testing.T) {
+func TestCache_Get(t *testing.T) {
 	// Given
 	cache, failsafeCache := policytesting.NewCache[string]()
 	stats := &policytesting.Stats{}
@@ -68,7 +68,7 @@ func TestCache(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			setup := func() {
+			before := func() {
 				stats.Reset()
 				clear(cache)
 			}
@@ -76,7 +76,7 @@ func TestCache(t *testing.T) {
 			// Add item to cache
 			testutil.Test[string](t).
 				WithExecutor(tc.executor).
-				Setup(setup).
+				Before(before).
 				Get(testutil.GetFn("bar", nil)).
 				AssertSuccess(1, 1, "bar", func() {
 					assert.Equal(t, tc.expectedCaches, stats.Caches())
@@ -98,73 +98,75 @@ func TestCache(t *testing.T) {
 	}
 }
 
-func TestConditionalCache(t *testing.T) {
-	// Given
-	cache, failsafeCache := policytesting.NewCache[string]()
-	stats := &policytesting.Stats{}
-	barPredicate := func(s string, err error) bool { return s == "bar" }
+func TestCache(t *testing.T) {
+	t.Run("with condition", func(t *testing.T) {
+		// Given
+		cache, failsafeCache := policytesting.NewCache[string]()
+		stats := &policytesting.Stats{}
+		barPredicate := func(s string, err error) bool { return s == "bar" }
 
-	// When / Then
-	tests := []struct {
-		name           string
-		cpb            cachepolicy.Builder[string]
-		result         string
-		expectedCaches int
-	}{
-		{
-			name: "with matching condition",
-			cpb: policytesting.WithCacheStats(cachepolicy.NewBuilder[string](failsafeCache), stats).WithKey("foo").
-				CacheIf(barPredicate),
-			result:         "bar",
-			expectedCaches: 1,
-		},
-		{
-			name: "with non-matching condition",
-			cpb: policytesting.WithCacheStats(cachepolicy.NewBuilder[string](failsafeCache), stats).WithKey("foo").
-				CacheIf(barPredicate),
-			result:         "baz",
-			expectedCaches: 0,
-		},
-	}
+		// When / Then
+		tests := []struct {
+			name           string
+			cpb            cachepolicy.Builder[string]
+			result         string
+			expectedCaches int
+		}{
+			{
+				name: "with matching condition",
+				cpb: policytesting.WithCacheStats(cachepolicy.NewBuilder[string](failsafeCache), stats).WithKey("foo").
+					CacheIf(barPredicate),
+				result:         "bar",
+				expectedCaches: 1,
+			},
+			{
+				name: "with non-matching condition",
+				cpb: policytesting.WithCacheStats(cachepolicy.NewBuilder[string](failsafeCache), stats).WithKey("foo").
+					CacheIf(barPredicate),
+				result:         "baz",
+				expectedCaches: 0,
+			},
+		}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			setup := func() {
-				stats.Reset()
-				clear(cache)
-			}
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				before := func() {
+					stats.Reset()
+					clear(cache)
+				}
 
-			// When / Then
-			testutil.Test[string](t).
-				WithExecutor(failsafe.NewExecutor[string](tc.cpb.Build())).
-				Setup(setup).
-				Get(testutil.GetFn(tc.result, nil)).
-				AssertSuccess(1, 1, tc.result, func() {
-					assert.Equal(t, tc.expectedCaches, stats.Caches())
-					assert.Equal(t, 0, stats.CacheHits())
-					assert.Equal(t, 1, stats.CacheMisses())
-				})
-		})
-	}
-}
+				// When / Then
+				testutil.Test[string](t).
+					WithExecutor(failsafe.NewExecutor[string](tc.cpb.Build())).
+					Before(before).
+					Get(testutil.GetFn(tc.result, nil)).
+					AssertSuccess(1, 1, tc.result, func() {
+						assert.Equal(t, tc.expectedCaches, stats.Caches())
+						assert.Equal(t, 0, stats.CacheHits())
+						assert.Equal(t, 1, stats.CacheMisses())
+					})
+			})
+		}
+	})
 
-// Tests that a result is not cached when an error occurs.
-func TestDoNotCacheOnError(t *testing.T) {
-	// Given
-	_, failsafeCache := policytesting.NewCache[string]()
-	stats := &policytesting.Stats{}
-	cp := policytesting.WithCacheStats(cachepolicy.NewBuilder[string](failsafeCache), stats).
-		WithKey("foo").
-		Build()
+	// Tests that a result is not cached when an error occurs.
+	t.Run("should not cache on error", func(t *testing.T) {
+		// Given
+		_, failsafeCache := policytesting.NewCache[string]()
+		stats := &policytesting.Stats{}
+		cp := policytesting.WithCacheStats(cachepolicy.NewBuilder[string](failsafeCache), stats).
+			WithKey("foo").
+			Build()
 
-	// When / Then
-	testutil.Test[string](t).
-		With(cp).
-		Reset(stats).
-		Get(testutil.GetFn("", testutil.ErrInvalidState)).
-		AssertSuccessError(1, 1, testutil.ErrInvalidState, func() {
-			assert.Equal(t, 0, stats.Caches())
-			assert.Equal(t, 0, stats.CacheHits())
-			assert.Equal(t, 1, stats.CacheMisses())
-		})
+		// When / Then
+		testutil.Test[string](t).
+			With(cp).
+			Reset(stats).
+			Get(testutil.GetFn("", testutil.ErrInvalidState)).
+			AssertSuccessError(1, 1, testutil.ErrInvalidState, func() {
+				assert.Equal(t, 0, stats.Caches())
+				assert.Equal(t, 0, stats.CacheHits())
+				assert.Equal(t, 1, stats.CacheMisses())
+			})
+	})
 }
