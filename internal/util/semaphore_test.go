@@ -13,14 +13,15 @@ func TestDynamicSemaphore_Acquire(t *testing.T) {
 	t.Parallel()
 
 	t.Run("should release permits to waiters", func(t *testing.T) {
+		// Given
 		s := NewDynamicSemaphore(1)
 		assert.NoError(t, s.Acquire(context.Background()))
 		assert.Equal(t, 1, s.Used())
 
-		go func() {
-			_ = s.Acquire(context.Background())
-		}()
+		// When
+		go s.Acquire(context.Background())
 
+		// Then
 		waitForWaiters(t, s, 1)
 		s.Release()
 		assert.Equal(t, 1, s.Used())
@@ -28,12 +29,58 @@ func TestDynamicSemaphore_Acquire(t *testing.T) {
 	})
 
 	t.Run("should unblock waiters when context completed", func(t *testing.T) {
+		// Given
+		s := NewDynamicSemaphore(1)
+		assert.NoError(t, s.Acquire(context.Background()))
+		ctx, cancel := context.WithCancel(context.Background())
+
+		// When / Then
+		cancel()
+		assert.ErrorIs(t, s.Acquire(ctx), context.Canceled)
+		assert.Equal(t, 1, s.Used())
+		assert.Equal(t, 0, s.Waiters())
+	})
+}
+
+func TestDynamicSemaphore_AcquireWithMaxWait(t *testing.T) {
+	t.Parallel()
+
+	t.Run("should release permits to waiters", func(t *testing.T) {
+		// Given
+		s := NewDynamicSemaphore(1)
+		assert.NoError(t, s.Acquire(context.Background()))
+		assert.Equal(t, 1, s.Used())
+
+		// When
+		go s.AcquireWithMaxWait(context.Background(), time.Second)
+
+		// Then
+		waitForWaiters(t, s, 1)
+		s.Release()
+		assert.Equal(t, 1, s.Used())
+		assert.Equal(t, 0, s.Waiters())
+	})
+
+	t.Run("should unblock waiters when context completed", func(t *testing.T) {
+		// Given
+		s := NewDynamicSemaphore(1)
+		assert.NoError(t, s.Acquire(context.Background()))
+		ctx, cancel := context.WithCancel(context.Background())
+
+		// When / Then
+		cancel()
+		assert.ErrorIs(t, s.AcquireWithMaxWait(ctx, time.Second), context.Canceled)
+		assert.Equal(t, 1, s.Used())
+		assert.Equal(t, 0, s.Waiters())
+	})
+
+	t.Run("should unblock waiters when max wait time exceeded", func(t *testing.T) {
+		// Given
 		s := NewDynamicSemaphore(1)
 		assert.NoError(t, s.Acquire(context.Background()))
 
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-		assert.ErrorIs(t, s.Acquire(ctx), context.Canceled)
+		// When / Then
+		assert.ErrorIs(t, s.AcquireWithMaxWait(context.Background(), time.Millisecond), ErrWaitExceeded)
 		assert.Equal(t, 1, s.Used())
 		assert.Equal(t, 0, s.Waiters())
 	})
@@ -84,12 +131,8 @@ func TestDynamicSemaphore_SetSize(t *testing.T) {
 		s := NewDynamicSemaphore(1)
 		assert.NoError(t, s.Acquire(context.Background()))
 
-		go func() {
-			_ = s.Acquire(context.Background())
-		}()
-		go func() {
-			_ = s.Acquire(context.Background())
-		}()
+		go s.Acquire(context.Background())
+		go s.Acquire(context.Background())
 
 		waitForWaiters(t, s, 2)
 
@@ -181,8 +224,8 @@ func TestDynamicSemaphore_Waiters(t *testing.T) {
 	wg.Wait()
 }
 
-func waitForWaiters(t *testing.T, s *DynamicSemaphore, expected int) {
+func waitForWaiters(t *testing.T, s *DynamicSemaphore, expectedWaiters int) {
 	assert.Eventually(t, func() bool {
-		return s.Waiters() == expected
+		return s.Waiters() == expectedWaiters
 	}, 100*time.Millisecond, 10*time.Millisecond)
 }
