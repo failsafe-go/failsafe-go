@@ -31,6 +31,12 @@ func (l *queueingLimiter[R]) AcquirePermitWithMaxWait(ctx context.Context, maxWa
 	return l.adaptiveLimiter.AcquirePermitWithMaxWait(ctx, maxWaitTime)
 }
 
+// TryAcquirePermit for a queueingLimiter adds no new behavior since it needs to return immediately, even if the
+// semaphore is full, regardless of the queue size.
+func (l *queueingLimiter[R]) TryAcquirePermit() (Permit, bool) {
+	return l.adaptiveLimiter.TryAcquirePermit()
+}
+
 // CanAcquirePermit returns whether a permit can be acquired based on the semaphore or the queue.
 func (l *queueingLimiter[R]) CanAcquirePermit() bool {
 	// Check with semaphore
@@ -78,4 +84,8 @@ func (l *queueingLimiter[R]) ToExecutor(_ R) any {
 	}
 	e.Executor = e
 	return e
+}
+
+func (l *queueingLimiter[R]) configRef() *config[R] {
+	return l.config
 }

@@ -3,54 +3,85 @@ package adaptivelimiter
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestPriorityLimiter_AcquirePermit(t *testing.T) {
-	p := NewPrioritizer().(*prioritizer)
-	l := NewBuilder[any]().BuildPrioritized(p)
-
+func TestPriorityLimiter_AcquirePermitWithPriority(t *testing.T) {
 	t.Run("with no rejection threshold", func(t *testing.T) {
-		permit, err := l.AcquirePermitWithPriority(context.Background(), PriorityLow)
+		limiter := NewBuilder[any]().BuildPrioritized(NewPrioritizer())
+		permit, err := limiter.AcquirePermitWithPriority(context.Background(), PriorityLow)
+		assert.NotNil(t, permit)
+		assert.NoError(t, err)
+	})
+
+	t.Run("above prioritizer rejection threshold", func(t *testing.T) {
+		// Given
+		p := NewPrioritizer().(*prioritizer)
+		limiter := NewBuilder[any]().BuildPrioritized(p)
+		p.rejectionThreshold.Store(200)
+
+		// When
+		permit, err := limiter.AcquirePermitWithPriority(context.Background(), PriorityHigh)
+
+		// Then
 		assert.NotNil(t, permit)
 		assert.NoError(t, err)
 	})
 
 	t.Run("below prioritizer rejection threshold", func(t *testing.T) {
+		// Given
+		p := NewPrioritizer().(*prioritizer)
+		limiter := NewBuilder[any]().
+			WithLimits(1, 1, 1).
+			WithQueueing(1, 1).
+			BuildPrioritized(p)
+		limiter.AcquirePermit(context.Background()) // fill limiter
 		p.rejectionThreshold.Store(200)
-		permit, err := l.AcquirePermitWithPriority(context.Background(), PriorityLow)
+
+		// When
+		permit, err := limiter.AcquirePermitWithPriority(context.Background(), PriorityLow)
+
+		// Then
 		assert.Nil(t, permit)
 		assert.Error(t, err, ErrExceeded)
 	})
 
-	t.Run("above prioritizer rejection threshold", func(t *testing.T) {
-		p.rejectionThreshold.Store(200)
-		permit, err := l.AcquirePermitWithPriority(context.Background(), PriorityHigh)
-		assert.NotNil(t, permit)
-		assert.NoError(t, err)
-	})
-
-	// Asserts that AcquirePermit fails after the max number of requests is queued, even if the request exceeds the rejection threshold
+	// Asserts that AcquirePermitWithPriority fails after the max number of requests is queued, even if the request is
+	// within the rejection threshold.
 	t.Run("above max queued requests", func(t *testing.T) {
-		l := NewBuilder[any]().WithLimits(1, 1, 1).BuildPrioritized(p)
-		p.rejectionThreshold.Store(200)
+		p := NewPrioritizer().(*prioritizer)
+		limiter := NewBuilder[any]().WithLimits(1, 1, 1).
+			WithQueueing(1, 1).
+			BuildPrioritized(p)
+		shouldAcquireWithPriority(t, limiter, PriorityHigh)    // fill the limiter
+		go shouldAcquireWithPriority(t, limiter, PriorityHigh) // fill the queue
+		assertQueued(t, limiter, 1)
 
-		// Add a request and 3 waiters
-		for i := 0; i < 4; i++ {
-			go func() {
-				permit, err := l.AcquirePermitWithPriority(context.Background(), PriorityHigh)
-				assert.NotNil(t, permit)
-				assert.NoError(t, err)
-			}()
-		}
-
-		assert.Eventually(t, func() bool {
-			return l.Queued() == 3
-		}, 300*time.Millisecond, 10*time.Millisecond)
-		permit, err := l.AcquirePermitWithPriority(context.Background(), PriorityHigh)
+		permit, err := limiter.AcquirePermitWithPriority(context.Background(), PriorityHigh)
 		assert.Nil(t, permit)
 		assert.ErrorIs(t, err, ErrExceeded)
 	})
+}
+
+func TestPriorityLimiter_AcquirePermitWithMaxWaitAndRecord(t *testing.T) {
+	// Given
+	limiter := NewBuilder[any]().WithLimits(1, 1, 1).BuildPrioritized(NewPrioritizer())
+
+	// When
+	permit, err := limiter.AcquirePermitWithMaxWait(context.Background(), 0)
+
+	// Then
+	assert.NoError(t, err)
+	assert.Equal(t, 1, limiter.Inflight())
+	permit.Record()
+	assert.Equal(t, 0, limiter.Inflight())
+}
+
+func shouldAcquireWithPriority[R any](t *testing.T, limiter PriorityLimiter[R], priority Priority) Permit {
+	permit, err := limiter.AcquirePermitWithPriority(context.Background(), priority)
+	require.NotNil(t, permit)
+	require.NoError(t, err)
+	return permit
 }

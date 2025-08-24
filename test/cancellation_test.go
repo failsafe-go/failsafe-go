@@ -23,12 +23,12 @@ func TestExecution_Cancellation(t *testing.T) {
 	t.Run("with Context", func(t *testing.T) {
 		// Given
 		rp := retrypolicy.NewWithDefaults[any]()
-		setup := testutil.SetupWithContextSleep(100 * time.Millisecond)
+		ctxFn := testutil.ContextWithCancel(100 * time.Millisecond)
 
 		// When / Then
 		testutil.Test[any](t).
 			With(rp).
-			Context(setup).
+			Context(ctxFn).
 			Run(func(exec failsafe.Execution[any]) error {
 				testutil.WaitAndAssertCanceled(t, time.Second, exec)
 				return nil
@@ -104,12 +104,12 @@ func TestRetryPolicy_Cancellation(t *testing.T) {
 	t.Run("with context during pending retry", func(t *testing.T) {
 		// Given
 		rp := policytesting.WithRetryLogs[any](retrypolicy.NewBuilder[any]().WithDelay(time.Second)).Build()
-		setup := testutil.SetupWithContextSleep(50 * time.Millisecond)
+		ctxFn := testutil.ContextWithCancel(50 * time.Millisecond)
 
 		// When / Then
 		testutil.Test[any](t).
 			With(rp).
-			Context(setup).
+			Context(ctxFn).
 			Get(testutil.GetFn[any](nil, testutil.ErrInvalidState)).
 			AssertFailure(1, 1, context.Canceled)
 	})
@@ -140,12 +140,12 @@ func TestFallback_Cancellation(t *testing.T) {
 	t.Run("with context during execution", func(t *testing.T) {
 		// Given
 		fb := fallback.NewWithError[any](nil)
-		setup := testutil.SetupWithContextSleep(50 * time.Millisecond)
+		ctxFn := testutil.ContextWithCancel(50 * time.Millisecond)
 
 		// When / Then
 		testutil.Test[any](t).
 			With(fb).
-			Context(setup).
+			Context(ctxFn).
 			Get(func(execution failsafe.Execution[any]) (any, error) {
 				time.Sleep(200 * time.Millisecond)
 				return nil, testutil.ErrInvalidArgument
@@ -160,12 +160,12 @@ func TestFallback_Cancellation(t *testing.T) {
 			testutil.WaitAndAssertCanceled(t, time.Second, exec)
 			return nil, nil
 		})
-		setup := testutil.SetupWithContextSleep(100 * time.Millisecond)
+		ctxFn := testutil.ContextWithCancel(100 * time.Millisecond)
 
 		// When / Then
 		testutil.Test[any](t).
 			With(fb).
-			Context(setup).
+			Context(ctxFn).
 			Get(testutil.GetFn[any](nil, testutil.ErrInvalidState)).
 			AssertFailure(1, 1, context.Canceled)
 	})
@@ -199,13 +199,13 @@ func TestRateLimit_Cancellation(t *testing.T) {
 	t.Run("with context during RateLimiter delay", func(t *testing.T) {
 		// Given
 		rl := ratelimiter.NewSmoothBuilderWithMaxRate[any](time.Second).WithMaxWaitTime(time.Minute).Build()
-		setup := testutil.SetupWithContextSleep(100 * time.Millisecond)
+		ctxFn := testutil.ContextWithCancel(100 * time.Millisecond)
 		rl.TryAcquirePermit() // All permits used
 
 		// When / Then
 		testutil.Test[any](t).
 			With(rl).
-			Context(setup).
+			Context(ctxFn).
 			Get(testutil.GetFn[any](nil, testutil.ErrInvalidState)).
 			AssertFailure(1, 0, context.Canceled)
 	})
@@ -251,14 +251,14 @@ func TestBulkhead_Cancellation(t *testing.T) {
 	t.Run("with context during Bulkhead delay", func(t *testing.T) {
 		// Given
 		bh := bulkhead.NewBuilder[any](2).WithMaxWaitTime(200 * time.Millisecond).Build()
-		setup := testutil.SetupWithContextSleep(100 * time.Millisecond)
+		ctxFn := testutil.ContextWithCancel(100 * time.Millisecond)
 		bh.TryAcquirePermit()
 		bh.TryAcquirePermit() // bulkhead should be full
 
 		// When / Then
 		testutil.Test[any](t).
 			With(bh).
-			Context(setup).
+			Context(ctxFn).
 			Get(testutil.GetFn[any](nil, nil)).
 			AssertFailure(1, 0, context.Canceled)
 	})
@@ -306,13 +306,13 @@ func TestHedgePolicy_Cancellation(t *testing.T) {
 		// Given
 		stats := &policytesting.Stats{}
 		hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelay[any](time.Second).WithMaxHedges(2), stats).Build()
-		setup := testutil.SetupWithContextSleep(100 * time.Millisecond)
+		ctxFn := testutil.ContextWithCancel(100 * time.Millisecond)
 
 		// When / Then
 		testutil.Test[any](t).
 			With(hp).
 			Reset(stats).
-			Context(setup).
+			Context(ctxFn).
 			Run(func(exec failsafe.Execution[any]) error {
 				testutil.WaitAndAssertCanceled(t, time.Second, exec)
 				return nil
@@ -326,13 +326,13 @@ func TestHedgePolicy_Cancellation(t *testing.T) {
 	t.Run("with context during hedge", func(t *testing.T) {
 		// Given
 		hp := hedgepolicy.NewBuilderWithDelay[any](10 * time.Millisecond).WithMaxHedges(2).Build()
-		setup := testutil.SetupWithContextSleep(100 * time.Millisecond)
+		ctxFn := testutil.ContextWithCancel(100 * time.Millisecond)
 		waiter := testutil.NewWaiter()
 
 		// When / Then
 		testutil.Test[any](t).
 			With(hp).
-			Context(setup).
+			Context(ctxFn).
 			Run(func(exec failsafe.Execution[any]) error {
 				testutil.WaitAndAssertCanceled(t, time.Second, exec)
 				waiter.Resume()

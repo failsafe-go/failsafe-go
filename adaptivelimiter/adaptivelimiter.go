@@ -56,8 +56,8 @@ type AdaptiveLimiter[R any] interface {
 	AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) (Permit, error)
 
 	// TryAcquirePermit attempts to acquire a permit to perform an execution via the limiter, returning whether the Permit
-	// was acquired or not. This method will not block if the limiter is full. Callers must call Record or Drop to release a
-	// successfully acquired permit back to the limiter.
+	// was acquired or not. This method will never block. Callers must call Record or Drop to release a successfully
+	// acquired permit back to the limiter.
 	TryAcquirePermit() (Permit, bool)
 
 	// CanAcquirePermit returns whether it's currently possible to acquire a permit.
@@ -77,7 +77,7 @@ type Metrics interface {
 	// Inflight returns the current number of inflight executions.
 	Inflight() int
 
-	// Queued returns the current number of queyed executions when the limiter is full.
+	// Queued returns the current number of queued executions when the limiter is full.
 	Queued() int
 }
 
@@ -580,6 +580,10 @@ func (l *adaptiveLimiter[R]) ToExecutor(_ R) any {
 	}
 	e.Executor = e
 	return e
+}
+
+func (l *adaptiveLimiter[R]) configRef() *config[R] {
+	return l.config
 }
 
 type recordingPermit[R any] struct {

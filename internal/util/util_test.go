@@ -115,8 +115,8 @@ func TestErrorAs(t *testing.T) {
 
 func TestMergeContexts(t *testing.T) {
 	// Given
-	ctx1 := SetupWithContextSleep(50 * time.Millisecond)()
-	ctx2 := SetupWithContextSleep(time.Second)()
+	ctx1 := ContextWithCancel(50 * time.Millisecond)()
+	ctx2 := ContextWithCancel(time.Second)()
 
 	// When
 	mergedCtx, _ := MergeContexts(ctx1, ctx2)

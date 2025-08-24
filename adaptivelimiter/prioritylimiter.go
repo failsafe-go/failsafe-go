@@ -97,11 +97,17 @@ func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) 
 }
 
 func (l *priorityLimiter[R]) AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) (Permit, error) {
-	if !l.CanAcquirePermit(ctx) {
+	level := levelForContext(ctx)
+	if !l.CanAcquirePermitWithLevel(level) {
 		return nil, ErrExceeded
 	}
 
-	return l.adaptiveLimiter.AcquirePermitWithMaxWait(ctx, maxWaitTime)
+	permit, err := l.adaptiveLimiter.AcquirePermitWithMaxWait(ctx, maxWaitTime)
+	if err != nil {
+		return nil, err
+	}
+	l.prioritizer.recordPriority(level)
+	return permit, nil
 }
 
 func (l *priorityLimiter[R]) AcquirePermitWithPriority(ctx context.Context, priority Priority) (Permit, error) {
@@ -113,8 +119,12 @@ func (l *priorityLimiter[R]) AcquirePermitWithLevel(ctx context.Context, level i
 		return nil, ErrExceeded
 	}
 
+	permit, err := l.adaptiveLimiter.AcquirePermit(ctx)
+	if err != nil {
+		return nil, err
+	}
 	l.prioritizer.recordPriority(level)
-	return l.adaptiveLimiter.AcquirePermit(ctx)
+	return permit, nil
 }
 
 func (l *priorityLimiter[R]) CanAcquirePermit(ctx context.Context) bool {
@@ -126,7 +136,12 @@ func (l *priorityLimiter[R]) CanAcquirePermitWithPriority(priority Priority) boo
 }
 
 func (l *priorityLimiter[R]) CanAcquirePermitWithLevel(level int) bool {
-	// Threshold against the limiter's max capacity
+	// Return immediately if the limiter has capacity
+	if l.adaptiveLimiter.CanAcquirePermit() {
+		return true
+	}
+
+	// Check the limiter's max capacity
 	_, _, _, maxQueue := l.queueStats()
 	if l.Queued() >= maxQueue {
 		return false
@@ -163,4 +178,8 @@ func (l *priorityLimiter[R]) ToExecutor(_ R) any {
 	}
 	e.Executor = e
 	return e
+}
+
+func (l *priorityLimiter[R]) configRef() *config[R] {
+	return l.config
 }

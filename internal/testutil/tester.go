@@ -11,7 +11,6 @@ import (
 	"github.com/failsafe-go/failsafe-go"
 )
 
-type ContextFn func() context.Context
 type WhenRun[R any] func(execution failsafe.Execution[R]) error
 type WhenGet[R any] func(execution failsafe.Execution[R]) (R, error)
 
@@ -20,14 +19,14 @@ type Resetable interface {
 }
 
 type Tester[R any] struct {
-	T        *testing.T
-	BeforeFn func()
-	AfterFn  func()
-	ContextFn
-	Policies []failsafe.Policy[R]
-	Executor failsafe.Executor[R]
-	run      WhenRun[R]
-	get      WhenGet[R]
+	T         *testing.T
+	BeforeFn  func()
+	AfterFn   func()
+	ContextFn func() context.Context
+	Policies  []failsafe.Policy[R]
+	Executor  failsafe.Executor[R]
+	run       WhenRun[R]
+	get       WhenGet[R]
 }
 
 func Test[R any](t *testing.T) *Tester[R] {
@@ -144,7 +143,7 @@ func (t *Tester[R]) assertResult(expectedAttempts int, expectedExecutions int, e
 
 type AssertFunc[R any] func(expectedAttempts int, expectedExecutions int, expectedResult R, result R, expectedErr error, err error, expectedSuccess bool, expectedFailure bool, errorAs bool, thens ...func())
 
-func PrepareTest[R any](t *testing.T, beforeFn func(), contextFn ContextFn, executor failsafe.Executor[R]) (executorFn func() failsafe.Executor[R], assertFn AssertFunc[R]) {
+func PrepareTest[R any](t *testing.T, beforeFn func(), contextFn func() context.Context, executor failsafe.Executor[R]) (executorFn func() failsafe.Executor[R], assertFn AssertFunc[R]) {
 	var doneEvent atomic.Pointer[failsafe.ExecutionDoneEvent[R]]
 	var onSuccessCalled atomic.Bool
 	var onFailureCalled atomic.Bool

@@ -171,8 +171,8 @@ func TestClientHedgePolicy(t *testing.T) {
 
 // Asserts that providing a context to either the executor or a request that is canceled results in the execution being canceled.
 func TestClientCancelWithContext(t *testing.T) {
-	slowCtxFn := testutil.SetupWithContextSleep(time.Second)
-	fastCtxFn := testutil.SetupWithContextSleep(50 * time.Millisecond)
+	slowCtxFn := testutil.ContextWithCancel(time.Second)
+	fastCtxFn := testutil.ContextWithCancel(50 * time.Millisecond)
 
 	tests := []struct {
 		name         string

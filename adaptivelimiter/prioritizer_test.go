@@ -20,22 +20,17 @@ func TestPrioritizer_Calibrate(t *testing.T) {
 	acquire := func() {
 		go limiter.AcquirePermitWithPriority(context.Background(), PriorityLow)
 	}
-	assertQueued := func(queued int) {
-		assert.Eventually(t, func() bool {
-			return limiter.Queued() == queued
-		}, 300*time.Millisecond, 10*time.Millisecond)
-	}
 
 	permit, err := limiter.AcquirePermitWithPriority(context.Background(), PriorityLow)
 	assert.NoError(t, err)
 	acquire()
-	assertQueued(1)
+	assertQueued(t, limiter, 1)
 	acquire()
-	assertQueued(2)
+	assertQueued(t, limiter, 2)
 	acquire()
-	assertQueued(3)
+	assertQueued(t, limiter, 3)
 	acquire()
-	assertQueued(4)
+	assertQueued(t, limiter, 4)
 	permit.Record()
 
 	p.Calibrate()

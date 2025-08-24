@@ -1,9 +1,36 @@
 package testutil
 
 import (
+	"context"
+	"reflect"
 	"sync/atomic"
 	"time"
+	"unsafe"
 )
+
+var CanceledContextFn = func() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	return ctx
+}
+
+func ContextFn(ctx context.Context) func() context.Context {
+	return func() context.Context {
+		return ctx
+	}
+}
+
+// ContextWithCancel returns a function that provides a context that is canceled after the sleepTime.
+func ContextWithCancel(sleepTime time.Duration) func() context.Context {
+	return func() context.Context {
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			time.Sleep(sleepTime)
+			cancel()
+		}()
+		return ctx
+	}
+}
 
 type TestClock struct {
 	CurrentTime int64
@@ -69,4 +96,11 @@ func (w *Waiter) Resume() {
 
 func MillisToNanos(millis int) int64 {
 	return (time.Duration(millis) * time.Millisecond).Nanoseconds()
+}
+
+func GetPrioritizerRejectionThreshold(prioritizer any) *atomic.Int32 {
+	val := reflect.ValueOf(prioritizer).Elem()
+	field := val.FieldByName("rejectionThreshold")
+	ptr := unsafe.Pointer(field.UnsafeAddr())
+	return (*atomic.Int32)(ptr)
 }

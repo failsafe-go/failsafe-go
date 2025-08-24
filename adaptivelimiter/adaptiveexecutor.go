@@ -13,6 +13,8 @@ import (
 
 type blockingLimiter[R any] interface {
 	AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) (Permit, error)
+
+	configRef() *config[R]
 }
 
 // executor is a policy.Executor that handles failures according to an AdaptiveLimiter or PriorityLimiter.
@@ -26,8 +28,8 @@ var _ policy.Executor[any] = &executor[any]{}
 func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
-		limiter := e.blockingLimiter.(*adaptiveLimiter[R])
-		permit, err := e.AcquirePermitWithMaxWait(exec.Context(), limiter.maxWaitTime)
+		c := e.blockingLimiter.configRef()
+		permit, err := e.AcquirePermitWithMaxWait(exec.Context(), c.maxWaitTime)
 
 		if err != nil {
 			// Check for cancellation while waiting for a permit
@@ -36,8 +38,8 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 			}
 
 			// Handle exceeded
-			if limiter.onExceeded != nil && errors.Is(err, ErrExceeded) {
-				limiter.onExceeded(failsafe.ExecutionEvent[R]{
+			if c.onExceeded != nil && errors.Is(err, ErrExceeded) {
+				c.onExceeded(failsafe.ExecutionEvent[R]{
 					ExecutionAttempt: exec,
 				})
 			}

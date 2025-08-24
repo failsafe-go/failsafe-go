@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestAdaptiveLimiter(t *testing.T) {
+func TestAdaptiveLimiter_Defaults(t *testing.T) {
 	t.Run("should initialize limit", func(t *testing.T) {
 		limiter := NewBuilder[any]().Build()
 		assert.Equal(t, 20, limiter.Limit())
@@ -32,6 +32,16 @@ func TestAdaptiveLimiter_AcquirePermitAndRecord(t *testing.T) {
 	limiter := NewBuilder[any]().WithLimits(1, 20, 1).Build()
 
 	permit, err := limiter.AcquirePermit(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, 1, limiter.Inflight())
+	permit.Record()
+	assert.Equal(t, 0, limiter.Inflight())
+}
+
+func TestAdaptiveLimiter_AcquirePermitWithMaxWaitAndRecord(t *testing.T) {
+	limiter := NewBuilder[any]().WithLimits(1, 20, 1).Build()
+
+	permit, err := limiter.AcquirePermitWithMaxWait(context.Background(), 0)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, limiter.Inflight())
 	permit.Record()
@@ -67,12 +77,8 @@ func TestAdaptiveLimiter_Queued(t *testing.T) {
 	permit, err := limiter.AcquirePermit(context.Background())
 	assert.NoError(t, err)
 
-	go func() {
-		limiter.AcquirePermit(context.Background())
-	}()
-	assert.Eventually(t, func() bool {
-		return limiter.Queued() == 1
-	}, 100*time.Millisecond, 10*time.Millisecond)
+	acquireAsync(limiter)
+	assertQueued(t, limiter, 1)
 	permit.Record()
 	assert.Equal(t, 0, limiter.Queued())
 }
@@ -200,4 +206,14 @@ func TestAdaptiveLimiter_BuilderValidation(t *testing.T) {
 			})
 		}
 	})
+}
+
+func acquireAsync(limiter AdaptiveLimiter[any]) {
+	go limiter.AcquirePermit(context.Background())
+}
+
+func assertQueued(t *testing.T, metrics Metrics, queued int) {
+	assert.Eventually(t, func() bool {
+		return metrics.Queued() == queued
+	}, 300*time.Millisecond, 10*time.Millisecond)
 }

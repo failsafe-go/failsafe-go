@@ -3,45 +3,54 @@ package adaptivelimiter
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
 // This test asserts that queued requests block or are rejected and the rejection rate is updated as expected.
 func TestQueueingLimiter_AcquirePermit(t *testing.T) {
-	limiter := NewBuilder[any]().
-		WithLimits(1, 10, 1).
-		WithQueueing(3, 3).
-		Build().(*queueingLimiter[any])
-	_, err := limiter.AcquirePermit(context.Background())
-	assert.NoError(t, err)
+	// Given
+	limiter := createQueueingLimiter(t, 3, 3)
 
-	acquire := func() {
-		go limiter.AcquirePermit(context.Background())
-	}
-	assertQueued := func(queued int) {
-		assert.Eventually(t, func() bool {
-			return limiter.Queued() == queued
-		}, 300*time.Millisecond, 10*time.Millisecond)
-	}
-
-	acquire()
-	assertQueued(1)
-	acquire()
-	assertQueued(2)
-	acquire()
-	assertQueued(3)
-	assert.Equal(t, 1.0, limiter.computeRejectionRate())
-
-	// Queue is full
+	// When
 	permit, err := limiter.AcquirePermit(context.Background())
+
+	// Then
 	assert.Nil(t, permit)
 	assert.ErrorIs(t, err, ErrExceeded)
-	assertQueued(3)
-	assert.Eventually(t, func() bool {
-		return limiter.computeRejectionRate() == 1.0
-	}, 300*time.Millisecond, 10*time.Millisecond)
+	assertQueued(t, limiter, 3)
+	assert.Equal(t, 1.0, limiter.computeRejectionRate())
+}
+
+func TestQueueingLimiter_CanAcquirePermit(t *testing.T) {
+	// Given
+	limiter := createQueueingLimiter(t, 3, 2)
+	assert.True(t, limiter.CanAcquirePermit())
+
+	// When
+	acquireAsync(limiter)
+
+	// Then
+	assertQueued(t, limiter, 3)
+	assert.False(t, limiter.CanAcquirePermit())
+	assert.Equal(t, 1.0, limiter.computeRejectionRate())
+}
+
+func createQueueingLimiter(t *testing.T, queueCapacity float32, queueSize int) *queueingLimiter[any] {
+	limiter := NewBuilder[any]().
+		WithLimits(1, 10, 1).
+		WithQueueing(queueCapacity, queueCapacity).
+		Build().(*queueingLimiter[any])
+
+	// Fill the limiter
+	limiter.TryAcquirePermit()
+
+	// Fill the queue
+	for i := 0; i < queueSize; i++ {
+		acquireAsync(limiter)
+		assertQueued(t, limiter, i+1)
+	}
+	return limiter
 }
 
 func TestQueueingLimiter_computeRejectionRate(t *testing.T) {
