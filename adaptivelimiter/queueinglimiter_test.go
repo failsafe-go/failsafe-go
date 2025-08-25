@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// This test asserts that queued requests block or are rejected and the rejection rate is updated as expected.
+// This test asserts that queued executions block or are rejected and the rejection rate is updated as expected.
 func TestQueueingLimiter_AcquirePermit(t *testing.T) {
 	// Given
 	limiter := createQueueingLimiter(t, 3, 3)

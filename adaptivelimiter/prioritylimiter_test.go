@@ -48,9 +48,9 @@ func TestPriorityLimiter_AcquirePermitWithPriority(t *testing.T) {
 		assert.Error(t, err, ErrExceeded)
 	})
 
-	// Asserts that AcquirePermitWithPriority fails after the max number of requests is queued, even if the request is
+	// Asserts that AcquirePermitWithPriority fails after the max number of executions is queued, even if the execution is
 	// within the rejection threshold.
-	t.Run("above max queued requests", func(t *testing.T) {
+	t.Run("above max queued executions", func(t *testing.T) {
 		p := NewPrioritizer().(*prioritizer)
 		limiter := NewBuilder[any]().WithLimits(1, 1, 1).
 			WithQueueing(1, 1).

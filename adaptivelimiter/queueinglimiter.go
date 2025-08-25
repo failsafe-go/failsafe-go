@@ -8,7 +8,7 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// queueingLimiter wraps an adaptiveLimiter and queues some portion of requests when the adaptiveLimiter is full.
+// queueingLimiter wraps an adaptiveLimiter and queues some portion of executions when the adaptiveLimiter is full.
 type queueingLimiter[R any] struct {
 	*adaptiveLimiter[R]
 }

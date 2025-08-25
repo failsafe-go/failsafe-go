@@ -21,8 +21,8 @@ func TestAdaptiveLimiter_Defaults(t *testing.T) {
 
 	t.Run("should initialize empty", func(t *testing.T) {
 		limiter := NewBuilder[any]().Build().(*adaptiveLimiter[any])
-		assert.Equal(t, 0.0, limiter.shortRTT.Count())
-		assert.Equal(t, 0.0, limiter.longRTT.Value())
+		assert.Equal(t, 0.0, limiter.recentRTT.Count())
+		assert.Equal(t, 0.0, limiter.baselineRTT.Value())
 		assert.Equal(t, 0, limiter.Inflight())
 		assert.Equal(t, 0, limiter.Queued())
 	})
@@ -71,7 +71,7 @@ func TestAdaptiveLimiter_CanAcquirePermit(t *testing.T) {
 	assert.True(t, limiter.CanAcquirePermit())
 }
 
-// Asserts that queued requests are counted.
+// Asserts that queued executions are counted.
 func TestAdaptiveLimiter_Queued(t *testing.T) {
 	limiter := NewBuilder[any]().WithLimits(1, 20, 1).Build()
 	permit, err := limiter.AcquirePermit(context.Background())
@@ -88,9 +88,9 @@ func TestAdaptiveLimiter_record(t *testing.T) {
 		limiter := NewBuilder[any]().Build().(*adaptiveLimiter[any])
 		now := time.UnixMilli(0)
 		limiter.nextUpdateTime = now
-		limiter.WithShortWindow(time.Second, time.Second, 1)
+		limiter.WithRecentWindow(time.Second, time.Second, 1)
 		for i := 0; i < warmupSamples; i++ {
-			limiter.longRTT.Add(float64(time.Second))
+			limiter.baselineRTT.Add(float64(time.Second))
 		}
 		return limiter, now
 	}
@@ -113,7 +113,7 @@ func TestAdaptiveLimiter_record(t *testing.T) {
 		now = recordFn(limiter, now, 250*time.Millisecond, 10)
 
 		assert.Equal(t, float64(200*time.Millisecond), limiter.medianFilter.Median())
-		assert.Equal(t, float64(200*time.Millisecond), limiter.smoothedShortRTT.Value())
+		assert.Equal(t, float64(200*time.Millisecond), limiter.smoothedRecentRTT.Value())
 	})
 
 	t.Run("should increase limit", func(t *testing.T) {
@@ -148,10 +148,10 @@ func TestAdaptiveLimiter_record(t *testing.T) {
 }
 
 func TestAdaptiveLimiter_BuilderValidation(t *testing.T) {
-	t.Run("should panic on invalid WithShortWindow", func(t *testing.T) {
+	t.Run("should panic on invalid WithRecentWindow", func(t *testing.T) {
 		assert.Panicsf(t, func() {
-			NewBuilder[any]().WithShortWindow(time.Minute, time.Second, 1)
-		}, "expected panic with invalid short window")
+			NewBuilder[any]().WithRecentWindow(time.Minute, time.Second, 1)
+		}, "expected panic with invalid recent window")
 	})
 
 	t.Run("should panic on invalid WithSampleQuantile", func(t *testing.T) {

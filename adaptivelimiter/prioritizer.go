@@ -11,24 +11,26 @@ import (
 	"github.com/influxdata/tdigest"
 )
 
-// Prioritizer computes a rejection rate and rejection threshold for one or more priority limiters, which can be used to
-// determine whether to accept or reject an execution. Individual requests through the same limiter can be prioritized
-// differently. A Prioritizer can also be used with multiple limiters, to determine rejection thresholds based on the
-// amount of queueing across limiters.
+// Prioritizer computes rejection rates and thresholds for priority limiters based on system overload. When limiters
+// become full and start queueing executions, the Prioritizer determines which priority levels should be rejected to
+// shed load. Individual executions can be assigned different priority levels, with higher priorities more likely to be
+// accepted during overload. A Prioritizer can coordinate across multiple limiters to make rejection decisions based on
+// overall system queueing.
 //
 // In order to operate correctly, a Prioritizer needs to be regularly calibrated, either by calling Calibrate at regular
 // intervals, or by using ScheduleCalibrations.
 //
 // This type is concurrency safe.
 type Prioritizer interface {
-	// RejectionRate returns the current rate, from 0 to 1, at which the limiter will reject requests, based on recent
-	// execution times.
+	// RejectionRate returns the current rate, from 0 to 1, at which executions will be rejected, based on recent
+	// queueing levels across registered limiters.
 	RejectionRate() float64
 
-	// RejectionThreshold is the threshold below which requests will be rejected, based on their level, from 0 to 499.
+	// RejectionThreshold returns the threshold below which executions will be rejected, based on their priority level
+	// (0-499). Higher priority executions are more likely to be accepted when the system is overloaded.
 	RejectionThreshold() int
 
-	// Calibrate calibrates the RejectionRate based on recent execution times from registered limiters.
+	// Calibrate recalculates the RejectionRate and RejectionThreshold based on current queueing levels from registered limiters.
 	Calibrate()
 
 	// ScheduleCalibrations runs Calibrate on the interval until the ctx is done or the returned CancelFunc is called.

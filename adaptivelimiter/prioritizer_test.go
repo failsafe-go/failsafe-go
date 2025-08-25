@@ -13,7 +13,7 @@ func TestPrioritizer_Calibrate(t *testing.T) {
 	p := NewPrioritizer().(*prioritizer)
 	limiter := NewBuilder[any]().
 		WithLimits(1, 10, 1).
-		WithShortWindow(time.Second, time.Second, 10).
+		WithRecentWindow(time.Second, time.Second, 10).
 		WithQueueing(2, 4).
 		BuildPrioritized(p).(*priorityLimiter[any])
 

@@ -13,18 +13,20 @@ type Ewma struct {
 	sum   float64
 }
 
-// NewEwma creates a new Ewma for the windowSize and warmupSamples. windowSize controls how many samples are effectively
-// stored in the Ewma before they decay out. warmupSamples controls how many samples must be recorded before decay
-// begins.
-func NewEwma(windowSize uint, warmupSamples uint8) *Ewma {
+// NewEwma creates a new Ewma for the given age and warmupSamples. The age controls how far back in time the
+// Ewma effectively "remembers" - smaller ages adapt faster to recent changes, while larger ages provide
+// more stability by retaining influence from older samples. The warmupSamples parameter controls how many
+// samples must be recorded before exponential decay begins, during which a simple average is used instead.
+func NewEwma(age uint, warmupSamples uint8) *Ewma {
 	return &Ewma{
 		warmupSamples:   warmupSamples,
-		smoothingFactor: 2 / (float64(windowSize) + 1),
+		smoothingFactor: 2 / (float64(age) + 1),
 	}
 }
 
-// Add adds a value to the series and updates the moving average. Add decays the Ewma value via (oldValue * (1 -
-// smoothingFactor)) + (newValue * smoothingFactor)
+// Add adds a value to the series and updates the moving average. Add decays the Ewma value via:
+//
+//   (oldValue * (1 - smoothingFactor)) + (newValue * smoothingFactor)
 func (e *Ewma) Add(newValue float64) float64 {
 	switch {
 	case e.count < e.warmupSamples:
