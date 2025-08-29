@@ -38,8 +38,8 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 			}
 
 			// Handle exceeded
-			if c.onExceeded != nil && errors.Is(err, ErrExceeded) {
-				c.onExceeded(failsafe.ExecutionEvent[R]{
+			if c.onLimitExceeded != nil && errors.Is(err, ErrExceeded) {
+				c.onLimitExceeded(failsafe.ExecutionEvent[R]{
 					ExecutionAttempt: exec,
 				})
 			}

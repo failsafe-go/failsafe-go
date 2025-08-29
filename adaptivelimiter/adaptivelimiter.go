@@ -119,18 +119,18 @@ type Builder[R any] interface {
 	// Panics if minDuration is not <= maxDuration.
 	WithRecentWindow(minDuration time.Duration, maxDuration time.Duration, minSamples uint) Builder[R]
 
+	// WithRecentQuantile configures the recentQuantile of recent execution times to consider when adjusting the concurrency limit.
+	//
+	// Defaults to 0.9 which uses p90 samples.
+	// Panics if recentQuantile is negative.
+	WithRecentQuantile(quantile float32) Builder[R]
+
 	// WithBaselineWindow configures how the baseline execution times are maintained and updated. The baseline represents
 	// the long-term average execution performance that recent execution times are compared against to detect overload.
 	// The baselineAge controls how many samples back the baseline effectively remembers - smaller values make the baseline
 	// adapt faster to recent changes, while larger values keep it more stable by retaining influence from older measurements.
 	// The default value is 10.
 	WithBaselineWindow(baselineAge uint) Builder[R]
-
-	// WithSampleQuantile configures the quantile of recent execution times to consider when adjusting the concurrency limit.
-	//
-	// Defaults to 0.9 which uses p90 samples.
-	// Panics if quantile is negative.
-	WithSampleQuantile(quantile float32) Builder[R]
 
 	// WithCorrelationWindow configures how many recent limit and execution time measurements are stored to detect whether
 	// increases in limits correlate with increases in execution times, which causes the limit to be adjusted down.
@@ -183,45 +183,50 @@ type LimitChangedEvent struct {
 }
 
 type config[R any] struct {
-	maxWaitTime             time.Duration
-	logger                  *slog.Logger
-	recentWindowMinDuration time.Duration
-	recentWindowMaxDuration time.Duration
-	recentWindowMinSamples  uint
-	baselineWindowAge       uint
-	quantile                float64
-	correlationWindowSize   uint
+	maxWaitTime time.Duration
+	logger      *slog.Logger
 
+	// Limit config
 	minLimit, maxLimit float64
 	initialLimit       uint
 	maxLimitFactor     float64
+
+	// Windowing config
+	recentWindowMinDuration time.Duration
+	recentWindowMaxDuration time.Duration
+	recentWindowMinSamples  uint
+	recentQuantile          float64
+	baselineWindowAge       uint
+	correlationWindowSize   uint
 
 	// Rejection config
 	initialRejectionFactor float64
 	maxRejectionFactor     float64
 
+	// Limit thresholding and adjustment functions
 	alphaFunc, betaFunc        func(int) int
 	increaseFunc, decreaseFunc func(int) int
 
-	onExceeded           func(failsafe.ExecutionEvent[R])
-	limitChangedListener func(LimitChangedEvent)
+	// Listeners
+	onLimitExceeded func(failsafe.ExecutionEvent[R])
+	onLimitChanged  func(LimitChangedEvent)
 }
 
 var _ Builder[any] = &config[any]{}
 
 func NewBuilder[R any]() Builder[R] {
 	return &config[R]{
-		recentWindowMinDuration: time.Second,
-		recentWindowMaxDuration: 30 * time.Second,
-		recentWindowMinSamples:  50,
-		baselineWindowAge:       10,
-		quantile:                0.9,
-		correlationWindowSize:   50,
-
 		minLimit:       1,
 		maxLimit:       200,
 		initialLimit:   20,
 		maxLimitFactor: 5.0,
+
+		recentWindowMinDuration: time.Second,
+		recentWindowMaxDuration: 30 * time.Second,
+		recentWindowMinSamples:  50,
+		recentQuantile:          0.9,
+		baselineWindowAge:       10,
+		correlationWindowSize:   50,
 
 		alphaFunc:    util.Log10Func(3),
 		betaFunc:     util.Log10Func(6),
@@ -253,14 +258,14 @@ func (c *config[R]) WithRecentWindow(minDuration time.Duration, maxDuration time
 	return c
 }
 
-func (c *config[R]) WithBaselineWindow(baselineAge uint) Builder[R] {
-	c.baselineWindowAge = baselineAge
+func (c *config[R]) WithRecentQuantile(quantile float32) Builder[R] {
+	util.Assert(quantile >= 0, "recentQuantile must be >= 0")
+	c.recentQuantile = float64(quantile)
 	return c
 }
 
-func (c *config[R]) WithSampleQuantile(quantile float32) Builder[R] {
-	util.Assert(quantile >= 0, "quantile must be >= 0")
-	c.quantile = float64(quantile)
+func (c *config[R]) WithBaselineWindow(baselineAge uint) Builder[R] {
+	c.baselineWindowAge = baselineAge
 	return c
 }
 
@@ -289,12 +294,12 @@ func (c *config[R]) WithLogger(logger *slog.Logger) Builder[R] {
 }
 
 func (c *config[R]) OnLimitExceeded(listener func(event failsafe.ExecutionEvent[R])) Builder[R] {
-	c.onExceeded = listener
+	c.onLimitExceeded = listener
 	return c
 }
 
 func (c *config[R]) OnLimitChanged(listener func(event LimitChangedEvent)) Builder[R] {
-	c.limitChangedListener = listener
+	c.onLimitChanged = listener
 	return c
 }
 
@@ -455,7 +460,7 @@ func (l *adaptiveLimiter[R]) record(now time.Time, rtt time.Duration, inflight i
 	}
 
 	if now.After(l.nextUpdateTime) && l.recentRTT.Size >= l.recentWindowMinSamples {
-		quantile := l.recentRTT.Quantile(l.quantile)
+		quantile := l.recentRTT.Quantile(l.recentQuantile)
 		filteredRTT := l.medianFilter.Add(quantile)
 		smoothedRTT := l.smoothedRecentRTT.Add(filteredRTT)
 		l.updateLimit(smoothedRTT, l.recentRTT.MaxInflight)
@@ -528,8 +533,8 @@ func (l *adaptiveLimiter[R]) updateLimit(recentRTT float64, inflight int) {
 
 	l.logLimit(direction, reason, newLimit, gradient, queueSize, inflight, recentRTT, baselineRTT, rttCorr, throughput, throughputCorr, throughputCV)
 
-	if uint(l.limit) != uint(newLimit) && l.limitChangedListener != nil {
-		l.limitChangedListener(LimitChangedEvent{
+	if uint(l.limit) != uint(newLimit) && l.onLimitChanged != nil {
+		l.onLimitChanged(LimitChangedEvent{
 			OldLimit: uint(l.limit),
 			NewLimit: uint(newLimit),
 		})

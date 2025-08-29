@@ -154,10 +154,10 @@ func TestAdaptiveLimiter_BuilderValidation(t *testing.T) {
 		}, "expected panic with invalid recent window")
 	})
 
-	t.Run("should panic on invalid WithSampleQuantile", func(t *testing.T) {
+	t.Run("should panic on invalid WithRecentQuantile", func(t *testing.T) {
 		assert.Panicsf(t, func() {
-			NewBuilder[any]().WithSampleQuantile(-1)
-		}, "expected panic with invalid sample quantile")
+			NewBuilder[any]().WithRecentQuantile(-1)
+		}, "expected panic with invalid sample recentQuantile")
 	})
 
 	t.Run("should panic on invalid WithLimits", func(t *testing.T) {
