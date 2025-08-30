@@ -214,6 +214,18 @@ type config[R any] struct {
 
 var _ Builder[any] = &config[any]{}
 
+// NewWithDefaults creates an AdaptiveLimiter with min, max, and initial limits of 1, 200, and 20 respectively, and a maxLimitFactor of 5.
+// The recent window's min and max durations are 1 and 30 seconds respectively, and the min samples is 50.
+// The baseline window age is 10 and the correlation window size is 50.
+// To configure additional options on an AdaptiveLimiter, use NewBuilder() instead.
+func NewWithDefaults[R any]() AdaptiveLimiter[R] {
+	return NewBuilder[R]().Build()
+}
+
+// NewBuilder creates a Builder for execution result type R.
+// The min, max, and initial limits default to 1, 200, and 20 respectively, and the maxLimitFactor to 5.
+// The recent window's min and max durations default to 1 and 30 seconds respectively, and the min samples to 50.
+// The baseline window age defaults to 10 and the correlation window size to 50.
 func NewBuilder[R any]() Builder[R] {
 	return &config[R]{
 		minLimit:       1,
