@@ -1,6 +1,8 @@
 package cachepolicy
 
 import (
+	"context"
+
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/policy"
 )
@@ -9,6 +11,11 @@ type key int
 
 // CacheKey is a key to use with a Context that stores the cache key.
 const CacheKey key = 0
+
+// ContextWithCacheKey returns a context with the cache key.
+func ContextWithCacheKey(ctx context.Context, key string) context.Context {
+	return context.WithValue(ctx, CacheKey, key)
+}
 
 // Cache is a simple interface for cached values that can be adapted to different cache backends.
 //

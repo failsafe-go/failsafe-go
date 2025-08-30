@@ -55,8 +55,8 @@ type AdaptiveLimiter[R any] interface {
 	AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) (Permit, error)
 
 	// TryAcquirePermit attempts to acquire a permit to perform an execution via the limiter, returning whether the Permit
-	// was acquired or not. This method will never block. Callers must call Record or Drop to release a successfully
-	// acquired permit back to the limiter.
+	// was acquired or not. This method will never block, and only considers whether the limiter is full - it does not allow
+	// queueing. Callers must call Record or Drop to release a successfully acquired permit back to the limiter.
 	TryAcquirePermit() (Permit, bool)
 
 	// CanAcquirePermit returns whether it's currently possible to acquire a permit.

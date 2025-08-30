@@ -218,7 +218,7 @@ func TestPriorityLimiter(t *testing.T) {
 			WithLimits(2, 2, 2).
 			WithMaxWaitTime(time.Second).
 			BuildPrioritized(p)
-		ctx := context.WithValue(context.Background(), adaptivelimiter.PriorityKey, adaptivelimiter.PriorityHigh)
+		ctx := adaptivelimiter.ContextWithPriority(context.Background(), adaptivelimiter.PriorityHigh)
 		ctxFn := testutil.ContextFn(ctx)
 		rejectionThreshold.Store(200)
 
@@ -239,7 +239,7 @@ func TestPriorityLimiter(t *testing.T) {
 			WithMaxWaitTime(time.Second).
 			BuildPrioritized(p)
 		limiter.AcquirePermit(context.Background()) // fill the limiter
-		ctx := context.WithValue(context.Background(), adaptivelimiter.PriorityKey, adaptivelimiter.PriorityLow)
+		ctx := adaptivelimiter.ContextWithPriority(context.Background(), adaptivelimiter.PriorityLow)
 		ctxFn := testutil.ContextFn(ctx)
 		rejectionThreshold.Store(200)
 

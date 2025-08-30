@@ -40,6 +40,16 @@ const PriorityKey key = 0
 // LevelKey is a key to use with a Context that stores the level value.
 const LevelKey key = 1
 
+// ContextWithPriority returns a context with the priority value.
+func ContextWithPriority(ctx context.Context, priority Priority) context.Context {
+	return context.WithValue(ctx, PriorityKey, priority)
+}
+
+// ContextWithLevel returns a context with the level value.
+func ContextWithLevel(ctx context.Context, level int) context.Context {
+	return context.WithValue(ctx, LevelKey, level)
+}
+
 // PriorityLimiter is an adaptive concurrency limiter that can prioritize execution rejections during overload. When the
 // limiter and its queue start to become full, it uses a Prioritizer to determine which priority levels should be
 // rejected, allowing higher-priority executions to proceed while shedding lower-priority load.
@@ -155,7 +165,7 @@ func (l *priorityLimiter[R]) CanAcquirePermitWithLevel(level int) bool {
 	if l.Queued() >= maxQueue {
 		return false
 	}
-
+	context.WithValue(context.Background(), PriorityKey, PriorityHigh)
 	// Threshold against the prioritizer's rejection threshold
 	return level >= l.prioritizer.RejectionThreshold()
 }
