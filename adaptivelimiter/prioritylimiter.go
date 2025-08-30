@@ -11,6 +11,12 @@ import (
 
 type Priority int
 
+// RandomLevel returns a random level for the Priority.
+func (p Priority) RandomLevel() int {
+	r := priorityLevelRanges[p]
+	return rand.Intn(r.upper-r.lower+1) + r.lower
+}
+
 const (
 	PriorityVeryLow Priority = iota
 	PriorityLow
@@ -130,7 +136,7 @@ func (l *priorityLimiter[R]) AcquirePermitWithMaxWait(ctx context.Context, maxWa
 }
 
 func (l *priorityLimiter[R]) AcquirePermitWithPriority(ctx context.Context, priority Priority) (Permit, error) {
-	return l.AcquirePermitWithLevel(ctx, randomLevel(priority))
+	return l.AcquirePermitWithLevel(ctx, priority.RandomLevel())
 }
 
 func (l *priorityLimiter[R]) AcquirePermitWithLevel(ctx context.Context, level int) (Permit, error) {
@@ -151,7 +157,7 @@ func (l *priorityLimiter[R]) CanAcquirePermit(ctx context.Context) bool {
 }
 
 func (l *priorityLimiter[R]) CanAcquirePermitWithPriority(priority Priority) bool {
-	return l.CanAcquirePermitWithLevel(randomLevel(priority))
+	return l.CanAcquirePermitWithLevel(priority.RandomLevel())
 }
 
 func (l *priorityLimiter[R]) CanAcquirePermitWithLevel(level int) bool {
@@ -165,29 +171,9 @@ func (l *priorityLimiter[R]) CanAcquirePermitWithLevel(level int) bool {
 	if l.Queued() >= maxQueue {
 		return false
 	}
-	context.WithValue(context.Background(), PriorityKey, PriorityHigh)
+
 	// Threshold against the prioritizer's rejection threshold
 	return level >= l.prioritizer.RejectionThreshold()
-}
-
-func randomLevel(priority Priority) int {
-	r := priorityLevelRanges[priority]
-	return rand.Intn(r.upper-r.lower+1) + r.lower
-}
-
-func levelForContext(ctx context.Context) int {
-	var level int
-	if untypedLevel := ctx.Value(LevelKey); untypedLevel != nil {
-		level, _ = untypedLevel.(int)
-	}
-	if level == 0 {
-		if untypedPriority := ctx.Value(PriorityKey); untypedPriority != nil {
-			priority, _ := untypedPriority.(Priority)
-			// Generate a random level if we only have a priority
-			level = randomLevel(priority)
-		}
-	}
-	return level
 }
 
 func (l *priorityLimiter[R]) ToExecutor(_ R) any {
@@ -197,6 +183,23 @@ func (l *priorityLimiter[R]) ToExecutor(_ R) any {
 	}
 	e.Executor = e
 	return e
+}
+
+// levelForContext returns a level for the level contained within the given context, else if a priority is contained
+// within the context, a random level is generated within that priority, else 0 is returned.
+func levelForContext(ctx context.Context) int {
+	var level int
+	if untypedLevel := ctx.Value(LevelKey); untypedLevel != nil {
+		level, _ = untypedLevel.(int)
+	}
+	if level == 0 {
+		if untypedPriority := ctx.Value(PriorityKey); untypedPriority != nil {
+			priority, _ := untypedPriority.(Priority)
+			// Generate a random level if we only have a priority
+			level = priority.RandomLevel()
+		}
+	}
+	return level
 }
 
 func (l *priorityLimiter[R]) configRef() *config[R] {

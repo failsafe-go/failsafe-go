@@ -1,12 +1,15 @@
 package failsafegrpc
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/adaptivelimiter"
 	"github.com/failsafe-go/failsafe-go/bulkhead"
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
@@ -137,4 +140,36 @@ func TestCancelWithTimeout(t *testing.T) {
 			assert.True(t, start.Add(time.Second).After(time.Now()), "timeout should immediately exit execution")
 		})
 	}
+}
+
+// This test asserts that a priority level is generated and propagated from an outgoing client context to an incoming
+// server one.
+func TestPropagateAdaptiveLimiterLevel(t *testing.T) {
+	// Given
+	var capturedContext context.Context
+	mockServer := &pbfixtures.MockPingServer{
+		OnPing: func(ctx context.Context, req *pbfixtures.PingRequest) (*pbfixtures.PingResponse, error) {
+			capturedContext = ctx
+			return &pbfixtures.PingResponse{Msg: "pong"}, nil
+		},
+	}
+	grpcServer, dialer := testutil.GrpcServer(mockServer, grpc.UnaryInterceptor(NewUnaryServerInterceptorWithLevel(true)))
+	grpcClient := testutil.GrpcClient(dialer, grpc.WithUnaryInterceptor(NewUnaryClientInterceptorWithLevel()))
+	t.Cleanup(func() {
+		grpcServer.Stop()
+		grpcClient.Close()
+	})
+	client := pbfixtures.NewPingServiceClient(grpcClient)
+
+	// When
+	ctx := adaptivelimiter.ContextWithPriority(context.Background(), adaptivelimiter.PriorityHigh)
+	_, err := client.Ping(ctx, &pbfixtures.PingRequest{Msg: "ping"})
+
+	// Then
+	assert.NoError(t, err)
+	level := capturedContext.Value(adaptivelimiter.LevelKey)
+	levelInt, ok := level.(int)
+	assert.True(t, ok)
+	assert.GreaterOrEqual(t, levelInt, 300)
+	assert.LessOrEqual(t, levelInt, 399)
 }

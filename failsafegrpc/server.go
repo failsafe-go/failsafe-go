@@ -2,11 +2,14 @@ package failsafegrpc
 
 import (
 	"context"
+	"strconv"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/tap"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/adaptivelimiter"
 	"github.com/failsafe-go/failsafe-go/internal/util"
 )
 
@@ -51,5 +54,34 @@ func NewUnaryServerInterceptorWithExecutor[R any](executor failsafe.Executor[R])
 			response, _ = resp.(R)
 			return response, err
 		})
+	}
+}
+
+// NewUnaryServerInterceptorWithLevel extracts adaptivelimiter priority and level information from an incoming request
+// and adds a level to the handling context. If a level is present in the incoming request metadata, it's added to the
+// context. If a level is not present and ensureLevel is true, then a level will be generated from a priority, if one is
+// present, else a level 0 will be used.
+func NewUnaryServerInterceptorWithLevel(ensureLevel bool) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		if !ensureLevel {
+			return handler(ctx, req)
+		}
+
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			return handler(adaptivelimiter.ContextWithLevel(ctx, 0), req)
+		}
+		if levels := md.Get(levelMetadataKey); len(levels) > 0 {
+			if level, err := strconv.Atoi(levels[0]); err == nil {
+				return handler(adaptivelimiter.ContextWithLevel(ctx, level), req)
+			}
+		}
+		if priorities := md.Get(priorityMetadataKey); len(priorities) > 0 {
+			if priorityInt, err := strconv.Atoi(priorities[0]); err == nil {
+				level := adaptivelimiter.Priority(priorityInt).RandomLevel()
+				return handler(adaptivelimiter.ContextWithLevel(ctx, level), req)
+			}
+		}
+		return handler(adaptivelimiter.ContextWithLevel(ctx, 0), req)
 	}
 }

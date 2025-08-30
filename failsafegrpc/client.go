@@ -2,11 +2,19 @@ package failsafegrpc
 
 import (
 	"context"
+	"strconv"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/adaptivelimiter"
 	"github.com/failsafe-go/failsafe-go/internal/util"
+)
+
+const (
+	priorityMetadataKey = "x-failsafe-priority"
+	levelMetadataKey    = "x-failsafe-level"
 )
 
 // NewUnaryClientInterceptor returns a grpc.UnaryClientInterceptor that wraps the invoker with the policies.
@@ -38,5 +46,36 @@ func NewUnaryClientInterceptorWithExecutor[R any](executor failsafe.Executor[R])
 			return response, invoker(innerCtx, method, req, reply, cc, opts...)
 		})
 		return err
+	}
+}
+
+// NewUnaryClientInterceptorWithLevel propagates adaptivelimiter priority and level information from a client
+// context to a server via metadata.
+func NewUnaryClientInterceptorWithLevel() grpc.UnaryClientInterceptor {
+	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		md, _ := metadata.FromOutgoingContext(ctx)
+		// Lazily construct or copy metadata
+		lazyMd := func() metadata.MD {
+			if md == nil {
+				return metadata.New(nil)
+			} else {
+				return md.Copy()
+			}
+		}
+
+		if untypedLevel := ctx.Value(adaptivelimiter.LevelKey); untypedLevel != nil {
+			if level, ok := untypedLevel.(int); ok {
+				md = lazyMd()
+				md.Set(levelMetadataKey, strconv.Itoa(level))
+			}
+		} else if untypedPriority := ctx.Value(adaptivelimiter.PriorityKey); untypedPriority != nil {
+			if priority, ok := untypedPriority.(adaptivelimiter.Priority); ok {
+				md = lazyMd()
+				md.Set(priorityMetadataKey, strconv.Itoa(int(priority)))
+			}
+		}
+
+		ctx = metadata.NewOutgoingContext(ctx, md)
+		return invoker(ctx, method, req, reply, cc, opts...)
 	}
 }

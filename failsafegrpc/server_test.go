@@ -9,9 +9,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/adaptivelimiter"
 	"github.com/failsafe-go/failsafe-go/cachepolicy"
 	"github.com/failsafe-go/failsafe-go/fallback"
 	"github.com/failsafe-go/failsafe-go/internal/policytesting"
@@ -157,4 +159,57 @@ func testServer[R any](t *testing.T, requestCtxFn func() context.Context, server
 		fmt.Println("Testing NewServerInHandleWithExecutor")
 		testGrpc(grpc.InTapHandle(NewServerInHandleWithExecutor(executorFn())))
 	}
+}
+
+func TestNewUnaryServerInterceptorWithLevel(t *testing.T) {
+	mockHandler := func(ctx context.Context, req any) (any, error) {
+		return ctx.Value(adaptivelimiter.LevelKey), nil
+	}
+
+	t.Run("ensureLevel=true", func(t *testing.T) {
+		interceptor := NewUnaryServerInterceptorWithLevel(true)
+
+		t.Run("should use level from metadata", func(t *testing.T) {
+			md := metadata.Pairs(levelMetadataKey, "250")
+			ctx := metadata.NewIncomingContext(context.Background(), md)
+
+			result, err := interceptor(ctx, nil, nil, mockHandler)
+
+			assert.NoError(t, err)
+			assert.Equal(t, 250, result)
+		})
+
+		t.Run("should convert priority to level", func(t *testing.T) {
+			md := metadata.Pairs(priorityMetadataKey, "2")
+			ctx := metadata.NewIncomingContext(context.Background(), md)
+
+			result, err := interceptor(ctx, nil, nil, mockHandler)
+
+			assert.NoError(t, err)
+			level := result.(int)
+			assert.GreaterOrEqual(t, level, 200)
+			assert.LessOrEqual(t, level, 299)
+		})
+
+		t.Run("should default to level 0", func(t *testing.T) {
+			result, err := interceptor(context.Background(), nil, nil, mockHandler)
+
+			assert.NoError(t, err)
+			assert.Equal(t, 0, result)
+		})
+	})
+
+	t.Run("ensureLevel=false", func(t *testing.T) {
+		interceptor := NewUnaryServerInterceptorWithLevel(false)
+
+		t.Run("should pass through the context unchanged", func(t *testing.T) {
+			md := metadata.Pairs(priorityMetadataKey, "2")
+			ctx := metadata.NewIncomingContext(context.Background(), md)
+
+			result, err := interceptor(ctx, nil, nil, mockHandler)
+
+			assert.NoError(t, err)
+			assert.Nil(t, result) // No level should be set
+		})
+	})
 }

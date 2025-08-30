@@ -8,6 +8,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestContextWithPriority(t *testing.T) {
+	assert.Equal(t, PriorityHigh, ContextWithPriority(context.Background(), PriorityHigh).Value(PriorityKey))
+}
+
+func TestContextWithLevel(t *testing.T) {
+	assert.Equal(t, 12, ContextWithLevel(context.Background(), 12).Value(LevelKey))
+}
+
 func TestPriorityLimiter_AcquirePermitWithPriority(t *testing.T) {
 	t.Run("with no rejection threshold", func(t *testing.T) {
 		limiter := NewBuilder[any]().BuildPrioritized(NewPrioritizer())

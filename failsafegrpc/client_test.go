@@ -10,9 +10,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/adaptivelimiter"
 	"github.com/failsafe-go/failsafe-go/fallback"
 	"github.com/failsafe-go/failsafe-go/hedgepolicy"
 	"github.com/failsafe-go/failsafe-go/internal/policytesting"
@@ -219,4 +221,37 @@ func testClient[R any](t *testing.T, requestCtxFn func() context.Context, server
 	// Then
 	var nilR R
 	assertResult(expectedAttempts, expectedExecutions, nilR, nilR, expectedError, err, expectedSuccess, !expectedSuccess, false, thens...)
+}
+
+func TestNewUnaryClientInterceptorWithPrioritization(t *testing.T) {
+	interceptor := NewUnaryClientInterceptorWithLevel()
+
+	runTest := func(ctx context.Context) metadata.MD {
+		var resultMD metadata.MD
+		invoker := func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, opts ...grpc.CallOption) error {
+			md, _ := metadata.FromOutgoingContext(ctx)
+			resultMD = md
+			return nil
+		}
+		interceptor(ctx, "", nil, nil, nil, invoker)
+		return resultMD
+	}
+
+	t.Run("should add level to metadata", func(t *testing.T) {
+		ctx := adaptivelimiter.ContextWithLevel(context.Background(), 250)
+		md := runTest(ctx)
+		assert.Equal(t, []string{"250"}, md.Get(levelMetadataKey))
+	})
+
+	t.Run("should add priority to metadata", func(t *testing.T) {
+		ctx := adaptivelimiter.ContextWithPriority(context.Background(), adaptivelimiter.PriorityHigh)
+		md := runTest(ctx)
+		assert.Equal(t, []string{"3"}, md.Get(priorityMetadataKey))
+	})
+
+	t.Run("should not modify metadata when no level or priority is present", func(t *testing.T) {
+		md := runTest(context.Background())
+		assert.Empty(t, md.Get(levelMetadataKey))
+		assert.Empty(t, md.Get(priorityMetadataKey))
+	})
 }
