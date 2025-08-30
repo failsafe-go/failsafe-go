@@ -1,5 +1,10 @@
 ## Upcoming Release
 
+## 0.7.0
+
+- New AdaptiveLimiter policy.
+- Add support for failsafehttp server Handlers.
+
 ## 0.6.9
 
 ### Bug Fixes
