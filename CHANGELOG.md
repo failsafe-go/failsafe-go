@@ -5,6 +5,10 @@
 - New AdaptiveLimiter policy.
 - Add support for failsafehttp server Handlers.
 
+### API Changes
+
+- The builder creation methods through the library had their names changed from `Builder()` to `NewBuilder()`, and so on.
+
 ## 0.6.9
 
 ### Bug Fixes
