@@ -122,7 +122,6 @@ func TestQueueingLimiter(t *testing.T) {
 		limiter := adaptivelimiter.NewBuilder[string]().
 			WithLimits(2, 2, 2). // limit of 2
 			WithQueueing(1.5, 1.5). // queue of 1.5 * 2 = 3
-			WithMaxWaitTime(time.Second).
 			Build()
 		before := func() {
 			shouldAcquireAndDropAfterWait(t, limiter, 2, 100*time.Millisecond) // fill limiter

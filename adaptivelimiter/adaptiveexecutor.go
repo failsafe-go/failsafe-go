@@ -12,6 +12,8 @@ import (
 )
 
 type blockingLimiter[R any] interface {
+	AcquirePermit(ctx context.Context) (Permit, error)
+
 	AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) (Permit, error)
 
 	configRef() *config[R]
@@ -29,7 +31,14 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
 		c := e.blockingLimiter.configRef()
-		permit, err := e.AcquirePermitWithMaxWait(exec.Context(), c.maxWaitTime)
+
+		var permit Permit
+		var err error
+		if c.maxWaitTime == -1 {
+			permit, err = e.AcquirePermit(exec.Context())
+		} else {
+			permit, err = e.AcquirePermitWithMaxWait(exec.Context(), c.maxWaitTime)
+		}
 
 		if err != nil {
 			// Check for cancellation while waiting for a permit

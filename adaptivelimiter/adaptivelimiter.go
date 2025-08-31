@@ -330,6 +330,9 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 		throughputCorrelation: util.NewCorrelationWindow(c.correlationWindowSize, warmupSamples),
 	}
 	if c.initialRejectionFactor != 0 && c.maxRejectionFactor != 0 {
+		if c.maxWaitTime == 0 {
+			cCopy.maxWaitTime = -1 // Wait indefinitely for queued executions
+		}
 		return &queueingLimiter[R]{adaptiveLimiter: limiter}
 	}
 	return limiter
