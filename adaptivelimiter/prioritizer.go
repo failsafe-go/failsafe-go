@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/influxdata/tdigest"
+	"github.com/failsafe-go/failsafe-go/priority"
 )
 
 // Prioritizer computes rejection rates and thresholds for priority limiters based on system overload. When limiters
@@ -36,19 +36,23 @@ type Prioritizer interface {
 	// ScheduleCalibrations runs Calibrate on the interval until the ctx is done or the returned CancelFunc is called.
 	ScheduleCalibrations(ctx context.Context, interval time.Duration) context.CancelFunc
 
-	register(limiter limiterStats)
-	recordPriority(priority int)
+	// Registers a queue stats func for a limiter, to be used for combined rejection threshold calculations.
+	register(queueStatsFn queueStatsFunc)
 }
 
 // PrioritizerBuilder builds Prioritizer instances.
 //
 // This type is not concurrency safe.
 type PrioritizerBuilder interface {
-	// OnThresholdChanged configures a listener to be called with the rejection threshold for rejection changes.
-	OnThresholdChanged(listener func(event ThresholdChangedEvent)) PrioritizerBuilder
+	// WithLevelTracker configures a level tracker to use with the prioritizer. The level tracker can be shared across
+	// different policy instances and types.
+	WithLevelTracker(levelTracker priority.LevelTracker) PrioritizerBuilder
 
 	// WithLogger configures a logger which provides debug logging of calibrations.
 	WithLogger(logger *slog.Logger) PrioritizerBuilder
+
+	// OnThresholdChanged configures a listener to be called with the rejection threshold for rejection changes.
+	OnThresholdChanged(listener func(event ThresholdChangedEvent)) PrioritizerBuilder
 
 	// Build returns a new Prioritizer using the builder's configuration.
 	Build() Prioritizer
@@ -61,8 +65,9 @@ type ThresholdChangedEvent struct {
 }
 
 type prioritizerConfig struct {
-	logger   *slog.Logger
-	listener func(event ThresholdChangedEvent)
+	logger             *slog.Logger
+	levelTracker       priority.LevelTracker
+	onThresholdChanged func(event ThresholdChangedEvent)
 }
 
 var _ PrioritizerBuilder = &prioritizerConfig{}
@@ -77,28 +82,33 @@ func NewPrioritizerBuilder() PrioritizerBuilder {
 	return &prioritizerConfig{}
 }
 
+func (c *prioritizerConfig) WithLevelTracker(levelTracker priority.LevelTracker) PrioritizerBuilder {
+	c.levelTracker = levelTracker
+	return c
+}
+
 func (c *prioritizerConfig) WithLogger(logger *slog.Logger) PrioritizerBuilder {
 	c.logger = logger
 	return c
 }
 
 func (c *prioritizerConfig) OnThresholdChanged(listener func(event ThresholdChangedEvent)) PrioritizerBuilder {
-	c.listener = listener
+	c.onThresholdChanged = listener
 	return c
 }
 
 func (c *prioritizerConfig) Build() Prioritizer {
 	pCopy := *c
+	if pCopy.levelTracker == nil {
+		pCopy.levelTracker = priority.NewLevelTracker()
+	}
 	return &prioritizer{
 		prioritizerConfig: &pCopy, // TODO copy base fields
-		digest:            tdigest.NewWithCompression(100),
 	}
 }
 
 // Define limiter operations that don't depend on a result type.
-type limiterStats interface {
-	queueStats() (limit, queued, rejectionThreshold, maxQueue int)
-}
+type queueStatsFunc func() (limit, queued, rejectionThreshold, maxQueue int)
 
 type prioritizer struct {
 	*prioritizerConfig
@@ -106,34 +116,33 @@ type prioritizer struct {
 	// Mutable state
 	rejectionThreshold atomic.Int32
 	mu                 sync.Mutex
-	limiters           []limiterStats   // Guarded by mu
-	digest             *tdigest.TDigest // Guarded by mu
+	statsFuncs         []queueStatsFunc // Guarded by mu
 	rejectionRate      float64          // Guarded by mu
 }
 
-func (r *prioritizer) register(limiter limiterStats) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.limiters = append(r.limiters, limiter)
+func (p *prioritizer) register(statsFunc queueStatsFunc) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.statsFuncs = append(p.statsFuncs, statsFunc)
 }
 
-func (r *prioritizer) RejectionRate() float64 {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.rejectionRate
+func (p *prioritizer) RejectionRate() float64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.rejectionRate
 }
 
-func (r *prioritizer) RejectionThreshold() int {
-	return int(r.rejectionThreshold.Load())
+func (p *prioritizer) RejectionThreshold() int {
+	return int(p.rejectionThreshold.Load())
 }
 
-func (r *prioritizer) Calibrate() {
-	r.mu.Lock()
+func (p *prioritizer) Calibrate() {
+	p.mu.Lock()
 
-	// Compute queue stats across all registered limiters
+	// Compute queue stats across all registered stats funcs
 	var totalLimit, totalQueued, totalRejectionThresh, totalMaxQueue int
-	for _, limiter := range r.limiters {
-		limit, queued, rejectionThresh, maxQueue := limiter.queueStats()
+	for _, statsFunc := range p.statsFuncs {
+		limit, queued, rejectionThresh, maxQueue := statsFunc()
 		totalLimit += limit
 		totalQueued += queued
 		totalRejectionThresh += rejectionThresh
@@ -142,31 +151,31 @@ func (r *prioritizer) Calibrate() {
 
 	// Update rejection rate and rejection threshold
 	newRate := computeRejectionRate(totalQueued, totalRejectionThresh, totalMaxQueue)
-	r.rejectionRate = newRate
+	p.rejectionRate = newRate
 	var newThresh int32
 	if newRate > 0 {
-		newThresh = int32(r.digest.Quantile(newRate))
+		newThresh = int32(p.levelTracker.GetLevel(newRate))
 	}
-	r.mu.Unlock()
-	oldThresh := r.rejectionThreshold.Swap(newThresh)
+	p.mu.Unlock()
+	oldThresh := p.rejectionThreshold.Swap(newThresh)
 
-	if r.logger != nil && r.logger.Enabled(nil, slog.LevelDebug) {
-		r.logger.Debug("prioritizer calibration",
+	if p.logger != nil && p.logger.Enabled(nil, slog.LevelDebug) {
+		p.logger.Debug("prioritizer calibration",
 			"newRate", fmt.Sprintf("%.2f", newRate),
 			"newThresh", newThresh,
 			"limit", totalLimit,
 			"queued", totalQueued)
 	}
 
-	if oldThresh != newThresh && r.listener != nil {
-		r.listener(ThresholdChangedEvent{
+	if oldThresh != newThresh && p.onThresholdChanged != nil {
+		p.onThresholdChanged(ThresholdChangedEvent{
 			OldThreshold: uint(oldThresh),
 			NewThreshold: uint(newThresh),
 		})
 	}
 }
 
-func (r *prioritizer) ScheduleCalibrations(ctx context.Context, interval time.Duration) context.CancelFunc {
+func (p *prioritizer) ScheduleCalibrations(ctx context.Context, interval time.Duration) context.CancelFunc {
 	ticker := time.NewTicker(interval)
 	done := make(chan struct{})
 
@@ -179,7 +188,7 @@ func (r *prioritizer) ScheduleCalibrations(ctx context.Context, interval time.Du
 			case <-done:
 				return
 			case <-ticker.C:
-				r.Calibrate()
+				p.Calibrate()
 			}
 		}
 	}()
@@ -187,10 +196,4 @@ func (r *prioritizer) ScheduleCalibrations(ctx context.Context, interval time.Du
 	return func() {
 		close(done)
 	}
-}
-
-func (r *prioritizer) recordPriority(priority int) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.digest.Add(float64(priority), 1.0)
 }

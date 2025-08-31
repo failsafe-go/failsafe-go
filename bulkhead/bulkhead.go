@@ -87,8 +87,9 @@ func (c *config[R]) OnFull(listener func(event failsafe.ExecutionEvent[R])) Buil
 }
 
 func (c *config[R]) Build() Bulkhead[R] {
+	cCopy := *c
 	return &bulkhead[R]{
-		config:    c, // TODO copy base fields
+		config:    &cCopy, // TODO copy base fields
 		semaphore: make(chan struct{}, c.maxConcurrency),
 	}
 }

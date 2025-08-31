@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/failsafe-go/failsafe-go/priority"
 )
 
 // Tests that a rejection rate is computed as expected based on queue sizes.
@@ -18,10 +20,10 @@ func TestPrioritizer_Calibrate(t *testing.T) {
 		BuildPrioritized(p).(*priorityLimiter[any])
 
 	acquire := func() {
-		go limiter.AcquirePermitWithPriority(context.Background(), PriorityLow)
+		go limiter.AcquirePermitWithPriority(context.Background(), priority.Low)
 	}
 
-	permit, err := limiter.AcquirePermitWithPriority(context.Background(), PriorityLow)
+	permit, err := limiter.AcquirePermitWithPriority(context.Background(), priority.Low)
 	assert.NoError(t, err)
 	acquire()
 	assertQueued(t, limiter, 1)

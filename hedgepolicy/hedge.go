@@ -141,9 +141,9 @@ func (c *config[R]) WithMaxHedges(maxHedges int) Builder[R] {
 
 func (c *config[R]) Build() HedgePolicy[R] {
 	hCopy := *c
-	if !c.BaseAbortablePolicy.IsConfigured() {
+	if !hCopy.BaseAbortablePolicy.IsConfigured() {
 		// Cancel hedges by default after any result is received
-		c.AbortIf(func(r R, err error) bool {
+		hCopy.AbortIf(func(r R, err error) bool {
 			return true
 		})
 	}

@@ -316,8 +316,9 @@ func (c *config[R]) OnLimitChanged(listener func(event LimitChangedEvent)) Build
 }
 
 func (c *config[R]) Build() AdaptiveLimiter[R] {
+	cCopy := *c
 	limiter := &adaptiveLimiter[R]{
-		config:                c,
+		config:                &cCopy,
 		semaphore:             util.NewDynamicSemaphore(int(c.initialLimit)),
 		limit:                 float64(c.initialLimit),
 		recentRTT:             &TDigestSample{TDigest: tdigest.NewWithCompression(100)},
@@ -334,16 +335,16 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 	return limiter
 }
 
-func (c *config[R]) BuildPrioritized(prioritizer Prioritizer) PriorityLimiter[R] {
+func (c *config[R]) BuildPrioritized(p Prioritizer) PriorityLimiter[R] {
 	if c.initialRejectionFactor == 0 && c.maxRejectionFactor == 0 {
 		c.initialRejectionFactor = 2
 		c.maxRejectionFactor = 3
 	}
 	limiter := &priorityLimiter[R]{
 		queueingLimiter: c.Build().(*queueingLimiter[R]),
-		prioritizer:     prioritizer,
+		prioritizer:     p.(*prioritizer),
 	}
-	prioritizer.register(limiter)
+	p.register(limiter.queueStats)
 	return limiter
 }
 

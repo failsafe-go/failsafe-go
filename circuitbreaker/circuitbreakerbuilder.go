@@ -132,8 +132,9 @@ func NewBuilder[R any]() Builder[R] {
 }
 
 func (c *config[R]) Build() CircuitBreaker[R] {
+	cCopy := *c
 	breaker := &circuitBreaker[R]{
-		config: c, // TODO copy base fields
+		config: &cCopy, // TODO copy base fields
 	}
 	breaker.state = newClosedState[R](breaker)
 	return breaker

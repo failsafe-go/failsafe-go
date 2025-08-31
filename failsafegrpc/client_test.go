@@ -14,12 +14,12 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/failsafe-go/failsafe-go"
-	"github.com/failsafe-go/failsafe-go/adaptivelimiter"
 	"github.com/failsafe-go/failsafe-go/fallback"
 	"github.com/failsafe-go/failsafe-go/hedgepolicy"
 	"github.com/failsafe-go/failsafe-go/internal/policytesting"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
 	"github.com/failsafe-go/failsafe-go/internal/testutil/pbfixtures"
+	"github.com/failsafe-go/failsafe-go/priority"
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
 )
 
@@ -238,13 +238,13 @@ func TestNewUnaryClientInterceptorWithPrioritization(t *testing.T) {
 	}
 
 	t.Run("should add level to metadata", func(t *testing.T) {
-		ctx := adaptivelimiter.ContextWithLevel(context.Background(), 250)
+		ctx := priority.ContextWithLevel(context.Background(), 250)
 		md := runTest(ctx)
 		assert.Equal(t, []string{"250"}, md.Get(levelMetadataKey))
 	})
 
 	t.Run("should add priority to metadata", func(t *testing.T) {
-		ctx := adaptivelimiter.ContextWithPriority(context.Background(), adaptivelimiter.PriorityHigh)
+		ctx := priority.High.AddTo(context.Background())
 		md := runTest(ctx)
 		assert.Equal(t, []string{"3"}, md.Get(priorityMetadataKey))
 	})

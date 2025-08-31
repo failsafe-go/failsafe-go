@@ -2,59 +2,12 @@ package adaptivelimiter
 
 import (
 	"context"
-	"math/rand"
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/policy"
+	"github.com/failsafe-go/failsafe-go/priority"
 )
-
-type Priority int
-
-// RandomLevel returns a random level for the Priority.
-func (p Priority) RandomLevel() int {
-	r := priorityLevelRanges[p]
-	return rand.Intn(r.upper-r.lower+1) + r.lower
-}
-
-const (
-	PriorityVeryLow Priority = iota
-	PriorityLow
-	PriorityMedium
-	PriorityHigh
-	PriorityVeryHigh
-)
-
-// levelRange provides a wider range of levels that allow for rejecting a subset of executions within a Priority.
-type levelRange struct {
-	lower, upper int
-}
-
-var priorityLevelRanges = map[Priority]levelRange{
-	PriorityVeryLow:  {0, 99},
-	PriorityLow:      {100, 199},
-	PriorityMedium:   {200, 299},
-	PriorityHigh:     {300, 399},
-	PriorityVeryHigh: {400, 499},
-}
-
-type key int
-
-// PriorityKey is a key to use with a Context that stores the priority value.
-const PriorityKey key = 0
-
-// LevelKey is a key to use with a Context that stores the level value.
-const LevelKey key = 1
-
-// ContextWithPriority returns a context with the priority value.
-func ContextWithPriority(ctx context.Context, priority Priority) context.Context {
-	return context.WithValue(ctx, PriorityKey, priority)
-}
-
-// ContextWithLevel returns a context with the level value.
-func ContextWithLevel(ctx context.Context, level int) context.Context {
-	return context.WithValue(ctx, LevelKey, level)
-}
 
 // PriorityLimiter is an adaptive concurrency limiter that can prioritize execution rejections during overload. When the
 // limiter and its queue start to become full, it uses a Prioritizer to determine which priority levels should be
@@ -89,7 +42,7 @@ type PriorityLimiter[R any] interface {
 	// AcquirePermitWithPriority attempts to acquire a permit for a execution at the given priority, waiting until one is
 	// available or the execution is canceled. Returns [context.Canceled] if the ctx is canceled. The execution priority must
 	// be greater than the current rejection threshold for admission.
-	AcquirePermitWithPriority(ctx context.Context, priority Priority) (Permit, error)
+	AcquirePermitWithPriority(ctx context.Context, priority priority.Priority) (Permit, error)
 
 	// AcquirePermitWithLevel attempts to acquire a permit for a execution at the given priority level, waiting until one is
 	// available or the execution is canceled. Returns [context.Canceled] if the ctx is canceled. The execution priority level
@@ -102,7 +55,7 @@ type PriorityLimiter[R any] interface {
 	CanAcquirePermit(ctx context.Context) bool
 
 	// CanAcquirePermitWithPriority returns whether it's currently possible to acquire a permit for the priority.
-	CanAcquirePermitWithPriority(priority Priority) bool
+	CanAcquirePermitWithPriority(priority priority.Priority) bool
 
 	// CanAcquirePermitWithLevel returns whether it's currently possible to acquire a permit for the level. The level must
 	// be between 0 and 499.
@@ -114,7 +67,7 @@ type PriorityLimiter[R any] interface {
 
 type priorityLimiter[R any] struct {
 	*queueingLimiter[R]
-	prioritizer Prioritizer
+	prioritizer *prioritizer
 }
 
 func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
@@ -131,11 +84,11 @@ func (l *priorityLimiter[R]) AcquirePermitWithMaxWait(ctx context.Context, maxWa
 	if err != nil {
 		return nil, err
 	}
-	l.prioritizer.recordPriority(level)
+	l.prioritizer.levelTracker.RecordLevel(level)
 	return permit, nil
 }
 
-func (l *priorityLimiter[R]) AcquirePermitWithPriority(ctx context.Context, priority Priority) (Permit, error) {
+func (l *priorityLimiter[R]) AcquirePermitWithPriority(ctx context.Context, priority priority.Priority) (Permit, error) {
 	return l.AcquirePermitWithLevel(ctx, priority.RandomLevel())
 }
 
@@ -148,7 +101,7 @@ func (l *priorityLimiter[R]) AcquirePermitWithLevel(ctx context.Context, level i
 	if err != nil {
 		return nil, err
 	}
-	l.prioritizer.recordPriority(level)
+	l.prioritizer.levelTracker.RecordLevel(level)
 	return permit, nil
 }
 
@@ -156,7 +109,7 @@ func (l *priorityLimiter[R]) CanAcquirePermit(ctx context.Context) bool {
 	return l.CanAcquirePermitWithLevel(levelForContext(ctx))
 }
 
-func (l *priorityLimiter[R]) CanAcquirePermitWithPriority(priority Priority) bool {
+func (l *priorityLimiter[R]) CanAcquirePermitWithPriority(priority priority.Priority) bool {
 	return l.CanAcquirePermitWithLevel(priority.RandomLevel())
 }
 
@@ -189,12 +142,12 @@ func (l *priorityLimiter[R]) ToExecutor(_ R) any {
 // within the context, a random level is generated within that priority, else 0 is returned.
 func levelForContext(ctx context.Context) int {
 	var level int
-	if untypedLevel := ctx.Value(LevelKey); untypedLevel != nil {
+	if untypedLevel := ctx.Value(priority.LevelKey); untypedLevel != nil {
 		level, _ = untypedLevel.(int)
 	}
 	if level == 0 {
-		if untypedPriority := ctx.Value(PriorityKey); untypedPriority != nil {
-			priority, _ := untypedPriority.(Priority)
+		if untypedPriority := ctx.Value(priority.PriorityKey); untypedPriority != nil {
+			priority, _ := untypedPriority.(priority.Priority)
 			// Generate a random level if we only have a priority
 			level = priority.RandomLevel()
 		}

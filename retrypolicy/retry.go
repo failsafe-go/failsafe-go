@@ -338,9 +338,9 @@ func (c *config[R]) allowsRetries() bool {
 }
 
 func (c *config[R]) Build() RetryPolicy[R] {
-	rpCopy := *c
+	cCopy := *c
 	return &retryPolicy[R]{
-		config: &rpCopy, // TODO copy base fields
+		config: &cCopy, // TODO copy base fields
 	}
 }
 

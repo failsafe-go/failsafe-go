@@ -60,16 +60,6 @@ func (l *queueingLimiter[R]) computeRejectionRate() float64 {
 	return computeRejectionRate(queued, rejectionThreshold, maxQueueSize)
 }
 
-func computeRejectionRate(queueSize, rejectionThreshold, maxQueueSize int) float64 {
-	if queueSize < rejectionThreshold {
-		return 0
-	}
-	if queueSize >= maxQueueSize {
-		return 1
-	}
-	return float64(queueSize-rejectionThreshold) / float64(maxQueueSize-rejectionThreshold)
-}
-
 func (l *queueingLimiter[R]) queueStats() (limit, queued, rejectionThreshold, maxQueueSize int) {
 	limit = l.Limit()
 	rejectionThreshold = int(float64(limit) * l.initialRejectionFactor)
@@ -88,4 +78,15 @@ func (l *queueingLimiter[R]) ToExecutor(_ R) any {
 
 func (l *queueingLimiter[R]) configRef() *config[R] {
 	return l.config
+}
+
+// Computes a rejection rate that using the queueing stats.
+func computeRejectionRate(queueSize, rejectionThreshold, maxQueueSize int) float64 {
+	if queueSize < rejectionThreshold {
+		return 0
+	}
+	if queueSize >= maxQueueSize {
+		return 1
+	}
+	return float64(queueSize-rejectionThreshold) / float64(maxQueueSize-rejectionThreshold)
 }

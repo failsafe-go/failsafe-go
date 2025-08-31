@@ -6,20 +6,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/failsafe-go/failsafe-go/priority"
 )
-
-func TestContextWithPriority(t *testing.T) {
-	assert.Equal(t, PriorityHigh, ContextWithPriority(context.Background(), PriorityHigh).Value(PriorityKey))
-}
-
-func TestContextWithLevel(t *testing.T) {
-	assert.Equal(t, 12, ContextWithLevel(context.Background(), 12).Value(LevelKey))
-}
 
 func TestPriorityLimiter_AcquirePermitWithPriority(t *testing.T) {
 	t.Run("with no rejection threshold", func(t *testing.T) {
 		limiter := NewBuilder[any]().BuildPrioritized(NewPrioritizer())
-		permit, err := limiter.AcquirePermitWithPriority(context.Background(), PriorityLow)
+		permit, err := limiter.AcquirePermitWithPriority(context.Background(), priority.Low)
 		assert.NotNil(t, permit)
 		assert.NoError(t, err)
 	})
@@ -31,7 +25,7 @@ func TestPriorityLimiter_AcquirePermitWithPriority(t *testing.T) {
 		p.rejectionThreshold.Store(200)
 
 		// When
-		permit, err := limiter.AcquirePermitWithPriority(context.Background(), PriorityHigh)
+		permit, err := limiter.AcquirePermitWithPriority(context.Background(), priority.High)
 
 		// Then
 		assert.NotNil(t, permit)
@@ -49,7 +43,7 @@ func TestPriorityLimiter_AcquirePermitWithPriority(t *testing.T) {
 		p.rejectionThreshold.Store(200)
 
 		// When
-		permit, err := limiter.AcquirePermitWithPriority(context.Background(), PriorityLow)
+		permit, err := limiter.AcquirePermitWithPriority(context.Background(), priority.Low)
 
 		// Then
 		assert.Nil(t, permit)
@@ -63,11 +57,11 @@ func TestPriorityLimiter_AcquirePermitWithPriority(t *testing.T) {
 		limiter := NewBuilder[any]().WithLimits(1, 1, 1).
 			WithQueueing(1, 1).
 			BuildPrioritized(p)
-		shouldAcquireWithPriority(t, limiter, PriorityHigh)    // fill the limiter
-		go shouldAcquireWithPriority(t, limiter, PriorityHigh) // fill the queue
+		shouldAcquireWithPriority(t, limiter, priority.High)    // fill the limiter
+		go shouldAcquireWithPriority(t, limiter, priority.High) // fill the queue
 		assertQueued(t, limiter, 1)
 
-		permit, err := limiter.AcquirePermitWithPriority(context.Background(), PriorityHigh)
+		permit, err := limiter.AcquirePermitWithPriority(context.Background(), priority.High)
 		assert.Nil(t, permit)
 		assert.ErrorIs(t, err, ErrExceeded)
 	})
@@ -87,7 +81,7 @@ func TestPriorityLimiter_AcquirePermitWithMaxWaitAndRecord(t *testing.T) {
 	assert.Equal(t, 0, limiter.Inflight())
 }
 
-func shouldAcquireWithPriority[R any](t *testing.T, limiter PriorityLimiter[R], priority Priority) Permit {
+func shouldAcquireWithPriority[R any](t *testing.T, limiter PriorityLimiter[R], priority priority.Priority) Permit {
 	permit, err := limiter.AcquirePermitWithPriority(context.Background(), priority)
 	require.NotNil(t, permit)
 	require.NoError(t, err)

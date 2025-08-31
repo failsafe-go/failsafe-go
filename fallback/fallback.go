@@ -118,9 +118,9 @@ func (c *config[R]) OnFallbackExecuted(listener func(event failsafe.ExecutionDon
 }
 
 func (c *config[R]) Build() Fallback[R] {
-	fbCopy := *c
+	cCopy := *c
 	return &fallback[R]{
-		config: &fbCopy, // TODO copy base fields
+		config: &cCopy, // TODO copy base fields
 	}
 }
 

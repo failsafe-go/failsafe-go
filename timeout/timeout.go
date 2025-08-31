@@ -62,9 +62,9 @@ func (c *config[R]) OnTimeoutExceeded(listener func(event failsafe.ExecutionDone
 }
 
 func (c *config[R]) Build() Timeout[R] {
-	fbCopy := *c
+	cCopy := *c
 	return &timeout[R]{
-		config: &fbCopy, // TODO copy base fields
+		config: &cCopy, // TODO copy base fields
 	}
 }
 

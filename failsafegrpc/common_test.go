@@ -9,11 +9,11 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/failsafe-go/failsafe-go"
-	"github.com/failsafe-go/failsafe-go/adaptivelimiter"
 	"github.com/failsafe-go/failsafe-go/bulkhead"
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
 	"github.com/failsafe-go/failsafe-go/internal/testutil/pbfixtures"
+	"github.com/failsafe-go/failsafe-go/priority"
 	"github.com/failsafe-go/failsafe-go/ratelimiter"
 	"github.com/failsafe-go/failsafe-go/timeout"
 )
@@ -146,10 +146,10 @@ func TestCancelWithTimeout(t *testing.T) {
 // server one.
 func TestPropagateAdaptiveLimiterLevel(t *testing.T) {
 	// Given
-	var capturedContext context.Context
+	var recordedCtx context.Context
 	mockServer := &pbfixtures.MockPingServer{
 		OnPing: func(ctx context.Context, req *pbfixtures.PingRequest) (*pbfixtures.PingResponse, error) {
-			capturedContext = ctx
+			recordedCtx = ctx
 			return &pbfixtures.PingResponse{Msg: "pong"}, nil
 		},
 	}
@@ -162,12 +162,12 @@ func TestPropagateAdaptiveLimiterLevel(t *testing.T) {
 	client := pbfixtures.NewPingServiceClient(grpcClient)
 
 	// When
-	ctx := adaptivelimiter.ContextWithPriority(context.Background(), adaptivelimiter.PriorityHigh)
+	ctx := priority.High.AddTo(context.Background())
 	_, err := client.Ping(ctx, &pbfixtures.PingRequest{Msg: "ping"})
 
 	// Then
 	assert.NoError(t, err)
-	level := capturedContext.Value(adaptivelimiter.LevelKey)
+	level := recordedCtx.Value(priority.LevelKey)
 	levelInt, ok := level.(int)
 	assert.True(t, ok)
 	assert.GreaterOrEqual(t, levelInt, 300)

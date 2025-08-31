@@ -11,6 +11,7 @@ import (
 	"github.com/failsafe-go/failsafe-go/adaptivelimiter"
 	"github.com/failsafe-go/failsafe-go/internal/policytesting"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
+	"github.com/failsafe-go/failsafe-go/priority"
 )
 
 func TestAdaptiveLimiter(t *testing.T) {
@@ -218,7 +219,7 @@ func TestPriorityLimiter(t *testing.T) {
 			WithLimits(2, 2, 2).
 			WithMaxWaitTime(time.Second).
 			BuildPrioritized(p)
-		ctx := adaptivelimiter.ContextWithPriority(context.Background(), adaptivelimiter.PriorityHigh)
+		ctx := priority.High.AddTo(context.Background())
 		ctxFn := testutil.ContextFn(ctx)
 		rejectionThreshold.Store(200)
 
@@ -239,7 +240,7 @@ func TestPriorityLimiter(t *testing.T) {
 			WithMaxWaitTime(time.Second).
 			BuildPrioritized(p)
 		limiter.AcquirePermit(context.Background()) // fill the limiter
-		ctx := adaptivelimiter.ContextWithPriority(context.Background(), adaptivelimiter.PriorityLow)
+		ctx := priority.Low.AddTo(context.Background())
 		ctxFn := testutil.ContextFn(ctx)
 		rejectionThreshold.Store(200)
 
