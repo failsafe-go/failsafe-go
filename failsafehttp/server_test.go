@@ -3,6 +3,8 @@ package failsafehttp
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -14,6 +16,7 @@ import (
 	"github.com/failsafe-go/failsafe-go/hedgepolicy"
 	"github.com/failsafe-go/failsafe-go/internal/policytesting"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
+	"github.com/failsafe-go/failsafe-go/priority"
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
 	"github.com/failsafe-go/failsafe-go/timeout"
 )
@@ -154,4 +157,78 @@ func testServer(t *testing.T, handler http.HandlerFunc) *tester {
 		tester:  testutil.Test[*http.Response](t),
 		handler: handler,
 	}
+}
+
+func TestNewHandlerWithLevel(t *testing.T) {
+	// Returns a level, if available, else a priority as the handled result
+	mockHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		if level := ctx.Value(priority.LevelKey); level != nil {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(strconv.Itoa(level.(int))))
+			return
+		}
+		if p := ctx.Value(priority.PriorityKey); p != nil {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(strconv.Itoa(int(p.(priority.Priority)))))
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	t.Run("ensureLevel=true", func(t *testing.T) {
+		handler := NewHandlerWithLevel(mockHandler, true)
+
+		t.Run("should use level from headers", func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.Header.Set(levelHeaderKey, "250")
+
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, req)
+
+			assert.Equal(t, http.StatusOK, recorder.Code)
+			assert.Equal(t, "250", recorder.Body.String())
+		})
+
+		t.Run("should convert priority to level", func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.Header.Set(priorityHeaderKey, "2")
+
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, req)
+
+			assert.Equal(t, http.StatusOK, recorder.Code)
+
+			level, err := strconv.Atoi(recorder.Body.String())
+			assert.NoError(t, err)
+			assert.GreaterOrEqual(t, level, 200)
+			assert.LessOrEqual(t, level, 299)
+		})
+	})
+
+	t.Run("ensureLevel=false", func(t *testing.T) {
+		handler := NewHandlerWithLevel(mockHandler, false)
+
+		t.Run("should use level from headers", func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.Header.Set(levelHeaderKey, "250")
+
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, req)
+
+			assert.Equal(t, http.StatusOK, recorder.Code)
+			assert.Equal(t, "250", recorder.Body.String())
+		})
+
+		t.Run("should not convert priority to level", func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.Header.Set(priorityHeaderKey, "2")
+
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, req)
+
+			assert.Equal(t, http.StatusOK, recorder.Code)
+			assert.Equal(t, "2", recorder.Body.String())
+		})
+	})
 }

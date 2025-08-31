@@ -5,9 +5,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/internal/util"
+	"github.com/failsafe-go/failsafe-go/priority"
+)
+
+const (
+	priorityHeaderKey = "X-Failsafe-Priority"
+	levelHeaderKey    = "X-Failsafe-Level"
 )
 
 type roundTripper struct {
@@ -32,6 +39,37 @@ func NewRoundTripperWithExecutor(innerRoundTripper http.RoundTripper, executor f
 		next:     innerRoundTripper,
 		executor: executor,
 	}
+}
+
+type levelRoundTripper struct {
+	next http.RoundTripper
+}
+
+// NewRoundTripperWithLevel propagates adaptivelimiter priority and level information from a client context to
+// a server via HTTP headers. If a level is present it's propagated, else a priority is propagated if present.
+func NewRoundTripperWithLevel(innerRoundTripper http.RoundTripper) http.RoundTripper {
+	if innerRoundTripper == nil {
+		innerRoundTripper = http.DefaultTransport
+	}
+	return &levelRoundTripper{next: innerRoundTripper}
+}
+
+func (p *levelRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	ctx := req.Context()
+
+	if untypedLevel := ctx.Value(priority.LevelKey); untypedLevel != nil {
+		if level, ok := untypedLevel.(int); ok {
+			req = req.Clone(ctx)
+			req.Header.Set(levelHeaderKey, strconv.Itoa(level))
+		}
+	} else if untypedPriority := ctx.Value(priority.PriorityKey); untypedPriority != nil {
+		if priority, ok := untypedPriority.(priority.Priority); ok {
+			req = req.Clone(ctx)
+			req.Header.Set(priorityHeaderKey, strconv.Itoa(int(priority)))
+		}
+	}
+
+	return p.next.RoundTrip(req)
 }
 
 func (r *roundTripper) RoundTrip(request *http.Request) (*http.Response, error) {

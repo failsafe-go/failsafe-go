@@ -15,6 +15,7 @@ import (
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
+	"github.com/failsafe-go/failsafe-go/priority"
 )
 
 type tester struct {
@@ -170,4 +171,39 @@ func testRoundTripper(ctx context.Context, path string, executor failsafe.Execut
 func testRequest(ctx context.Context, path string, executor failsafe.Executor[*http.Response]) (*http.Response, error) {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, path, nil)
 	return NewRequestWithExecutor(req, http.DefaultClient, executor).Do()
+}
+
+// This test asserts that a priority level is generated and propagated from an outgoing client context to an incoming
+// server one.
+func TestPropagateAdaptiveLimiterLevel(t *testing.T) {
+	// Given
+	var recordedCtx context.Context
+
+	mockHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		recordedCtx = r.Context()
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("success"))
+	})
+
+	// Server with priority extraction
+	server := httptest.NewServer(NewHandlerWithLevel(mockHandler, true))
+	defer server.Close()
+
+	// Client with priority propagation
+	client := &http.Client{
+		Transport: NewRoundTripperWithLevel(nil),
+	}
+
+	// When
+	ctx := priority.High.AddTo(context.Background())
+	req, _ := http.NewRequestWithContext(ctx, "GET", server.URL, nil)
+	_, err := client.Do(req)
+
+	// Then
+	assert.NoError(t, err)
+	level := recordedCtx.Value(priority.LevelKey)
+	levelInt, ok := level.(int)
+	assert.True(t, ok)
+	assert.GreaterOrEqual(t, levelInt, 300)
+	assert.LessOrEqual(t, levelInt, 399)
 }

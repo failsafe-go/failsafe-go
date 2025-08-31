@@ -22,6 +22,7 @@ import (
 	"github.com/failsafe-go/failsafe-go/hedgepolicy"
 	"github.com/failsafe-go/failsafe-go/internal/policytesting"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
+	"github.com/failsafe-go/failsafe-go/priority"
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
 	"github.com/failsafe-go/failsafe-go/timeout"
 )
@@ -274,4 +275,43 @@ func TestBodyReader(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewRoundTripperWithLevel(t *testing.T) {
+	runTest := func(ctx context.Context) http.Header {
+		var recordedHeaders http.Header
+
+		// Mock server that records headers
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			recordedHeaders = r.Header.Clone()
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		client := &http.Client{
+			Transport: NewRoundTripperWithLevel(nil),
+		}
+		req, _ := http.NewRequestWithContext(ctx, "GET", server.URL, nil)
+		client.Do(req)
+
+		return recordedHeaders
+	}
+
+	t.Run("should add level to headers", func(t *testing.T) {
+		ctx := priority.ContextWithLevel(context.Background(), 250)
+		headers := runTest(ctx)
+		assert.Equal(t, "250", headers.Get(levelHeaderKey))
+	})
+
+	t.Run("should add priority to headers", func(t *testing.T) {
+		ctx := priority.High.AddTo(context.Background())
+		headers := runTest(ctx)
+		assert.Equal(t, "3", headers.Get(priorityHeaderKey))
+	})
+
+	t.Run("should not modify headers when no level or priority is present", func(t *testing.T) {
+		headers := runTest(context.Background())
+		assert.Empty(t, headers.Get(levelHeaderKey))
+		assert.Empty(t, headers.Get(priorityHeaderKey))
+	})
 }
