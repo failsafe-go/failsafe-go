@@ -321,7 +321,7 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 		config:                &cCopy,
 		semaphore:             util.NewDynamicSemaphore(int(c.initialLimit)),
 		limit:                 float64(c.initialLimit),
-		recentRTT:             &TDigestSample{TDigest: tdigest.NewWithCompression(100)},
+		recentRTT:             &tdigestSample{TDigest: tdigest.NewWithCompression(100)},
 		medianFilter:          util.NewMedianFilter(smoothedSamples),
 		smoothedRecentRTT:     util.NewEwma(smoothedSamples, warmupSamples),
 		baselineRTT:           util.NewEwma(c.baselineWindowAge, warmupSamples),
@@ -359,14 +359,14 @@ const (
 	hold
 )
 
-type TDigestSample struct {
+type tdigestSample struct {
 	MinRTT      time.Duration
 	MaxInflight int
 	Size        uint
 	*tdigest.TDigest
 }
 
-func (td *TDigestSample) Add(rtt time.Duration, inflight int) {
+func (td *tdigestSample) Add(rtt time.Duration, inflight int) {
 	if td.Size == 0 {
 		td.MinRTT = rtt
 		td.MaxInflight = inflight
@@ -378,7 +378,7 @@ func (td *TDigestSample) Add(rtt time.Duration, inflight int) {
 	td.TDigest.Add(float64(rtt), 1)
 }
 
-func (td *TDigestSample) Reset() {
+func (td *tdigestSample) Reset() {
 	td.TDigest.Reset()
 	td.MinRTT = 0
 	td.MaxInflight = 0
@@ -394,7 +394,7 @@ type adaptiveLimiter[R any] struct {
 
 	// Guarded by mu
 	limit                 float64        // The current concurrency limit
-	recentRTT             *TDigestSample // Recent execution times
+	recentRTT             *tdigestSample // Recent execution times
 	medianFilter          *util.MedianFilter
 	smoothedRecentRTT     *util.Ewma
 	baselineRTT           *util.Ewma              // Tracks baseline execution time
