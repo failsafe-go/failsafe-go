@@ -1,7 +1,9 @@
 package adaptivelimiter
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -206,6 +208,54 @@ func TestAdaptiveLimiter_BuilderValidation(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestAdaptiveLimiter_WithLogger(t *testing.T) {
+	// Given
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
+	limiter := NewBuilder[any]().
+		WithLimits(1, 100, 5).
+		WithRecentWindow(time.Millisecond, time.Second, 1).
+		WithLogger(logger).
+		Build().(*adaptiveLimiter[any])
+
+	// When
+	permit, err := limiter.AcquirePermit(context.Background())
+	assert.NoError(t, err)
+	permit.Record()
+
+	// Then
+	assert.Contains(t, buf.String(), "limit update")
+}
+
+func TestAdaptiveLimiter_Reset(t *testing.T) {
+	// Given
+	limiter := NewBuilder[any]().WithLimits(5, 100, 10).Build().(*adaptiveLimiter[any])
+	limiter.limit = 50
+	limiter.recentRTT.Add(time.Millisecond*100, 5)
+	limiter.baselineRTT.Add(50.0)
+	limiter.smoothedRecentRTT.Add(75.0)
+	limiter.medianFilter.Add(80.0)
+	limiter.rttCorrelation.Add(10.0, 90.0)
+	limiter.throughputCorrelation.Add(15.0, 120.0)
+
+	// When
+	limiter.Reset()
+
+	// Then
+	assert.Equal(t, 10, limiter.Limit())
+	assert.Equal(t, uint(0), limiter.recentRTT.Size)
+	assert.Equal(t, 0.0, limiter.recentRTT.Count())
+	assert.Equal(t, 0.0, limiter.baselineRTT.Value())
+	assert.Equal(t, 0.0, limiter.smoothedRecentRTT.Value())
+	assert.Equal(t, 0.0, limiter.medianFilter.Median())
+	corr, _, _ := limiter.rttCorrelation.Add(1.0, 1.0)
+	assert.Equal(t, 0.0, corr)
+	corr, _, _ = limiter.throughputCorrelation.Add(1.0, 1.0)
+	assert.Equal(t, 0.0, corr)
 }
 
 func acquireAsync(limiter AdaptiveLimiter[any]) {
