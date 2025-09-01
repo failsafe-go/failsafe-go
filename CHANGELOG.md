@@ -3,11 +3,13 @@
 ## 0.7.0
 
 - New AdaptiveLimiter policy.
-- Add support for failsafehttp server Handlers.
+- Added grpc and http integration for adaptive limiters.
+- Added support for failsafehttp server Handlers.
 
 ### API Changes
 
 - The builder creation methods through the library had their names changed from `Builder()` to `NewBuilder()`, and so on.
+- The policy builder types were renamed from, for example: `RetryPolicyBuilder` to `Builder`.
 
 ## 0.6.9
 
