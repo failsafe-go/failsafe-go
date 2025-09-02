@@ -119,7 +119,7 @@ func TestCircuitBreaker(t *testing.T) {
 		cb := circuitbreaker.NewBuilder[any]().WithFailureThreshold(3).Build()
 		before := func() {
 			rpStats.Reset()
-			policytesting.ResetCircuitBreaker(cb)
+			policytesting.Reset(cb)
 		}
 
 		// When / Then

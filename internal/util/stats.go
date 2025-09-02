@@ -1,53 +1,37 @@
-package circuitbreaker
+package util
 
 import (
 	"math"
 	"time"
 
 	"github.com/bits-and-blooms/bitset"
-
-	"github.com/failsafe-go/failsafe-go/internal/util"
 )
 
-// Stats for a CircuitBreaker.
+// ExecutionStats for tracking execution results.
 // Implementations are not concurrency safe and must be guarded externally.
-type stats interface {
-	executionCount() uint
-	failureCount() uint
-	failureRate() uint
-	successCount() uint
-	successRate() uint
-	recordFailure()
-	recordSuccess()
-	reset()
+type ExecutionStats interface {
+	ExecutionCount() uint
+	FailureCount() uint
+	FailureRate() uint
+	SuccessCount() uint
+	SuccessRate() uint
+	RecordFailure()
+	RecordSuccess()
+	Reset()
 }
 
-// The default number of buckets to aggregate time-based stats into.
-const defaultBucketCount = 10
-
-// countingStats is a stats implementation that counts execution results using a BitSet.
+// countingStats is a ExecutionStats implementation that counts execution results using a BitSet.
 type countingStats struct {
-	bitSet *bitset.BitSet
-	size   uint
-
-	// Index to write next entry to
+	bitSet       *bitset.BitSet
 	head         uint
 	occupiedBits uint
 	successes    uint
 	failures     uint
 }
 
-func newStats[R any](config *config[R], supportsTimeBased bool, capacity uint) stats {
-	if supportsTimeBased && config.failureThresholdingPeriod != 0 {
-		return newTimedStats(defaultBucketCount, config.failureThresholdingPeriod, config.clock)
-	}
-	return newCountingStats(capacity)
-}
-
-func newCountingStats(size uint) *countingStats {
+func NewCountingStats(size uint) ExecutionStats {
 	return &countingStats{
 		bitSet: bitset.New(size),
-		size:   size,
 	}
 }
 
@@ -58,7 +42,7 @@ value is true if positive/success, false if negative/failure
 */
 func (c *countingStats) setNext(value bool) int {
 	previousValue := -1
-	if c.occupiedBits < c.size {
+	if c.occupiedBits < c.bitSet.Len() {
 		c.occupiedBits++
 	} else {
 		if c.bitSet.Test(c.head) {
@@ -77,46 +61,46 @@ func (c *countingStats) setNext(value bool) int {
 	}
 
 	c.bitSet.SetTo(c.head, value)
-	c.head = (c.head + 1) % c.size
+	c.head = (c.head + 1) % c.bitSet.Len()
 
 	return previousValue
 }
 
-func (c *countingStats) executionCount() uint {
+func (c *countingStats) ExecutionCount() uint {
 	return c.occupiedBits
 }
 
-func (c *countingStats) failureCount() uint {
+func (c *countingStats) FailureCount() uint {
 	return c.failures
 }
 
-func (c *countingStats) failureRate() uint {
+func (c *countingStats) FailureRate() uint {
 	if c.occupiedBits == 0 {
 		return 0
 	}
 	return uint(math.Round(float64(c.failures) / float64(c.occupiedBits) * 100.0))
 }
 
-func (c *countingStats) successCount() uint {
+func (c *countingStats) SuccessCount() uint {
 	return c.successes
 }
 
-func (c *countingStats) successRate() uint {
+func (c *countingStats) SuccessRate() uint {
 	if c.occupiedBits == 0 {
 		return 0
 	}
 	return uint(math.Round(float64(c.successes) / float64(c.occupiedBits) * 100.0))
 }
 
-func (c *countingStats) recordFailure() {
+func (c *countingStats) RecordFailure() {
 	c.setNext(false)
 }
 
-func (c *countingStats) recordSuccess() {
+func (c *countingStats) RecordSuccess() {
 	c.setNext(true)
 }
 
-func (c *countingStats) reset() {
+func (c *countingStats) Reset() {
 	c.bitSet.ClearAll()
 	c.head = 0
 	c.occupiedBits = 0
@@ -124,9 +108,9 @@ func (c *countingStats) reset() {
 	c.failures = 0
 }
 
-// timedStats is a stats implementation that counts execution results within a time period, and buckets results to minimize overhead.
+// timedStats is a ExecutionStats implementation that counts execution results within a time period, and buckets results to minimize overhead.
 type timedStats struct {
-	clock       util.Clock
+	clock       Clock
 	bucketCount int64
 	bucketNanos int64
 
@@ -151,7 +135,7 @@ func (s *stat) remove(bucket *stat) {
 	s.failures -= bucket.failures
 }
 
-func newTimedStats(bucketCount int, thresholdingPeriod time.Duration, clock util.Clock) *timedStats {
+func NewTimedStats(bucketCount int, thresholdingPeriod time.Duration, clock Clock) ExecutionStats {
 	buckets := make([]stat, bucketCount)
 	for i := 0; i < bucketCount; i++ {
 		buckets[i] = stat{}
@@ -181,45 +165,45 @@ func (s *timedStats) currentBucket() *stat {
 	return &s.buckets[s.head%s.bucketCount]
 }
 
-func (s *timedStats) executionCount() uint {
+func (s *timedStats) ExecutionCount() uint {
 	return s.summary.successes + s.summary.failures
 }
 
-func (s *timedStats) failureCount() uint {
+func (s *timedStats) FailureCount() uint {
 	return s.summary.failures
 }
 
-func (s *timedStats) failureRate() uint {
-	executions := s.executionCount()
+func (s *timedStats) FailureRate() uint {
+	executions := s.ExecutionCount()
 	if executions == 0 {
 		return 0
 	}
 	return uint(math.Round(float64(s.summary.failures) / float64(executions) * 100.0))
 }
 
-func (s *timedStats) successCount() uint {
+func (s *timedStats) SuccessCount() uint {
 	return s.summary.successes
 }
 
-func (s *timedStats) successRate() uint {
-	executions := s.executionCount()
+func (s *timedStats) SuccessRate() uint {
+	executions := s.ExecutionCount()
 	if executions == 0 {
 		return 0
 	}
 	return uint(math.Round(float64(s.summary.successes) / float64(executions) * 100.0))
 }
 
-func (s *timedStats) recordFailure() {
+func (s *timedStats) RecordFailure() {
 	s.currentBucket().failures++
 	s.summary.failures++
 }
 
-func (s *timedStats) recordSuccess() {
+func (s *timedStats) RecordSuccess() {
 	s.currentBucket().successes++
 	s.summary.successes++
 }
 
-func (s *timedStats) reset() {
+func (s *timedStats) Reset() {
 	for i := range s.buckets {
 		(&s.buckets[i]).reset()
 	}

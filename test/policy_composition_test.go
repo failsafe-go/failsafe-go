@@ -31,7 +31,7 @@ func TestRetryPolicy_Composition(t *testing.T) {
 		stub, reset := testutil.ErrorNTimesThenReturn[bool](testutil.ErrConnecting, 2, true)
 		before := func() {
 			reset()
-			policytesting.ResetCircuitBreaker(cb)
+			policytesting.Reset(cb)
 		}
 
 		// When / Then
@@ -51,7 +51,7 @@ func TestRetryPolicy_Composition(t *testing.T) {
 		rp := policytesting.WithRetryLogs(retrypolicy.NewBuilder[any]()).Build()
 		cb := policytesting.WithBreakerLogs(circuitbreaker.NewBuilder[any]()).Build()
 		before := func() {
-			policytesting.ResetCircuitBreaker(cb)
+			policytesting.Reset(cb)
 		}
 
 		// When / Then
@@ -69,7 +69,7 @@ func TestRetryPolicy_Composition(t *testing.T) {
 		rl := ratelimiter.NewBurstyBuilder[any](3, 1*time.Second).Build()
 		before := func() {
 			rpStats.Reset()
-			policytesting.ResetRateLimiter(rl)
+			policytesting.Reset(rl)
 		}
 
 		// When / Then
@@ -178,7 +178,7 @@ func TestCircuitBreaker_Composition(t *testing.T) {
 		rp := retrypolicy.NewWithDefaults[any]()
 		cb := circuitbreaker.NewBuilder[any]().WithFailureThreshold(3).Build()
 		before := func() {
-			policytesting.ResetCircuitBreaker(cb)
+			policytesting.Reset(cb)
 		}
 
 		// When / Then
@@ -199,7 +199,7 @@ func TestCircuitBreaker_Composition(t *testing.T) {
 		cb := circuitbreaker.NewWithDefaults[string]()
 		assert.True(t, cb.IsClosed())
 		before := func() {
-			policytesting.ResetCircuitBreaker(cb)
+			policytesting.Reset(cb)
 		}
 
 		// When / Then
@@ -267,7 +267,7 @@ func TestFallback_Composition(t *testing.T) {
 		})
 		cb := circuitbreaker.NewBuilder[bool]().WithSuccessThreshold(3).Build()
 		before := func() {
-			policytesting.ResetCircuitBreaker(cb)
+			policytesting.Reset(cb)
 		}
 
 		// When / Then
@@ -393,7 +393,7 @@ func TestMultiPolicy_Composition(t *testing.T) {
 		cb := circuitbreaker.NewBuilder[string]().WithFailureThreshold(5).Build()
 		fb := fallback.NewWithResult("test")
 		before := func() {
-			policytesting.ResetCircuitBreaker(cb)
+			policytesting.Reset(cb)
 		}
 
 		// When / Then

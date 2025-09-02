@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/internal/util"
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
@@ -223,31 +224,31 @@ func (cb *circuitBreaker[R]) IsClosed() bool {
 func (cb *circuitBreaker[R]) Executions() uint {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
-	return cb.state.executionCount()
+	return cb.state.ExecutionCount()
 }
 
 func (cb *circuitBreaker[R]) Failures() uint {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
-	return cb.state.failureCount()
+	return cb.state.FailureCount()
 }
 
 func (cb *circuitBreaker[R]) FailureRate() uint {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
-	return cb.state.failureRate()
+	return cb.state.FailureRate()
 }
 
 func (cb *circuitBreaker[R]) Successes() uint {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
-	return cb.state.successCount()
+	return cb.state.SuccessCount()
 }
 
 func (cb *circuitBreaker[R]) SuccessRate() uint {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
-	return cb.state.successRate()
+	return cb.state.SuccessRate()
 }
 
 func (cb *circuitBreaker[R]) RecordFailure() {
@@ -328,27 +329,27 @@ func (cb *circuitBreaker[R]) transitionTo(newState State, exec failsafe.Executio
 }
 
 type eventMetrics struct {
-	stats stats
+	stats util.ExecutionStats
 }
 
 func (m *eventMetrics) Executions() uint {
-	return m.stats.executionCount()
+	return m.stats.ExecutionCount()
 }
 
 func (m *eventMetrics) Failures() uint {
-	return m.stats.failureCount()
+	return m.stats.FailureCount()
 }
 
 func (m *eventMetrics) FailureRate() uint {
-	return m.stats.failureRate()
+	return m.stats.FailureRate()
 }
 
 func (m *eventMetrics) Successes() uint {
-	return m.stats.successCount()
+	return m.stats.SuccessCount()
 }
 
 func (m *eventMetrics) SuccessRate() uint {
-	return m.stats.successRate()
+	return m.stats.SuccessRate()
 }
 
 // Requires external locking.
@@ -385,17 +386,17 @@ func (cb *circuitBreaker[R]) recordResult(result R, err error) {
 
 // Requires external locking.
 func (cb *circuitBreaker[R]) recordSuccess() {
-	cb.state.recordSuccess()
+	cb.state.RecordSuccess()
 	cb.state.checkThresholdAndReleasePermit(nil)
 }
 
 // Requires external locking.
 func (cb *circuitBreaker[R]) recordFailure(exec failsafe.Execution[R]) {
-	cb.state.recordFailure()
+	cb.state.RecordFailure()
 	cb.state.checkThresholdAndReleasePermit(exec)
 }
 
 func (cb *circuitBreaker[R]) Reset() {
 	cb.close()
-	cb.state.reset()
+	cb.state.Reset()
 }
