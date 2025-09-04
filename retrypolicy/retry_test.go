@@ -43,3 +43,16 @@ func TestErrExceeded(t *testing.T) {
 		assert.True(t, util.ErrorTypesMatch(testutil.CompositeError{ExceededError{}}, ErrExceeded))
 	})
 }
+
+func TestIsExceededError(t *testing.T) {
+	var e error = ExceededError{}
+	assert.True(t, IsExceededError(e))
+	assert.True(t, IsExceededError(ErrExceeded))
+	assert.False(t, IsExceededError(errors.New("retries exceeded")))
+}
+
+func TestAsExceededError(t *testing.T) {
+	var e error = ExceededError{}
+	assert.NotNil(t, AsExceededError(e))
+	assert.Nil(t, AsExceededError(errors.New("test error")))
+}

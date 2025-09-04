@@ -28,10 +28,7 @@ func (e ExceededError) Error() string {
 }
 
 func (e ExceededError) Is(err error) bool {
-	if err == ErrExceeded {
-		return true
-	}
-	return err == e
+	return err == ErrExceeded
 }
 
 func (e ExceededError) Unwrap() error {
@@ -39,6 +36,20 @@ func (e ExceededError) Unwrap() error {
 		return e.LastError
 	}
 	return fmt.Errorf("failure: %v", e.LastResult)
+}
+
+// IsExceededError returns whether the err is an ExceededError or ErrExceeded.
+func IsExceededError(err error) bool {
+	return errors.Is(err, ErrExceeded)
+}
+
+// AsExceededError returns a *ExceededError if err is an ExceededError value, else nil.
+func AsExceededError(err error) *ExceededError {
+	var e ExceededError
+	if errors.As(err, &e) {
+		return &e
+	}
+	return nil
 }
 
 // RetryPolicy is a policy that defines when retries should be performed. See Builder for configuration
