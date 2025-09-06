@@ -19,7 +19,7 @@ func TestQueueingLimiter_AcquirePermit(t *testing.T) {
 	assert.Nil(t, permit)
 	assert.ErrorIs(t, err, ErrExceeded)
 	assertQueued(t, limiter, 3)
-	assert.Equal(t, 1.0, limiter.computeRejectionRate())
+	assert.Equal(t, 1.0, limiter.getQueueStats().ComputeRejectionRate())
 }
 
 func TestQueueingLimiter_CanAcquirePermit(t *testing.T) {
@@ -33,10 +33,10 @@ func TestQueueingLimiter_CanAcquirePermit(t *testing.T) {
 	// Then
 	assertQueued(t, limiter, 3)
 	assert.False(t, limiter.CanAcquirePermit())
-	assert.Equal(t, 1.0, limiter.computeRejectionRate())
+	assert.Equal(t, 1.0, limiter.getQueueStats().ComputeRejectionRate())
 }
 
-func createQueueingLimiter(t *testing.T, queueCapacity float32, queueSize int) *queueingLimiter[any] {
+func createQueueingLimiter(t *testing.T, queueCapacity float64, queueSize int) *queueingLimiter[any] {
 	limiter := NewBuilder[any]().
 		WithLimits(1, 10, 1).
 		WithQueueing(queueCapacity, queueCapacity).
@@ -121,7 +121,11 @@ func TestQueueingLimiter_computeRejectionRate(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := computeRejectionRate(tc.queueSize, tc.rejectionThreshold, tc.maxQueueSize)
+			actual := (&queueStats{
+				queued:             tc.queueSize,
+				rejectionThreshold: tc.rejectionThreshold,
+				maxQueue:           tc.maxQueueSize,
+			}).ComputeRejectionRate()
 			assert.InDelta(t, tc.expectedRate, actual, 0.0001)
 		})
 	}

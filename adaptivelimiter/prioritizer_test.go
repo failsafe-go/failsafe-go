@@ -14,7 +14,7 @@ import (
 
 // Tests that a rejection rate is computed as expected based on queue sizes.
 func TestPrioritizer_Calibrate(t *testing.T) {
-	p := NewPrioritizer().(*prioritizer)
+	p := NewPrioritizer()
 	limiter := NewBuilder[any]().
 		WithLimits(1, 10, 1).
 		WithRecentWindow(time.Second, time.Second, 10).
@@ -39,7 +39,7 @@ func TestPrioritizer_Calibrate(t *testing.T) {
 
 	p.Calibrate()
 	assert.Equal(t, .5, p.RejectionRate())
-	assert.True(t, p.rejectionThreshold.Load() > 0 && p.rejectionThreshold.Load() < 200, "low priority execution should be rejected")
+	assert.True(t, p.RejectionThreshold() > 0 && p.RejectionThreshold() < 200, "low priority execution should be rejected")
 }
 
 func TestPrioritizer_WithLogger(t *testing.T) {
@@ -81,11 +81,39 @@ func TestPrioritizer_ScheduleCalibrations(t *testing.T) {
 	assert.LessOrEqual(t, p.RejectionThreshold(), 199)
 }
 
-func TestPrioritizer_Register(t *testing.T) {
-	p := NewPrioritizer().(*prioritizer)
-	assert.Len(t, p.statsFuncs, 0)
-	p.register(func() (int, int, int, int) {
-		return 0, 0, 0, 0
-	})
-	assert.Len(t, p.statsFuncs, 1)
+func TestQueueRejectionStrategy_CombineStats(t *testing.T) {
+	strategy := &queueRejectionStrategy{}
+	statsFuncs := []func() *queueStats{
+		func() *queueStats {
+			return &queueStats{
+				limit:              5,
+				queued:             1,
+				rejectionThreshold: 8,
+				maxQueue:           10,
+			}
+		},
+		func() *queueStats {
+			return &queueStats{
+				limit:              15,
+				queued:             4,
+				rejectionThreshold: 20,
+				maxQueue:           25,
+			}
+		},
+		func() *queueStats {
+			return &queueStats{
+				limit:              25,
+				queued:             8,
+				rejectionThreshold: 35,
+				maxQueue:           50,
+			}
+		},
+	}
+
+	result := strategy.CombineStats(statsFuncs)
+
+	assert.Equal(t, 45, result.limit)
+	assert.Equal(t, 13, result.queued)
+	assert.Equal(t, 63, result.rejectionThreshold)
+	assert.Equal(t, 85, result.maxQueue)
 }

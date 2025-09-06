@@ -100,7 +100,10 @@ func MillisToNanos(millis int) int64 {
 
 func GetPrioritizerRejectionThreshold(prioritizer any) *atomic.Int32 {
 	val := reflect.ValueOf(prioritizer).Elem()
-	field := val.FieldByName("rejectionThreshold")
+	field := val.FieldByName("RejectionThresh")
+	if !field.IsValid() {
+		panic("Failed to reflect RejectionThresh")
+	}
 	ptr := unsafe.Pointer(field.UnsafeAddr())
 	return (*atomic.Int32)(ptr)
 }

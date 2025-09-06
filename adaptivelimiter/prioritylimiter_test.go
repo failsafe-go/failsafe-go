@@ -20,9 +20,9 @@ func TestPriorityLimiter_AcquirePermitWithPriority(t *testing.T) {
 
 	t.Run("above prioritizer rejection threshold", func(t *testing.T) {
 		// Given
-		p := NewPrioritizer().(*prioritizer)
+		p := NewPrioritizer().(*priority.BasePrioritizer[*queueStats])
 		limiter := NewBuilder[any]().BuildPrioritized(p)
-		p.rejectionThreshold.Store(200)
+		p.RejectionThresh.Store(200)
 
 		// When
 		permit, err := limiter.AcquirePermitWithPriority(context.Background(), priority.High)
@@ -34,13 +34,13 @@ func TestPriorityLimiter_AcquirePermitWithPriority(t *testing.T) {
 
 	t.Run("below prioritizer rejection threshold", func(t *testing.T) {
 		// Given
-		p := NewPrioritizer().(*prioritizer)
+		p := NewPrioritizer().(*priority.BasePrioritizer[*queueStats])
 		limiter := NewBuilder[any]().
 			WithLimits(1, 1, 1).
 			WithQueueing(1, 1).
 			BuildPrioritized(p)
 		limiter.AcquirePermit(context.Background()) // fill limiter
-		p.rejectionThreshold.Store(200)
+		p.RejectionThresh.Store(200)
 
 		// When
 		permit, err := limiter.AcquirePermitWithPriority(context.Background(), priority.Low)
@@ -53,7 +53,7 @@ func TestPriorityLimiter_AcquirePermitWithPriority(t *testing.T) {
 	// Asserts that AcquirePermitWithPriority fails after the max number of executions is queued, even if the execution is
 	// within the rejection threshold.
 	t.Run("above max queued executions", func(t *testing.T) {
-		p := NewPrioritizer().(*prioritizer)
+		p := NewPrioritizer()
 		limiter := NewBuilder[any]().WithLimits(1, 1, 1).
 			WithQueueing(1, 1).
 			BuildPrioritized(p)

@@ -14,28 +14,25 @@ import (
 // rejected, allowing higher-priority executions to proceed while shedding lower-priority load.
 //
 // R is the execution result type. This type is concurrency safe.
-// PriorityLimiter is an adaptive concurrency limiter that can prioritize execution rejections via a Prioritizer.
-//
-// R is the execution result type. This type is concurrency safe.
 type PriorityLimiter[R any] interface {
 	failsafe.Policy[R]
 	Metrics
 
 	// AcquirePermit attempts to acquire a permit for an execution at the priority or level contained in the context,
 	// waiting until one is available or the execution is canceled. Returns [context.Canceled] if the ctx is canceled. A
-	// priority must be stored in the context using the PriorityKey, and a level must be stored in the context using the
-	// LevelKey. The execution's priority must be greater than the current rejection threshold for admission. Levels must be
+	// priority must be stored in the context using the PriorityKey, else a level must be stored in the context using the
+	// LevelKey. The priority or level must be greater than the current rejection threshold for admission. Levels must be
 	// between 0 and 499.
 	//
 	// Example usage:
-	//   ctx := context.WithValue(ctx, PriorityKey, PriorityHigh)
+	//   ctx := priority.ContextWithPriority(context.Background(), priority.High)
 	//   permit, err := limiter.AcquirePermit(ctx)
 	AcquirePermit(ctx context.Context) (Permit, error)
 
 	// AcquirePermitWithMaxWait attempts to acquire a permit for an execution at the priority or level contained in the
 	// context, waiting until one is available, the execution is canceled, or the maxWaitTime is exceeded. Returns
-	// [context.Canceled] if the ctx is canceled. A priority must be stored in the context using the PriorityKey, and a
-	// level must be stored in the context using the LevelKey. The execution's priority must be greater than the current
+	// [context.Canceled] if the ctx is canceled. A priority must be stored in the context using the PriorityKey, else a
+	// level must be stored in the context using the LevelKey. The priority or level must be greater than the current
 	// rejection threshold for admission. Levels must be between 0 and 499.
 	AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) (Permit, error)
 
@@ -67,15 +64,15 @@ type PriorityLimiter[R any] interface {
 
 type priorityLimiter[R any] struct {
 	*queueingLimiter[R]
-	prioritizer *prioritizer
+	prioritizer *priority.BasePrioritizer[*queueStats]
 }
 
 func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
-	return l.AcquirePermitWithLevel(ctx, levelForContext(ctx))
+	return l.AcquirePermitWithLevel(ctx, priority.LevelForContext(ctx))
 }
 
 func (l *priorityLimiter[R]) AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) (Permit, error) {
-	level := levelForContext(ctx)
+	level := priority.LevelForContext(ctx)
 	if !l.CanAcquirePermitWithLevel(level) {
 		return nil, ErrExceeded
 	}
@@ -84,7 +81,7 @@ func (l *priorityLimiter[R]) AcquirePermitWithMaxWait(ctx context.Context, maxWa
 	if err != nil {
 		return nil, err
 	}
-	l.prioritizer.levelTracker.RecordLevel(level)
+	l.prioritizer.LevelTracker.RecordLevel(level)
 	return permit, nil
 }
 
@@ -101,12 +98,12 @@ func (l *priorityLimiter[R]) AcquirePermitWithLevel(ctx context.Context, level i
 	if err != nil {
 		return nil, err
 	}
-	l.prioritizer.levelTracker.RecordLevel(level)
+	l.prioritizer.LevelTracker.RecordLevel(level)
 	return permit, nil
 }
 
 func (l *priorityLimiter[R]) CanAcquirePermit(ctx context.Context) bool {
-	return l.CanAcquirePermitWithLevel(levelForContext(ctx))
+	return l.CanAcquirePermitWithLevel(priority.LevelForContext(ctx))
 }
 
 func (l *priorityLimiter[R]) CanAcquirePermitWithPriority(priority priority.Priority) bool {
@@ -120,7 +117,7 @@ func (l *priorityLimiter[R]) CanAcquirePermitWithLevel(level int) bool {
 	}
 
 	// Check the limiter's max capacity
-	_, _, _, maxQueue := l.queueStats()
+	maxQueue := int(float64(l.Limit()) * l.maxRejectionFactor)
 	if l.Queued() >= maxQueue {
 		return false
 	}
@@ -136,23 +133,6 @@ func (l *priorityLimiter[R]) ToExecutor(_ R) any {
 	}
 	e.Executor = e
 	return e
-}
-
-// levelForContext returns a level for the level contained within the given context, else if a priority is contained
-// within the context, a random level is generated within that priority, else 0 is returned.
-func levelForContext(ctx context.Context) int {
-	var level int
-	if untypedLevel := ctx.Value(priority.LevelKey); untypedLevel != nil {
-		level, _ = untypedLevel.(int)
-	}
-	if level == 0 {
-		if untypedPriority := ctx.Value(priority.PriorityKey); untypedPriority != nil {
-			priority, _ := untypedPriority.(priority.Priority)
-			// Generate a random level if we only have a priority
-			level = priority.RandomLevel()
-		}
-	}
-	return level
 }
 
 func (l *priorityLimiter[R]) configRef() *config[R] {

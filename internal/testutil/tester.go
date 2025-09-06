@@ -83,6 +83,11 @@ func (t *Tester[R]) Get(when WhenGet[R]) *Tester[R] {
 	return t
 }
 
+func (t *Tester[R]) Exec(async bool) (R, error) {
+	result, err, _ := t.exec(async)
+	return result, err
+}
+
 func (t *Tester[R]) AssertSuccess(expectedAttempts int, expectedExecutions int, expectedResult R, then ...func()) {
 	t.assertResult(expectedAttempts, expectedExecutions, expectedResult, nil, true, false, then...)
 }
@@ -99,46 +104,48 @@ func (t *Tester[R]) AssertFailureAs(expectedAttempts int, expectedExecutions int
 	t.assertResult(expectedAttempts, expectedExecutions, *new(R), expectedError, false, true, then...)
 }
 
-func (t *Tester[R]) assertResult(expectedAttempts int, expectedExecutions int, expectedResult R, expectedError error, expectedSuccess bool, errorAs bool, then ...func()) {
+func (t *Tester[R]) exec(async bool) (R, error, AssertFunc[R]) {
 	t.T.Helper()
 	if t.Executor == nil {
 		t.Executor = failsafe.NewExecutor[R](t.Policies...)
 	}
-	test := func(async bool) {
-		executorFn, assertFn := PrepareTest(t.T, t.BeforeFn, t.ContextFn, t.Executor)
+	executorFn, assertFn := PrepareTest(t.T, t.BeforeFn, t.ContextFn, t.Executor)
 
-		// Execute
-		var result R
-		var err error
-		executor := executorFn()
-		if t.run != nil {
-			if !async {
-				err = executor.RunWithExecution(t.run)
-			} else {
-				err = executor.RunWithExecutionAsync(t.run).Error()
-			}
+	var result R
+	var err error
+	executor := executorFn()
+	if t.run != nil {
+		if !async {
+			err = executor.RunWithExecution(t.run)
 		} else {
-			if !async {
-				result, err = executor.GetWithExecution(t.get)
-			} else {
-				result, err = executor.GetWithExecutionAsync(t.get).Get()
-			}
+			err = executor.RunWithExecutionAsync(t.run).Error()
 		}
+	} else {
+		if !async {
+			result, err = executor.GetWithExecution(t.get)
+		} else {
+			result, err = executor.GetWithExecutionAsync(t.get).Get()
+		}
+	}
+	if t.AfterFn != nil {
+		t.AfterFn()
+	}
+	return result, err, assertFn
+}
 
+func (t *Tester[R]) assertResult(expectedAttempts int, expectedExecutions int, expectedResult R, expectedError error, expectedSuccess bool, errorAs bool, then ...func()) {
+	t.T.Helper()
+	assertResults := func(result R, err error, assertFn AssertFunc[R]) {
 		assertFn(expectedAttempts, expectedExecutions, expectedResult, result, expectedError, err, expectedSuccess, !expectedSuccess, errorAs, then...)
-
-		if t.AfterFn != nil {
-			t.AfterFn()
-		}
 	}
 
 	// Run sync
 	fmt.Println("Testing sync")
-	test(false)
+	assertResults(t.exec(false))
 
 	// Run async
 	fmt.Println("\nTesting async")
-	test(true)
+	assertResults(t.exec(true))
 }
 
 type AssertFunc[R any] func(expectedAttempts int, expectedExecutions int, expectedResult R, result R, expectedErr error, err error, expectedSuccess bool, expectedFailure bool, errorAs bool, thens ...func())

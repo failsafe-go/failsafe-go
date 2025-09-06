@@ -192,8 +192,8 @@ func TestAdaptiveLimiter_BuilderValidation(t *testing.T) {
 	t.Run("should panic on invalid WithQueueing", func(t *testing.T) {
 		tests := []struct {
 			name    string
-			initial float32
-			max     float32
+			initial float64
+			max     float64
 		}{
 			{"initial < 1", .5, 2},
 			{"max < 1", 2, .5},

@@ -32,8 +32,8 @@ func TestCircuitBreker_Nested(t *testing.T) {
 		cb1 := circuitbreaker.NewBuilder[any]().HandleErrors(testutil.ErrInvalidState).Build()
 		cb2 := circuitbreaker.NewBuilder[any]().HandleErrors(testutil.ErrInvalidArgument).Build()
 		before := func() {
-			policytesting.ResetCircuitBreaker(cb1)
-			policytesting.ResetCircuitBreaker(cb2)
+			policytesting.Reset(cb1)
+			policytesting.Reset(cb2)
 		}
 
 		testutil.Test[any](t).

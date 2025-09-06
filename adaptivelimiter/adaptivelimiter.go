@@ -14,6 +14,7 @@ import (
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/internal/util"
 	"github.com/failsafe-go/failsafe-go/policy"
+	"github.com/failsafe-go/failsafe-go/priority"
 )
 
 // ErrExceeded is returned when an execution exceeds the current limit.
@@ -108,7 +109,7 @@ type Builder[R any] interface {
 	//
 	// The default value is 5, which means the limit will only rise to 5 times the inflight executions.
 	// Panics if maxLimitFactor < 1.
-	WithMaxLimitFactor(maxLimitFactor float32) Builder[R]
+	WithMaxLimitFactor(maxLimitFactor float64) Builder[R]
 
 	// WithRecentWindow configures how recent execution times are collected and summarized. These help the limiter determine
 	// when execution times are trending up or down, relative to the baseline, which helps detect overload. The minDuration
@@ -123,7 +124,7 @@ type Builder[R any] interface {
 	//
 	// Defaults to 0.9 which uses p90 samples.
 	// Panics if recentQuantile is negative.
-	WithRecentQuantile(quantile float32) Builder[R]
+	WithRecentQuantile(quantile float64) Builder[R]
 
 	// WithBaselineWindow configures how the baseline execution times are maintained and updated. The baseline represents
 	// the long-term average execution performance that recent execution times are compared against to detect overload.
@@ -148,7 +149,7 @@ type Builder[R any] interface {
 	//
 	// WithQueueing is disabled by default, which means no executions will queue when the limiter is full.
 	// Panics if initialRejectionFactor or maxRejectionFactor are < 1 or if initialRejectionFactor is not <= maxRejectionFactor.
-	WithQueueing(initialRejectionFactor, maxRejectionFactor float32) Builder[R]
+	WithQueueing(initialRejectionFactor, maxRejectionFactor float64) Builder[R]
 
 	// WithMaxWaitTime configures the maxWaitTime to wait for a permit to be available, when the limiter is full.
 	WithMaxWaitTime(maxWaitTime time.Duration) Builder[R]
@@ -168,12 +169,13 @@ type Builder[R any] interface {
 	// BuildPrioritized returns a new PrioritizedLimiter using the builder's configuration. This enables queueing and
 	// prioritized rejections of executions when the limiter is full, where executions block while waiting for a permit.
 	// Enabling this allows short execution spikes to be absorbed without strictly rejecting executions when the limiter is
-	// full. Rejections are performed using the Prioritizer, which sets a rejection threshold based on the most overloaded
-	// limiters being used by the Prioritizer. The amount of queueing can be configured via WithQueueing, and defaults to an
-	// initialRejectionFactor of 2 times the current limit and a maxRejectionFactor of 3 times the current limit.
+	// full. Rejections are performed using the Prioritizer, which sets a rejection threshold based on the limits and queues
+	// of all the limiters being used by the Prioritizer. The amount of queueing can be configured via WithQueueing, and
+	// defaults to an initialRejectionFactor of 2 times the current limit and a maxRejectionFactor of 3 times the current
+	// limit.
 	//
 	// Prioritized rejection is disabled by default, which means no executions will block when the limiter is full.
-	BuildPrioritized(prioritizer Prioritizer) PriorityLimiter[R]
+	BuildPrioritized(prioritizer priority.Prioritizer) PriorityLimiter[R]
 }
 
 // LimitChangedEvent indicates an AdaptiveLimiter's limit has changed.
@@ -256,9 +258,9 @@ func (c *config[R]) WithLimits(minLimit uint, maxLimit uint, initialLimit uint) 
 	return c
 }
 
-func (c *config[R]) WithMaxLimitFactor(maxLimitFactor float32) Builder[R] {
+func (c *config[R]) WithMaxLimitFactor(maxLimitFactor float64) Builder[R] {
 	util.Assert(maxLimitFactor >= 1, "maxLimitFactor must be >= 1")
-	c.maxLimitFactor = float64(maxLimitFactor)
+	c.maxLimitFactor = maxLimitFactor
 	return c
 }
 
@@ -270,9 +272,9 @@ func (c *config[R]) WithRecentWindow(minDuration time.Duration, maxDuration time
 	return c
 }
 
-func (c *config[R]) WithRecentQuantile(quantile float32) Builder[R] {
+func (c *config[R]) WithRecentQuantile(quantile float64) Builder[R] {
 	util.Assert(quantile >= 0, "recentQuantile must be >= 0")
-	c.recentQuantile = float64(quantile)
+	c.recentQuantile = quantile
 	return c
 }
 
@@ -286,12 +288,12 @@ func (c *config[R]) WithCorrelationWindow(size uint) Builder[R] {
 	return c
 }
 
-func (c *config[R]) WithQueueing(initialRejectionFactor, maxRejectionFactor float32) Builder[R] {
+func (c *config[R]) WithQueueing(initialRejectionFactor, maxRejectionFactor float64) Builder[R] {
 	util.Assert(initialRejectionFactor >= 1, "initialRejectionFactor must be >= 1")
 	util.Assert(maxRejectionFactor >= 1, "maxRejectionFactor must be >= 1")
 	util.Assert(initialRejectionFactor <= maxRejectionFactor, "initialRejectionFactor must be <= maxRejectionFactor")
-	c.initialRejectionFactor = float64(initialRejectionFactor)
-	c.maxRejectionFactor = float64(maxRejectionFactor)
+	c.initialRejectionFactor = initialRejectionFactor
+	c.maxRejectionFactor = maxRejectionFactor
 	return c
 }
 
@@ -338,16 +340,16 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 	return limiter
 }
 
-func (c *config[R]) BuildPrioritized(p Prioritizer) PriorityLimiter[R] {
+func (c *config[R]) BuildPrioritized(p priority.Prioritizer) PriorityLimiter[R] {
 	if c.initialRejectionFactor == 0 && c.maxRejectionFactor == 0 {
 		c.initialRejectionFactor = 2
 		c.maxRejectionFactor = 3
 	}
 	limiter := &priorityLimiter[R]{
 		queueingLimiter: c.Build().(*queueingLimiter[R]),
-		prioritizer:     p.(*prioritizer),
+		prioritizer:     p.(*priority.BasePrioritizer[*queueStats]),
 	}
-	p.register(limiter.queueStats)
+	limiter.prioritizer.Register(limiter.getQueueStats)
 	return limiter
 }
 

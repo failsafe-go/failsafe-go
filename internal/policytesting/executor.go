@@ -14,20 +14,16 @@ import (
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
 	"github.com/failsafe-go/failsafe-go/fallback"
 	"github.com/failsafe-go/failsafe-go/hedgepolicy"
-	"github.com/failsafe-go/failsafe-go/ratelimiter"
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
 	"github.com/failsafe-go/failsafe-go/timeout"
 )
 
-func ResetRateLimiter[R any](cb ratelimiter.RateLimiter[R]) {
-	cbElem := reflect.ValueOf(cb)
-	resetMethod := cbElem.MethodByName("Reset")
-	resetMethod.Call([]reflect.Value{})
-}
-
-func ResetCircuitBreaker[R any](cb circuitbreaker.CircuitBreaker[R]) {
-	cbElem := reflect.ValueOf(cb)
-	resetMethod := cbElem.MethodByName("Reset")
+func Reset[R any](p failsafe.Policy[R]) {
+	elem := reflect.ValueOf(p)
+	resetMethod := elem.MethodByName("Reset")
+	if !resetMethod.IsValid() {
+		panic("Failed to reflect Reset method")
+	}
 	resetMethod.Call([]reflect.Value{})
 }
 

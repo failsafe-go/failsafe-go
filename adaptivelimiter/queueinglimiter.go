@@ -3,6 +3,7 @@ package adaptivelimiter
 import (
 	"context"
 	"math/rand"
+	"strconv"
 	"time"
 
 	"github.com/failsafe-go/failsafe-go/policy"
@@ -45,7 +46,7 @@ func (l *queueingLimiter[R]) CanAcquirePermit() bool {
 	}
 
 	// Check with queue
-	rejectionRate := l.computeRejectionRate()
+	rejectionRate := l.getQueueStats().ComputeRejectionRate()
 	if rejectionRate == 0 {
 		return true
 	}
@@ -53,18 +54,6 @@ func (l *queueingLimiter[R]) CanAcquirePermit() bool {
 		return false
 	}
 	return true
-}
-
-func (l *queueingLimiter[R]) computeRejectionRate() float64 {
-	_, queued, rejectionThreshold, maxQueueSize := l.queueStats()
-	return computeRejectionRate(queued, rejectionThreshold, maxQueueSize)
-}
-
-func (l *queueingLimiter[R]) queueStats() (limit, queued, rejectionThreshold, maxQueueSize int) {
-	limit = l.Limit()
-	rejectionThreshold = int(float64(limit) * l.initialRejectionFactor)
-	maxQueueSize = int(float64(limit) * l.maxRejectionFactor)
-	return limit, l.Queued(), rejectionThreshold, maxQueueSize
 }
 
 func (l *queueingLimiter[R]) ToExecutor(_ R) any {
@@ -80,13 +69,34 @@ func (l *queueingLimiter[R]) configRef() *config[R] {
 	return l.config
 }
 
-// Computes a rejection rate that using the queueing stats.
-func computeRejectionRate(queueSize, rejectionThreshold, maxQueueSize int) float64 {
-	if queueSize < rejectionThreshold {
+func (l *queueingLimiter[R]) getQueueStats() *queueStats {
+	limit := l.Limit()
+	return &queueStats{
+		limit:              limit,
+		queued:             l.Queued(),
+		rejectionThreshold: int(float64(limit) * l.initialRejectionFactor),
+		maxQueue:           int(float64(limit) * l.maxRejectionFactor),
+	}
+}
+
+// Implements priority.Stats.
+type queueStats struct {
+	limit              int
+	queued             int
+	rejectionThreshold int
+	maxQueue           int
+}
+
+func (s *queueStats) ComputeRejectionRate() float64 {
+	if s.queued < s.rejectionThreshold {
 		return 0
 	}
-	if queueSize >= maxQueueSize {
+	if s.queued >= s.maxQueue {
 		return 1
 	}
-	return float64(queueSize-rejectionThreshold) / float64(maxQueueSize-rejectionThreshold)
+	return float64(s.queued-s.rejectionThreshold) / float64(s.maxQueue-s.rejectionThreshold)
+}
+
+func (s *queueStats) DebugLogArgs() []any {
+	return []any{"limit", strconv.Itoa(s.limit), "queued", strconv.Itoa(s.queued)}
 }
