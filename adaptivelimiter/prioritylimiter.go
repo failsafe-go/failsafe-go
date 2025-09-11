@@ -111,15 +111,19 @@ func (l *priorityLimiter[R]) CanAcquirePermitWithPriority(priority priority.Prio
 }
 
 func (l *priorityLimiter[R]) CanAcquirePermitWithLevel(level int) bool {
-	// Return immediately if the limiter has capacity
-	if l.adaptiveLimiter.CanAcquirePermit() {
-		return true
-	}
+	// When this is the only limiter being used by the prioritizer, we can reject based on the limiter's capacity rather
+	// than wait for the next prioritizer calibration.
+	if l.prioritizer.RegisteredPolicies() == 1 {
+		// Return immediately if the limiter has capacity
+		if l.adaptiveLimiter.CanAcquirePermit() {
+			return true
+		}
 
-	// Check the limiter's max capacity
-	maxQueue := int(float64(l.Limit()) * l.maxRejectionFactor)
-	if l.Queued() >= maxQueue {
-		return false
+		// Check the limiter's max capacity
+		maxQueue := int(float64(l.Limit()) * l.maxRejectionFactor)
+		if l.Queued() >= maxQueue {
+			return false
+		}
 	}
 
 	// Threshold against the prioritizer's rejection threshold

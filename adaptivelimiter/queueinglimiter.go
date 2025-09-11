@@ -3,7 +3,6 @@ package adaptivelimiter
 import (
 	"context"
 	"math/rand"
-	"strconv"
 	"time"
 
 	"github.com/failsafe-go/failsafe-go/policy"
@@ -98,5 +97,5 @@ func (s *queueStats) ComputeRejectionRate() float64 {
 }
 
 func (s *queueStats) DebugLogArgs() []any {
-	return []any{"limit", strconv.Itoa(s.limit), "queued", strconv.Itoa(s.queued)}
+	return []any{"limit", s.limit, "queued", s.queued}
 }

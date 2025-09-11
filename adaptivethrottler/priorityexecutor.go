@@ -15,8 +15,8 @@ type priorityExecutor[R any] struct {
 var _ policy.Executor[any] = &priorityExecutor[any]{}
 
 func (e *priorityExecutor[R]) PreExecute(exec policy.ExecutionInternal[R]) *common.PolicyResult[R] {
-	if !e.CanAcquirePermit(exec.Context()) {
-		return internal.FailureResult[R](ErrExceeded)
+	if err := e.AcquirePermit(exec.Context()); err != nil {
+		return internal.FailureResult[R](err)
 	}
 	return nil
 }

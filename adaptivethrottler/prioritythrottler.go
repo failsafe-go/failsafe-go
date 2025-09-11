@@ -96,6 +96,10 @@ func (t *priorityThrottler[R]) CanAcquirePermitWithLevel(level int) bool {
 	return level >= t.prioritizer.RejectionThreshold()
 }
 
+func (t *priorityThrottler[R]) RejectionRate() float64 {
+	return t.prioritizer.RejectionRate()
+}
+
 func (t *priorityThrottler[R]) ToExecutor(_ R) any {
 	pte := &priorityExecutor[R]{
 		BaseExecutor: &policy.BaseExecutor[R]{

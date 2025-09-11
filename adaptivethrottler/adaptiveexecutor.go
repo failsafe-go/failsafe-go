@@ -15,8 +15,8 @@ type executor[R any] struct {
 var _ policy.Executor[any] = &executor[any]{}
 
 func (e *executor[R]) PreExecute(_ policy.ExecutionInternal[R]) *common.PolicyResult[R] {
-	if !e.CanAcquirePermit() {
-		return internal.FailureResult[R](ErrExceeded)
+	if err := e.AcquirePermit(); err != nil {
+		return internal.FailureResult[R](err)
 	}
 	return nil
 }

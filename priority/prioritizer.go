@@ -27,6 +27,9 @@ type Prioritizer interface {
 	// (0-499). Higher priority executions are more likely to be accepted when the system is overloaded.
 	RejectionThreshold() int
 
+	// RegisteredPolicies returns the number of policies that have been registered to the Prioritizer.
+	RegisteredPolicies() int
+
 	// Calibrate recalculates the RejectionRate and RejectionThreshold based on current queueing levels from registered limiters.
 	Calibrate()
 
@@ -112,7 +115,8 @@ type BasePrioritizer[S Stats] struct {
 	// Mutable state
 	mu              sync.Mutex
 	statsFuncs      []func() S // Guarded by mu
-	rejectionRate   float64    // Guarded by mu
+	numStats        atomic.Int32
+	rejectionRate   float64 // Guarded by mu
 	RejectionThresh atomic.Int32
 }
 
@@ -120,6 +124,7 @@ func (p *BasePrioritizer[S]) Register(statsFunc func() S) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.statsFuncs = append(p.statsFuncs, statsFunc)
+	p.numStats.Add(1)
 }
 
 func (p *BasePrioritizer[S]) RejectionRate() float64 {
@@ -130,6 +135,10 @@ func (p *BasePrioritizer[S]) RejectionRate() float64 {
 
 func (p *BasePrioritizer[S]) RejectionThreshold() int {
 	return int(p.RejectionThresh.Load())
+}
+
+func (p *BasePrioritizer[S]) RegisteredPolicies() int {
+	return int(p.numStats.Load())
 }
 
 // Calibrate computes a combined rejection rate and threshold based on all registered statsFuncs.
