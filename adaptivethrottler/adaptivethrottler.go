@@ -27,9 +27,6 @@ type AdaptiveThrottler[R any] interface {
 	// could not be acquired.
 	AcquirePermit() error
 
-	// CanAcquirePermit returns true if an execution could be performed via the throttler.
-	CanAcquirePermit() bool
-
 	// RecordResult records an execution result as a success or failure based on the failure handling configuration.
 	RecordResult(result R)
 
@@ -186,10 +183,6 @@ func (t *adaptiveThrottler[R]) AcquirePermit() error {
 		return ErrExceeded
 	}
 	return nil
-}
-
-func (t *adaptiveThrottler[R]) CanAcquirePermit() bool {
-	return t.AcquirePermit() == nil
 }
 
 func (t *adaptiveThrottler[R]) RejectionRate() float64 {

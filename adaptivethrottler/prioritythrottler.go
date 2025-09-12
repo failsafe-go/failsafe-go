@@ -2,6 +2,7 @@ package adaptivethrottler
 
 import (
 	"context"
+	"math/rand"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/policy"
@@ -36,19 +37,6 @@ type PriorityThrottler[R any] interface {
 	// could not be acquired. The level must be greater than the current rejection threshold for admission.
 	AcquirePermitWithLevel(level int) error
 
-	// CanAcquirePermit returns whether it's possible to acquire a permit for an execution at the priority or level
-	// contained in the context. A priority must be stored in the context using the PriorityKey, or a level must be stored
-	// in the context using the LevelKey. The priority or level must be greater than the current rejection threshold for
-	// admission. Levels must be between 0 and 499.
-	CanAcquirePermit(ctx context.Context) bool
-
-	// CanAcquirePermitWithPriority returns whether it's currently possible to acquire a permit for the priority.
-	CanAcquirePermitWithPriority(priority priority.Priority) bool
-
-	// CanAcquirePermitWithLevel returns whether it's currently possible to acquire a permit for the level. The level must
-	// be between 0 and 499.
-	CanAcquirePermitWithLevel(level int) bool
-
 	// RecordResult records an execution result as a success or failure based on the failure handling configuration.
 	RecordResult(result R)
 
@@ -76,24 +64,19 @@ func (t *priorityThrottler[R]) AcquirePermitWithPriority(priority priority.Prior
 }
 
 func (t *priorityThrottler[R]) AcquirePermitWithLevel(level int) error {
-	if !t.CanAcquirePermitWithLevel(level) {
-		return ErrExceeded
+	// Try to acquire through prioritizer
+	if level >= t.prioritizer.RejectionThreshold() {
+		t.prioritizer.LevelTracker.RecordLevel(level)
+		return nil
 	}
 
-	t.prioritizer.LevelTracker.RecordLevel(level)
-	return nil
-}
+	// Maintain min flow to prevent starvation
+	if rand.Float64() < 1.0-t.maxRejectionRate {
+		t.prioritizer.LevelTracker.RecordLevel(level)
+		return nil
+	}
 
-func (t *priorityThrottler[R]) CanAcquirePermit(ctx context.Context) bool {
-	return t.CanAcquirePermitWithLevel(priority.LevelForContext(ctx))
-}
-
-func (t *priorityThrottler[R]) CanAcquirePermitWithPriority(priority priority.Priority) bool {
-	return t.CanAcquirePermitWithLevel(priority.RandomLevel())
-}
-
-func (t *priorityThrottler[R]) CanAcquirePermitWithLevel(level int) bool {
-	return level >= t.prioritizer.RejectionThreshold()
+	return ErrExceeded
 }
 
 func (t *priorityThrottler[R]) RejectionRate() float64 {
