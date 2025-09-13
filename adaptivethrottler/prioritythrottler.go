@@ -37,6 +37,24 @@ type PriorityThrottler[R any] interface {
 	// could not be acquired. The level must be greater than the current rejection threshold for admission.
 	AcquirePermitWithLevel(level int) error
 
+	// TryAcquirePermit attempts to acquire a permit for an execution at the priority or level contained in the context,
+	// returning one could be acquired. A priority must be stored in the context using the PriorityKey, or a level must be
+	// stored in the context using the LevelKey. The priority or level must be greater than the current rejection threshold
+	// for admission. Levels must be between 0 and 499.
+	//
+	// Example usage:
+	//   ctx := priority.ContextWithPriority(context.Background(), priority.High)
+	//   permit, err := throttler.AcquirePermit(ctx)
+	TryAcquirePermit(ctx context.Context) bool
+
+	// TryAcquirePermitWithPriority attempts to acquire a permit for an execution at the given priority, returning whether
+	// one could be acquired. The priority must be greater than the current rejection threshold for admission.
+	TryAcquirePermitWithPriority(priority priority.Priority) bool
+
+	// TryAcquirePermitWithLevel attempts to acquire a permit for an execution at the given level, returning whether one
+	// could be acquired. The level must be greater than the current rejection threshold for admission.
+	TryAcquirePermitWithLevel(level int) bool
+
 	// RecordResult records an execution result as a success or failure based on the failure handling configuration.
 	RecordResult(result R)
 
@@ -77,6 +95,18 @@ func (t *priorityThrottler[R]) AcquirePermitWithLevel(level int) error {
 	}
 
 	return ErrExceeded
+}
+
+func (t *priorityThrottler[R]) TryAcquirePermit(ctx context.Context) bool {
+	return t.AcquirePermit(ctx) == nil
+}
+
+func (t *priorityThrottler[R]) TryAcquirePermitWithPriority(priority priority.Priority) bool {
+	return t.AcquirePermitWithPriority(priority) == nil
+}
+
+func (t *priorityThrottler[R]) TryAcquirePermitWithLevel(level int) bool {
+	return t.AcquirePermitWithLevel(level) == nil
 }
 
 func (t *priorityThrottler[R]) RejectionRate() float64 {

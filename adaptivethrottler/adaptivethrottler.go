@@ -12,8 +12,8 @@ import (
 	"github.com/failsafe-go/failsafe-go/priority"
 )
 
-// ErrExceeded is returned when an execution exceeds the current limit.
-var ErrExceeded = errors.New("limit exceeded")
+// ErrExceeded is returned when an execution exceeds the current failure rate.
+var ErrExceeded = errors.New("failure rate exceeded")
 
 const executionPadding = 1
 
@@ -26,6 +26,9 @@ type AdaptiveThrottler[R any] interface {
 	// AcquirePermit attempts to acquire a permit to perform an execution via the throttler, returning ErrExceeded if one
 	// could not be acquired.
 	AcquirePermit() error
+
+	// TryAcquirePermit attempts to acquire a permit to perform an execution via the throttler, returning whether one could be acquired.
+	TryAcquirePermit() bool
 
 	// RecordResult records an execution result as a success or failure based on the failure handling configuration.
 	RecordResult(result R)
@@ -184,6 +187,10 @@ func (t *adaptiveThrottler[R]) AcquirePermit() error {
 		return ErrExceeded
 	}
 	return nil
+}
+
+func (t *adaptiveThrottler[R]) TryAcquirePermit() bool {
+	return t.AcquirePermit() == nil
 }
 
 func (t *adaptiveThrottler[R]) RejectionRate() float64 {
