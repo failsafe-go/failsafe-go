@@ -1,7 +1,6 @@
 package util
 
 import (
-	"math"
 	"time"
 
 	"github.com/bits-and-blooms/bitset"
@@ -12,9 +11,9 @@ import (
 type ExecutionStats interface {
 	ExecutionCount() uint
 	FailureCount() uint
-	FailureRate() uint
+	FailureRate() float64
 	SuccessCount() uint
-	SuccessRate() uint
+	SuccessRate() float64
 	RecordFailure()
 	RecordSuccess()
 	Reset()
@@ -74,22 +73,22 @@ func (c *countingStats) FailureCount() uint {
 	return c.failures
 }
 
-func (c *countingStats) FailureRate() uint {
+func (c *countingStats) FailureRate() float64 {
 	if c.occupiedBits == 0 {
 		return 0
 	}
-	return uint(math.Round(float64(c.failures) / float64(c.occupiedBits) * 100.0))
+	return round(float64(c.failures) / float64(c.occupiedBits))
 }
 
 func (c *countingStats) SuccessCount() uint {
 	return c.successes
 }
 
-func (c *countingStats) SuccessRate() uint {
+func (c *countingStats) SuccessRate() float64 {
 	if c.occupiedBits == 0 {
 		return 0
 	}
-	return uint(math.Round(float64(c.successes) / float64(c.occupiedBits) * 100.0))
+	return round(float64(c.successes) / float64(c.occupiedBits))
 }
 
 func (c *countingStats) RecordFailure() {
@@ -173,24 +172,24 @@ func (s *timedStats) FailureCount() uint {
 	return s.summary.failures
 }
 
-func (s *timedStats) FailureRate() uint {
+func (s *timedStats) FailureRate() float64 {
 	executions := s.ExecutionCount()
 	if executions == 0 {
 		return 0
 	}
-	return uint(math.Round(float64(s.summary.failures) / float64(executions) * 100.0))
+	return round(float64(s.summary.failures) / float64(executions))
 }
 
 func (s *timedStats) SuccessCount() uint {
 	return s.summary.successes
 }
 
-func (s *timedStats) SuccessRate() uint {
+func (s *timedStats) SuccessRate() float64 {
 	executions := s.ExecutionCount()
 	if executions == 0 {
 		return 0
 	}
-	return uint(math.Round(float64(s.summary.successes) / float64(executions) * 100.0))
+	return round(float64(s.summary.successes) / float64(executions))
 }
 
 func (s *timedStats) RecordFailure() {

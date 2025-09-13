@@ -59,9 +59,11 @@ type Builder[R any] interface {
 	// WithFailureRateThreshold configures the failure rate threshold and thresholding period for the throttler.
 	// The throttler will increase rejection probability when the failure rate exceeds this threshold over the
 	// specified time period.
+	// Panics if failureRateThreshold < 0 or > 1.
 	WithFailureRateThreshold(failureRateThreshold float64, thresholdingPeriod time.Duration) Builder[R]
 
 	// WithMaxRejectionRate configures the max allowed rejection rate, which defaults to .9.
+	// Panics if maxRejectionRate < 0 or > 1.
 	WithMaxRejectionRate(maxRejectionRate float64) Builder[R]
 
 	// Build returns a new AdaptiveThrottler using the builder's configuration.
@@ -134,12 +136,14 @@ func (c *config[R]) OnFailure(listener func(event failsafe.ExecutionEvent[R])) B
 }
 
 func (c *config[R]) WithFailureRateThreshold(failureRateThreshold float64, thresholdingPeriod time.Duration) Builder[R] {
+	util.Assert(failureRateThreshold >= 0 && failureRateThreshold <= 1, "failureRateThreshold must be between 0 and 1")
 	c.successRateThreshold = min(1, max(0, 1-failureRateThreshold))
 	c.thresholdingPeriod = thresholdingPeriod
 	return c
 }
 
 func (c *config[R]) WithMaxRejectionRate(maxRejectionRate float64) Builder[R] {
+	util.Assert(maxRejectionRate >= 0 && maxRejectionRate <= 1, "maxRejectionFactor must be between 0 and 1")
 	c.maxRejectionRate = maxRejectionRate
 	return c
 }

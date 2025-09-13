@@ -24,8 +24,8 @@ func TestCountingStatsShouldReturnUninitializedValues(t *testing.T) {
 
 func TestCountingStats(t *testing.T) {
 	stats := NewCountingStats(100)
-	assert.Equal(t, uint(0), stats.SuccessRate())
-	assert.Equal(t, uint(0), stats.FailureRate())
+	assert.Equal(t, 0.0, stats.SuccessRate())
+	assert.Equal(t, 0.0, stats.FailureRate())
 	assert.Equal(t, uint(0), stats.ExecutionCount())
 
 	recordExecutions(stats, 50, func(i int) bool {
@@ -33,17 +33,17 @@ func TestCountingStats(t *testing.T) {
 	})
 
 	assert.Equal(t, uint(17), stats.SuccessCount())
-	assert.Equal(t, uint(34), stats.SuccessRate())
+	assert.Equal(t, .34, stats.SuccessRate())
 	assert.Equal(t, uint(33), stats.FailureCount())
-	assert.Equal(t, uint(66), stats.FailureRate())
+	assert.Equal(t, .66, stats.FailureRate())
 	assert.Equal(t, uint(50), stats.ExecutionCount())
 
 	recordSuccesses(stats, 100)
 
 	assert.Equal(t, uint(100), stats.SuccessCount())
-	assert.Equal(t, uint(100), stats.SuccessRate())
+	assert.Equal(t, 1.0, stats.SuccessRate())
 	assert.Equal(t, uint(0), stats.FailureCount())
-	assert.Equal(t, uint(0), stats.FailureRate())
+	assert.Equal(t, 0.0, stats.FailureRate())
 	assert.Equal(t, uint(100), stats.ExecutionCount())
 }
 
@@ -54,8 +54,8 @@ func TestTimedStats(t *testing.T) {
 
 	// Given 4 buckets representing 1 second each
 	stats := NewTimedStats(4, 4*time.Second, clock).(*timedStats)
-	assert.Equal(t, uint(0), stats.SuccessRate())
-	assert.Equal(t, uint(0), stats.FailureRate())
+	assert.Equal(t, 0.0, stats.SuccessRate())
+	assert.Equal(t, 0.0, stats.FailureRate())
 	assert.Equal(t, uint(0), stats.ExecutionCount())
 
 	// Record into bucket 1
@@ -64,9 +64,9 @@ func TestTimedStats(t *testing.T) {
 	})
 	assert.Equal(t, int64(0), stats.head)
 	assert.Equal(t, uint(10), stats.SuccessCount())
-	assert.Equal(t, uint(20), stats.SuccessRate())
+	assert.Equal(t, .2, stats.SuccessRate())
 	assert.Equal(t, uint(40), stats.FailureCount())
-	assert.Equal(t, uint(80), stats.FailureRate())
+	assert.Equal(t, .8, stats.FailureRate())
 	assert.Equal(t, uint(50), stats.ExecutionCount())
 
 	// Record into bucket 2
@@ -74,9 +74,9 @@ func TestTimedStats(t *testing.T) {
 	recordSuccesses(stats, 10)
 	assert.Equal(t, int64(1), stats.head)
 	assert.Equal(t, uint(20), stats.SuccessCount())
-	assert.Equal(t, uint(33), stats.SuccessRate())
+	assert.Equal(t, .33, stats.SuccessRate())
 	assert.Equal(t, uint(40), stats.FailureCount())
-	assert.Equal(t, uint(67), stats.FailureRate())
+	assert.Equal(t, .67, stats.FailureRate())
 	assert.Equal(t, uint(60), stats.ExecutionCount())
 
 	// Record into bucket 3
@@ -84,9 +84,9 @@ func TestTimedStats(t *testing.T) {
 	recordFailures(stats, 20)
 	assert.Equal(t, int64(2), stats.head)
 	assert.Equal(t, uint(20), stats.SuccessCount())
-	assert.Equal(t, uint(25), stats.SuccessRate())
+	assert.Equal(t, .25, stats.SuccessRate())
 	assert.Equal(t, uint(60), stats.FailureCount())
-	assert.Equal(t, uint(75), stats.FailureRate())
+	assert.Equal(t, .75, stats.FailureRate())
 	assert.Equal(t, uint(80), stats.ExecutionCount())
 
 	// Record into bucket 4
@@ -96,9 +96,9 @@ func TestTimedStats(t *testing.T) {
 	})
 	assert.Equal(t, int64(3), stats.head)
 	assert.Equal(t, uint(25), stats.SuccessCount())
-	assert.Equal(t, uint(24), stats.SuccessRate())
+	assert.Equal(t, .24, stats.SuccessRate())
 	assert.Equal(t, uint(80), stats.FailureCount())
-	assert.Equal(t, uint(76), stats.FailureRate())
+	assert.Equal(t, .76, stats.FailureRate())
 	assert.Equal(t, uint(105), stats.ExecutionCount())
 
 	// Record into bucket 2, skipping bucket 1
@@ -110,9 +110,9 @@ func TestTimedStats(t *testing.T) {
 	assert.Equal(t, uint(0), bucket1.successes)
 	assert.Equal(t, uint(0), bucket1.failures)
 	assert.Equal(t, uint(13), stats.SuccessCount())
-	assert.Equal(t, uint(25), stats.SuccessRate())
+	assert.Equal(t, .25, stats.SuccessRate())
 	assert.Equal(t, uint(40), stats.FailureCount())
-	assert.Equal(t, uint(75), stats.FailureRate())
+	assert.Equal(t, .75, stats.FailureRate())
 	assert.Equal(t, uint(53), stats.ExecutionCount())
 
 	// Record into bucket 4, skipping bucket 3
@@ -124,9 +124,9 @@ func TestTimedStats(t *testing.T) {
 	assert.Equal(t, uint(0), bucket3.successes)
 	assert.Equal(t, uint(0), bucket3.failures)
 	assert.Equal(t, uint(8), stats.SuccessCount())
-	assert.Equal(t, uint(62), stats.SuccessRate())
+	assert.Equal(t, .62, stats.SuccessRate())
 	assert.Equal(t, uint(5), stats.FailureCount())
-	assert.Equal(t, uint(38), stats.FailureRate())
+	assert.Equal(t, .38, stats.FailureRate())
 	assert.Equal(t, uint(13), stats.ExecutionCount())
 
 	// Skip all buckets, starting at 1 again
@@ -137,8 +137,8 @@ func TestTimedStats(t *testing.T) {
 		assert.Equal(t, uint(0), b.successes)
 		assert.Equal(t, uint(0), b.failures)
 	}
-	assert.Equal(t, uint(0), stats.SuccessRate())
-	assert.Equal(t, uint(0), stats.FailureRate())
+	assert.Equal(t, 0.0, stats.SuccessRate())
+	assert.Equal(t, 0.0, stats.FailureRate())
 	assert.Equal(t, uint(0), stats.ExecutionCount())
 
 	// Record into bucket 2

@@ -173,7 +173,7 @@ func TestCircuitBreaker(t *testing.T) {
 	t.Run("should support time based failure rate thresholding", func(t *testing.T) {
 		// Given
 		cb := circuitbreaker.NewBuilder[bool]().
-			WithFailureRateThreshold(50, 3, 200*time.Millisecond).
+			WithFailureRateThreshold(.5, 3, 200*time.Millisecond).
 			WithDelay(0).
 			HandleResult(false).
 			Build()

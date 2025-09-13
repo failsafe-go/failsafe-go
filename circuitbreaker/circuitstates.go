@@ -166,7 +166,7 @@ func (s *halfOpenState[R]) checkThresholdAndReleasePermit(exec failsafe.Executio
 			// Execution threshold can only be set for time based thresholding
 			executionThresholdExceeded := s.ExecutionCount() >= s.breaker.failureExecutionThreshold
 			failuresExceeded = executionThresholdExceeded && s.FailureRate() >= failureRateThreshold
-			successesExceeded = executionThresholdExceeded && s.SuccessRate() > 100-failureRateThreshold
+			successesExceeded = executionThresholdExceeded && s.SuccessRate() > 1-failureRateThreshold
 		} else {
 			failureThresholdingCapacity := s.breaker.failureThresholdingCapacity
 			failureThreshold := s.breaker.failureThreshold

@@ -123,11 +123,11 @@ type Metrics interface {
 	// the number of failures may vary within the failure thresholding period.
 	Failures() uint
 
-	// FailureRate returns the percentage rate of failed executions, from 0 to 100, in the current state when in a
-	// ClosedState or HalfOpenState. When in OpenState, this returns the rate recorded during the previous ClosedState.
+	// FailureRate returns the rate of failed executions in the current state when in a ClosedState or HalfOpenState. When
+	// in OpenState, this returns the rate recorded during the previous ClosedState.
 	//
 	// The rate is based on the configured failure thresholding capacity.
-	FailureRate() uint
+	FailureRate() float64
 
 	// Successes returns the number of successes recorded in the current state when in a ClosedState or HalfOpenState.
 	// When in OpenState, this returns the successes recorded during the previous ClosedState.
@@ -135,11 +135,11 @@ type Metrics interface {
 	// The max number of successes is based on the success threshold.
 	Successes() uint
 
-	// SuccessRate returns percentage rate of successful executions, from 0 to 100, in the current state when in a
-	// ClosedState or HalfOpenState. When in OpenState, this returns the successes recorded during the previous ClosedState.
+	// SuccessRate returns rate of successful executions in the current state when in a ClosedState or HalfOpenState. When
+	// in OpenState, this returns the successes recorded during the previous ClosedState.
 	//
 	// The rate is based on the configured success thresholding capacity.
-	SuccessRate() uint
+	SuccessRate() float64
 }
 
 // StateChangedEvent indicates a CircuitBreaker's state has changed.
@@ -233,7 +233,7 @@ func (cb *circuitBreaker[R]) Failures() uint {
 	return cb.state.FailureCount()
 }
 
-func (cb *circuitBreaker[R]) FailureRate() uint {
+func (cb *circuitBreaker[R]) FailureRate() float64 {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	return cb.state.FailureRate()
@@ -245,7 +245,7 @@ func (cb *circuitBreaker[R]) Successes() uint {
 	return cb.state.SuccessCount()
 }
 
-func (cb *circuitBreaker[R]) SuccessRate() uint {
+func (cb *circuitBreaker[R]) SuccessRate() float64 {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	return cb.state.SuccessRate()
@@ -340,7 +340,7 @@ func (m *eventMetrics) Failures() uint {
 	return m.stats.FailureCount()
 }
 
-func (m *eventMetrics) FailureRate() uint {
+func (m *eventMetrics) FailureRate() float64 {
 	return m.stats.FailureRate()
 }
 
@@ -348,7 +348,7 @@ func (m *eventMetrics) Successes() uint {
 	return m.stats.SuccessCount()
 }
 
-func (m *eventMetrics) SuccessRate() uint {
+func (m *eventMetrics) SuccessRate() float64 {
 	return m.stats.SuccessRate()
 }
 

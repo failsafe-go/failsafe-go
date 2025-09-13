@@ -57,14 +57,15 @@ type Builder[R any] interface {
 	// HalfOpenState to determine whether to transition back to OpenState or ClosedState.
 	WithFailureThresholdPeriod(failureThreshold uint, failureThresholdingPeriod time.Duration) Builder[R]
 
-	// WithFailureRateThreshold configures time based failure rate thresholding by setting the percentage rate of failures,
-	// from 1 to 100, that must occur within the rolling failureThresholdingPeriod when in a ClosedState in order to open the
-	// circuit. The number of executions must also exceed the failureExecutionThreshold within the failureThresholdingPeriod
-	// before the circuit will be opened.
+	// WithFailureRateThreshold configures time based failure rate thresholding by setting the percentage rate of failures
+	// that must occur within the rolling failureThresholdingPeriod when in a ClosedState in order to open the circuit. The
+	// number of executions must also exceed the failureExecutionThreshold within the failureThresholdingPeriod before the
+	// circuit will be opened.
 	//
 	// If WithSuccessThreshold is not configured, the failureExecutionThreshold will also be used when the circuit breaker is
 	// in a HalfOpenState state to determine whether to transition back to open or closed.
-	WithFailureRateThreshold(failureRateThreshold uint, failureExecutionThreshold uint, failureThresholdingPeriod time.Duration) Builder[R]
+	// Panics if failureRateThreshold is < 0 or > 1.
+	WithFailureRateThreshold(failureRateThreshold float64, failureExecutionThreshold uint, failureThresholdingPeriod time.Duration) Builder[R]
 
 	// WithDelay configures the delay to wait in OpenState before transitioning to HalfOpenState.
 	WithDelay(delay time.Duration) Builder[R]
@@ -97,7 +98,7 @@ type config[R any] struct {
 
 	// Failure config
 	failureThreshold            uint
-	failureRateThreshold        uint
+	failureRateThreshold        float64
 	failureThresholdingCapacity uint
 	failureExecutionThreshold   uint
 	failureThresholdingPeriod   time.Duration
@@ -178,7 +179,8 @@ func (c *config[R]) WithFailureThresholdPeriod(failureThreshold uint, failureThr
 	return c
 }
 
-func (c *config[R]) WithFailureRateThreshold(failureRateThreshold uint, failureExecutionThreshold uint, failureThresholdingPeriod time.Duration) Builder[R] {
+func (c *config[R]) WithFailureRateThreshold(failureRateThreshold float64, failureExecutionThreshold uint, failureThresholdingPeriod time.Duration) Builder[R] {
+	util.Assert(failureRateThreshold >= 0 && failureRateThreshold <= 1, "failureRateThreshold must be between 0 and 1")
 	c.failureRateThreshold = failureRateThreshold
 	c.failureExecutionThreshold = failureExecutionThreshold
 	c.failureThresholdingPeriod = failureThresholdingPeriod
