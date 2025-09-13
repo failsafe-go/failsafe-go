@@ -36,6 +36,7 @@ git push origin $version
 
 # Fetch new pkg
 GOPROXY=proxy.golang.org go list -m github.com/failsafe-go/failsafe-go@$version
+curl -s -o /dev/null https://pkg.go.dev/fetch/github.com/failsafe-go/failsafe-go@$version
 
 if [ $? -eq 0 ]; then
     echo "Released successfully."
