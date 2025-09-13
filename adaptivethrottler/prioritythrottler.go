@@ -148,6 +148,7 @@ func (t *priorityThrottler[R]) getThrottlerStats() *throttlerStats {
 			float64(t.SuccessCount()),
 			t.successRateThreshold,
 			t.maxRejectionRate,
+			t.executionThreshold,
 		),
 		maxRejectionRate: t.maxRejectionRate,
 	}

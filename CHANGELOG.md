@@ -1,10 +1,20 @@
 ## Upcoming Release
 
-## 0.7.1
+## 0.8.0
+
+### Improvements
 
 - New AdaptiveThrottler policy.
+- Improved gRPC tap.ServerInHandle support to perform CanAcquire checks on policies, when possible, so as to not block execution.
+
+### API Changes
+
+- Breaking change: the `circuitbreaker.Builder` `WithFailureRateThreshold` method now expects the `failureRateThreshold` parameter to be a `float64`, rather than an int representing a percentage. This brings the circuit breaker's API inline with the rest of the library, where rates are represented with `float64`. The `WithFailureRateThreshold` method will panic if a value < 1 is provided.
+- Similarly, the `circuitbreaker.Metrics` `SuccessRate` and `FailureRate` methods now return a `float64` instead of an int representing a percentage.
 
 ## 0.7.0
+
+### Improvements
 
 - New AdaptiveLimiter policy.
 - Added grpc and http integration for adaptive limiters.

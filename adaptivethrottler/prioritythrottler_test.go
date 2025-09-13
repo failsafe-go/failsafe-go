@@ -31,7 +31,7 @@ func TestPriorityThrottler_AcquirePermitWithPriority(t *testing.T) {
 	t.Run("below prioritizer rejection threshold", func(t *testing.T) {
 		// Given
 		p := NewPrioritizer().(*priority.BasePrioritizer[*throttlerStats])
-		throttler := NewBuilder[any]().BuildPrioritized(p)
+		throttler := NewBuilder[any]().WithMaxRejectionRate(1).BuildPrioritized(p)
 		p.RejectionThresh.Store(200)
 
 		// When

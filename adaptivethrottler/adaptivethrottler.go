@@ -56,11 +56,12 @@ This type is not concurrency safe.
 type Builder[R any] interface {
 	failsafe.FailurePolicyBuilder[Builder[R], R]
 
-	// WithFailureRateThreshold configures the failure rate threshold and thresholding period for the throttler.
-	// The throttler will increase rejection probability when the failure rate exceeds this threshold over the
-	// specified time period.
+	// WithFailureRateThreshold configures the failure rate threshold and thresholding period for the throttler. The
+	// throttler will increase rejection probability when the failure rate exceeds this threshold over the specified time
+	// period. The number of executions must also exceed the executionThreshold within the thresholdingPeriod
+	// before any executions will be rejected.
 	// Panics if failureRateThreshold < 0 or > 1.
-	WithFailureRateThreshold(failureRateThreshold float64, thresholdingPeriod time.Duration) Builder[R]
+	WithFailureRateThreshold(failureRateThreshold float64, executionThreshold uint, thresholdingPeriod time.Duration) Builder[R]
 
 	// WithMaxRejectionRate configures the max allowed rejection rate, which defaults to .9.
 	// Panics if maxRejectionRate < 0 or > 1.
@@ -83,6 +84,7 @@ type config[R any] struct {
 
 	maxRejectionRate     float64
 	successRateThreshold float64
+	executionThreshold   uint
 	thresholdingPeriod   time.Duration
 }
 
@@ -135,9 +137,10 @@ func (c *config[R]) OnFailure(listener func(event failsafe.ExecutionEvent[R])) B
 	return c
 }
 
-func (c *config[R]) WithFailureRateThreshold(failureRateThreshold float64, thresholdingPeriod time.Duration) Builder[R] {
+func (c *config[R]) WithFailureRateThreshold(failureRateThreshold float64, executionThreshold uint, thresholdingPeriod time.Duration) Builder[R] {
 	util.Assert(failureRateThreshold >= 0 && failureRateThreshold <= 1, "failureRateThreshold must be between 0 and 1")
 	c.successRateThreshold = min(1, max(0, 1-failureRateThreshold))
+	c.executionThreshold = executionThreshold
 	c.thresholdingPeriod = thresholdingPeriod
 	return c
 }
@@ -181,7 +184,8 @@ func (t *adaptiveThrottler[R]) AcquirePermit() error {
 		float64(t.ExecutionCount()),
 		float64(t.SuccessCount()),
 		t.successRateThreshold,
-		t.maxRejectionRate)
+		t.maxRejectionRate,
+		t.executionThreshold)
 
 	// Check for successful acquisition
 	if t.rejectionRate == 0 {
@@ -249,7 +253,11 @@ func (t *adaptiveThrottler[R]) ToExecutor(_ R) any {
 
 // Computes a rejection rate as described in the SRE book: https://sre.google/sre-book/handling-overload/#client-side-throttling-a7sYUg
 // The rejection rate ramps up rejections once the success rate falls below a threshold.
-func computeRejectionRate(executions, successes, successRateThreshold, maxRejectionRate float64) float64 {
+func computeRejectionRate(executions, successes, successRateThreshold, maxRejectionRate float64, executionThreshold uint) float64 {
+	if uint(executions) < executionThreshold {
+		return 0
+	}
+
 	// The max number of executions we should receive, given the successes and expected success rate threshold
 	maxAllowedExecutions := successes / successRateThreshold
 	// How many extra executions we processed beyond the max allowed

@@ -29,7 +29,7 @@ func TestAdaptiveThrottler(t *testing.T) {
 	t.Run("should eventually reject with high failure rate", func(t *testing.T) {
 		// Given
 		throttler := adaptivethrottler.NewBuilder[string]().
-			WithFailureRateThreshold(0.1, time.Minute).
+			WithFailureRateThreshold(0.1, 1, time.Minute).
 			WithMaxRejectionRate(1.0).
 			Build()
 		recordFailures(throttler, 50)
@@ -88,7 +88,7 @@ func TestPriorityThrottler(t *testing.T) {
 		p := adaptivethrottler.NewPrioritizer()
 		rejectionThreshold := testutil.GetPrioritizerRejectionThreshold(p)
 		throttler := adaptivethrottler.NewBuilder[string]().
-			WithFailureRateThreshold(0.1, time.Minute).
+			WithFailureRateThreshold(0.1, 1, time.Minute).
 			WithMaxRejectionRate(1.0).
 			BuildPrioritized(p)
 		recordPriorityFailures(throttler, 50)
@@ -108,7 +108,7 @@ func TestPriorityThrottler(t *testing.T) {
 		p := adaptivethrottler.NewPrioritizer()
 		rejectionThreshold := testutil.GetPrioritizerRejectionThreshold(p)
 		throttler := adaptivethrottler.NewBuilder[string]().
-			WithFailureRateThreshold(0.1, time.Minute).
+			WithFailureRateThreshold(0.1, 1, time.Minute).
 			WithMaxRejectionRate(1.0).
 			BuildPrioritized(p)
 		recordPriorityFailures(throttler, 50)

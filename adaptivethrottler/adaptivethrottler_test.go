@@ -28,7 +28,7 @@ func TestAdaptiveThrottler_AcquirePermit(t *testing.T) {
 	t.Run("should return ErrExceeded when AcquirePermit fails", func(t *testing.T) {
 		throttler := NewBuilder[any]().
 			WithMaxRejectionRate(1.0).
-			WithFailureRateThreshold(0.1, time.Minute).
+			WithFailureRateThreshold(0.1, 1, time.Minute).
 			Build()
 		recordFailures(throttler, 50)
 
@@ -55,6 +55,16 @@ func TestAdaptiveThrottler_AcquirePermit(t *testing.T) {
 		// Then
 		assert.LessOrEqual(t, throttler.RejectionRate(), maxRate)
 	})
+
+	t.Run("should not reject when execution threshold is not met", func(t *testing.T) {
+		throttler := NewBuilder[any]().
+			WithFailureRateThreshold(0.1, 2, time.Minute).
+			Build()
+		recordFailures(throttler, 1)
+		assert.True(t, throttler.TryAcquirePermit())
+		recordFailures(throttler, 1)
+		assert.False(t, throttler.TryAcquirePermit())
+	})
 }
 
 func TestComputeRejectionRate(t *testing.T) {
@@ -65,7 +75,7 @@ func TestComputeRejectionRate(t *testing.T) {
 		successRateThreshold := 0.9
 		maxRejectionRate := 0.8
 
-		result := computeRejectionRate(executions, successes, successRateThreshold, maxRejectionRate)
+		result := computeRejectionRate(executions, successes, successRateThreshold, maxRejectionRate, 1)
 
 		assert.Equal(t, 0.0, result)
 	})
@@ -76,7 +86,7 @@ func TestComputeRejectionRate(t *testing.T) {
 		successRateThreshold := 0.9
 		maxRejectionRate := 0.8
 
-		result := computeRejectionRate(executions, successes, successRateThreshold, maxRejectionRate)
+		result := computeRejectionRate(executions, successes, successRateThreshold, maxRejectionRate, 1)
 
 		// maxAllowedExecutions = 90 / 0.9 = 100
 		// excessExecutions = max(0, 120 - 100) = 20
@@ -91,7 +101,7 @@ func TestComputeRejectionRate(t *testing.T) {
 		successRateThreshold := 0.9
 		maxRejectionRate := 0.8
 
-		result := computeRejectionRate(executions, successes, successRateThreshold, maxRejectionRate)
+		result := computeRejectionRate(executions, successes, successRateThreshold, maxRejectionRate, 1)
 
 		// With 50 successes and 0.9 threshold, we should have had ~56 max executions
 		// We had 200, so we're massively over capacity
@@ -106,7 +116,7 @@ func TestComputeRejectionRate(t *testing.T) {
 		successRateThreshold := 0.9
 		maxRejectionRate := 0.8
 
-		result := computeRejectionRate(executions, successes, successRateThreshold, maxRejectionRate)
+		result := computeRejectionRate(executions, successes, successRateThreshold, maxRejectionRate, 1)
 
 		assert.Equal(t, maxRejectionRate, result)
 	})
@@ -117,7 +127,7 @@ func TestComputeRejectionRate(t *testing.T) {
 		successRateThreshold := 0.9
 		maxRejectionRate := 0.8
 
-		result := computeRejectionRate(executions, successes, successRateThreshold, maxRejectionRate)
+		result := computeRejectionRate(executions, successes, successRateThreshold, maxRejectionRate, 1)
 
 		assert.Equal(t, 0.0, result)
 	})
@@ -128,7 +138,7 @@ func TestComputeRejectionRate(t *testing.T) {
 		successRateThreshold := 0.9
 		maxRejectionRate := 0.8
 
-		result := computeRejectionRate(executions, successes, successRateThreshold, maxRejectionRate)
+		result := computeRejectionRate(executions, successes, successRateThreshold, maxRejectionRate, 1)
 
 		assert.Equal(t, maxRejectionRate, result)
 	})
@@ -140,11 +150,11 @@ func TestComputeRejectionRate(t *testing.T) {
 		maxRejectionRate := 0.8
 
 		// When / Then
-		healthyRejection := computeRejectionRate(executions, 90.0, successRateThreshold, maxRejectionRate)
+		healthyRejection := computeRejectionRate(executions, 90.0, successRateThreshold, maxRejectionRate, 1)
 		assert.Equal(t, 0.0, healthyRejection)
-		strugglingRejection := computeRejectionRate(executions, 70.0, successRateThreshold, maxRejectionRate)
+		strugglingRejection := computeRejectionRate(executions, 70.0, successRateThreshold, maxRejectionRate, 1)
 		assert.Greater(t, strugglingRejection, healthyRejection)
-		unhealthyRejection := computeRejectionRate(executions, 50.0, successRateThreshold, maxRejectionRate)
+		unhealthyRejection := computeRejectionRate(executions, 50.0, successRateThreshold, maxRejectionRate, 1)
 		assert.Greater(t, unhealthyRejection, strugglingRejection)
 	})
 }
