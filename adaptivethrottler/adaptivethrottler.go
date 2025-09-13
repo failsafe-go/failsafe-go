@@ -64,11 +64,12 @@ type Builder[R any] interface {
 	// Build returns a new AdaptiveThrottler using the builder's configuration.
 	Build() AdaptiveThrottler[R]
 
-	// BuildPrioritized returns a new PrioritizedThrottler using the builder's configuration. This prioritized rejections of
+	// BuildPrioritized returns a new PrioritizedThrottler using the builder's configuration. This prioritizes rejections of
 	// executions when throttling occurs. Rejections are performed using the Prioritizer, which sets a rejection threshold
-	// based on all the throttlers being used by the Prioritizer.
+	// based on all the throttlers being used by the Prioritizer. The Prioritizer can and should be shared across all
+	// throttler instances that need to coordinate prioritization.
 	//
-	// Prioritized rejection is disabled by default, which means no executions will block when the limiter is full.
+	// Prioritized rejection is disabled by default, which means no executions will block when the throttler is full.
 	BuildPrioritized(prioritizer priority.Prioritizer) PriorityThrottler[R]
 }
 
@@ -148,12 +149,12 @@ func (c *config[R]) Build() AdaptiveThrottler[R] {
 }
 
 func (c *config[R]) BuildPrioritized(p priority.Prioritizer) PriorityThrottler[R] {
-	limiter := &priorityThrottler[R]{
+	throttler := &priorityThrottler[R]{
 		adaptiveThrottler: c.Build().(*adaptiveThrottler[R]),
 		prioritizer:       p.(*priority.BasePrioritizer[*throttlerStats]),
 	}
-	limiter.prioritizer.Register(limiter.getThrottlerStats)
-	return limiter
+	throttler.prioritizer.Register(throttler.getThrottlerStats)
+	return throttler
 }
 
 type adaptiveThrottler[R any] struct {

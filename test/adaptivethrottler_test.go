@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/failsafe-go/failsafe-go/adaptivethrottler"
 	"github.com/failsafe-go/failsafe-go/internal/policytesting"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
+	"github.com/failsafe-go/failsafe-go/priority"
 )
 
 func TestAdaptiveThrottler(t *testing.T) {
@@ -69,7 +71,66 @@ func TestAdaptiveThrottler(t *testing.T) {
 	})
 }
 
+func TestPriorityThrottler(t *testing.T) {
+	t.Run("should allow execution when no failures", func(t *testing.T) {
+		// Given
+		throttler := adaptivethrottler.NewBuilder[string]().BuildPrioritized(adaptivethrottler.NewPrioritizer())
+
+		// When / Then
+		testutil.Test[string](t).
+			With(throttler).
+			Get(testutil.GetFn("success", nil)).
+			AssertSuccess(1, 1, "success")
+	})
+
+	t.Run("should acquire permit when priority is above rejection threshold", func(t *testing.T) {
+		// Given
+		p := adaptivethrottler.NewPrioritizer()
+		rejectionThreshold := testutil.GetPrioritizerRejectionThreshold(p)
+		throttler := adaptivethrottler.NewBuilder[string]().
+			WithFailureRateThreshold(0.1, time.Minute).
+			WithMaxRejectionRate(1.0).
+			BuildPrioritized(p)
+		recordPriorityFailures(throttler, 50)
+		rejectionThreshold.Store(200)
+		ctx := priority.High.AddTo(context.Background())
+
+		// When / Then
+		testutil.Test[string](t).
+			With(throttler).
+			Context(testutil.ContextFn(ctx)).
+			Get(testutil.GetFn("test", nil)).
+			AssertSuccess(1, 1, "test")
+	})
+
+	t.Run("should not acquire permit when priority is below rejection threshold", func(t *testing.T) {
+		// Given
+		p := adaptivethrottler.NewPrioritizer()
+		rejectionThreshold := testutil.GetPrioritizerRejectionThreshold(p)
+		throttler := adaptivethrottler.NewBuilder[string]().
+			WithFailureRateThreshold(0.1, time.Minute).
+			WithMaxRejectionRate(1.0).
+			BuildPrioritized(p)
+		recordPriorityFailures(throttler, 50)
+		rejectionThreshold.Store(200)
+		ctx := priority.Low.AddTo(context.Background())
+
+		// Should record as a failure
+		testutil.Test[string](t).
+			With(throttler).
+			Context(testutil.ContextFn(ctx)).
+			Get(testutil.GetFn("", testutil.ErrInvalidState)).
+			AssertFailure(1, 0, adaptivethrottler.ErrExceeded)
+	})
+}
+
 func recordFailures[R any](throttler adaptivethrottler.AdaptiveThrottler[R], count int) {
+	for i := 0; i < count; i++ {
+		throttler.RecordFailure()
+	}
+}
+
+func recordPriorityFailures[R any](throttler adaptivethrottler.PriorityThrottler[R], count int) {
 	for i := 0; i < count; i++ {
 		throttler.RecordFailure()
 	}

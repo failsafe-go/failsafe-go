@@ -218,14 +218,13 @@ func TestPriorityLimiter(t *testing.T) {
 			WithLimits(2, 2, 2).
 			WithMaxWaitTime(time.Second).
 			BuildPrioritized(p)
-		ctx := priority.High.AddTo(context.Background())
-		ctxFn := testutil.ContextFn(ctx)
 		rejectionThreshold.Store(200)
+		ctx := priority.High.AddTo(context.Background())
 
 		// When / Then
 		testutil.Test[string](t).
 			With(limiter).
-			Context(ctxFn).
+			Context(testutil.ContextFn(ctx)).
 			Get(testutil.GetFn("test", nil)).
 			AssertSuccess(1, 1, "test")
 	})
@@ -239,14 +238,13 @@ func TestPriorityLimiter(t *testing.T) {
 			WithMaxWaitTime(time.Second).
 			BuildPrioritized(p)
 		limiter.AcquirePermit(context.Background()) // fill the limiter
-		ctx := priority.Low.AddTo(context.Background())
-		ctxFn := testutil.ContextFn(ctx)
 		rejectionThreshold.Store(200)
+		ctx := priority.Low.AddTo(context.Background())
 
 		// When / Then
 		testutil.Test[string](t).
 			With(limiter).
-			Context(ctxFn).
+			Context(testutil.ContextFn(ctx)).
 			Get(testutil.GetFn("test", nil)).
 			AssertFailure(1, 0, adaptivelimiter.ErrExceeded)
 	})

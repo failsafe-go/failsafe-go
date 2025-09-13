@@ -100,7 +100,7 @@ func TestComputeRejectionRate(t *testing.T) {
 		assert.True(t, result < 0.8)
 	})
 
-	t.Run("system with max rejection rate cap", func(t *testing.T) {
+	t.Run("with a max rejection rate cap", func(t *testing.T) {
 		executions := 1000.0
 		successes := 10.0
 		successRateThreshold := 0.9

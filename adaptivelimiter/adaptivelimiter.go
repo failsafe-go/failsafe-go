@@ -174,6 +174,7 @@ type Builder[R any] interface {
 	// defaults to an initialRejectionFactor of 2 times the current limit and a maxRejectionFactor of 3 times the current
 	// limit.
 	//
+	// The Prioritizer can and should be shared across all limiter instances that need to coordinate prioritization.
 	// Prioritized rejection is disabled by default, which means no executions will block when the limiter is full.
 	BuildPrioritized(prioritizer priority.Prioritizer) PriorityLimiter[R]
 }

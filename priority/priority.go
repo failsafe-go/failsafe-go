@@ -2,6 +2,7 @@ package priority
 
 import (
 	"context"
+	"math"
 	"math/rand"
 	"sync"
 
@@ -66,7 +67,8 @@ type LevelTracker interface {
 	// RecordLevel records an execution having been accepted for the level.
 	RecordLevel(level int)
 
-	// GetLevel returns the level that falls at the quantile among all recorded levels in the tracker.
+	// GetLevel returns the level that falls at the quantile among all recorded levels in the tracker, else returns 0 if no
+	// levels have been recorded.
 	GetLevel(quantile float64) float64
 }
 
@@ -92,5 +94,8 @@ func (lt *levelTracker) RecordLevel(level int) {
 func (lt *levelTracker) GetLevel(quantile float64) float64 {
 	lt.mu.Lock()
 	defer lt.mu.Unlock()
-	return lt.digest.Quantile(quantile)
+	if level := lt.digest.Quantile(quantile); !math.IsNaN(level) {
+		return level
+	}
+	return 0
 }
