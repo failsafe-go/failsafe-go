@@ -614,6 +614,10 @@ func (l *adaptiveLimiter[R]) ToExecutor(_ R) any {
 	return e
 }
 
+func (l *adaptiveLimiter[R]) canAcquirePermit(_ context.Context) bool {
+	return l.CanAcquirePermit()
+}
+
 func (l *adaptiveLimiter[R]) configRef() *config[R] {
 	return l.config
 }

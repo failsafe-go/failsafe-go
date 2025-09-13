@@ -64,6 +64,10 @@ func (l *queueingLimiter[R]) ToExecutor(_ R) any {
 	return e
 }
 
+func (l *queueingLimiter[R]) canAcquirePermit(_ context.Context) bool {
+	return l.CanAcquirePermit()
+}
+
 func (l *queueingLimiter[R]) configRef() *config[R] {
 	return l.config
 }

@@ -139,6 +139,10 @@ func (l *priorityLimiter[R]) ToExecutor(_ R) any {
 	return e
 }
 
+func (l *priorityLimiter[R]) canAcquirePermit(ctx context.Context) bool {
+	return l.CanAcquirePermit(ctx)
+}
+
 func (l *priorityLimiter[R]) configRef() *config[R] {
 	return l.config
 }

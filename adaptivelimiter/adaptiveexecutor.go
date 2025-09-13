@@ -12,6 +12,8 @@ import (
 )
 
 type blockingLimiter[R any] interface {
+	canAcquirePermit(ctx context.Context) bool
+
 	AcquirePermit(ctx context.Context) (Permit, error)
 
 	AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) (Permit, error)
@@ -34,7 +36,11 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 
 		var permit Permit
 		var err error
-		if c.maxWaitTime == -1 {
+		if exec.Context().Value(policy.CheckOnlyKey) != nil {
+			if !e.canAcquirePermit(exec.Context()) {
+				err = ErrExceeded
+			}
+		} else if c.maxWaitTime == -1 {
 			permit, err = e.AcquirePermit(exec.Context())
 		} else {
 			permit, err = e.AcquirePermitWithMaxWait(exec.Context(), c.maxWaitTime)
@@ -57,7 +63,9 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 
 		result := innerFn(exec)
 		result = e.PostExecute(execInternal, result)
-		permit.Record()
+		if permit != nil {
+			permit.Record()
+		}
 		return result
 	}
 }

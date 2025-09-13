@@ -10,22 +10,29 @@ import (
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/internal/util"
+	"github.com/failsafe-go/failsafe-go/policy"
 	"github.com/failsafe-go/failsafe-go/priority"
 )
 
 // NewServerInHandle returns a tap.ServerInHandle that wraps the handler with the policies. This can be used to limit
-// server side load with policies such as CircuitBreaker, Bulkhead, RateLimiter, and Cache, and should be prefered over
-// NewUnaryServerInterceptor since it does not waste resources for requests that are rejected.
+// server side load with policies such as AdaptiveLimiter, AdaptiveThrottler, CircuitBreaker, Bulkhead, RateLimiter, and
+// Cache, and should be prefered over NewUnaryServerInterceptor since it does not waste resources for requests that are
+// rejected. Since a tap.ServerInHandle is meant to be non-blocking, be sure that any policies you're using do not have a
+// wait time configured.
 func NewServerInHandle[R any](policies ...failsafe.Policy[R]) tap.ServerInHandle {
 	return NewServerInHandleWithExecutor(failsafe.NewExecutor(policies...))
 }
 
-// NewServerInHandleWithExecutor returns a tap.ServerInHandle that wraps the handler with a failsafe.Executor. This can be used to limit
-// server side load with policies such as CircuitBreaker, Bulkhead, RateLimiter, and Cache, and should be prefered over
-// NewUnaryServerInterceptorWithExecutor since it does not waste resources for requests that are rejected.
+// NewServerInHandleWithExecutor returns a tap.ServerInHandle that wraps the handler with a failsafe.Executor. This can
+// be used to limit server side load with policies such as AdaptiveLimiter, AdaptiveThrottler, CircuitBreaker, Bulkhead,
+// RateLimiter, and Cache, and should be prefered over NewUnaryServerInterceptorWithExecutor since it does not waste
+// resources for requests that are rejected. Since a tap.ServerInHandle is meant to be non-blocking, be sure that any
+// policies you're using do not have a wait time configured.
 func NewServerInHandleWithExecutor[R any](executor failsafe.Executor[R]) tap.ServerInHandle {
 	return func(ctx context.Context, info *tap.Info) (context.Context, error) {
-		return ctx, executor.Run(func() error {
+		// Pass a hint to executors that they should perform a check-only execution
+		execCtx := context.WithValue(executor.Context(), policy.CheckOnlyKey, true)
+		return ctx, executor.WithContext(execCtx).Run(func() error {
 			// The execution is a noop since it's meant to be used with load limiting policies
 			return nil
 		})

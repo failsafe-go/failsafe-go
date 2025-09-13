@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/adaptivelimiter"
 	"github.com/failsafe-go/failsafe-go/cachepolicy"
 	"github.com/failsafe-go/failsafe-go/fallback"
 	"github.com/failsafe-go/failsafe-go/internal/policytesting"
@@ -55,6 +56,23 @@ func TestServerCache(t *testing.T) {
 	// When / Then
 	testServerSuccess(t, nil, server, executor,
 		1, 0, "bar", false)
+}
+
+// Asserts that a full limiter causes requests to fail, including when using a tap.ServerInHandle.
+func TestServerPriorityLimiter(t *testing.T) {
+	// Given
+	server := testutil.MockGrpcResponses("foo")
+	limiter := adaptivelimiter.NewBuilder[any]().
+		WithLimits(1, 1, 1).
+		WithQueueing(1, 1).
+		BuildPrioritized(adaptivelimiter.NewPrioritizer())
+	limiter.AcquirePermit(context.Background())    // fill limiter
+	go limiter.AcquirePermit(context.Background()) // fill queue
+	executor := failsafe.NewExecutor[any](limiter).WithContext(priority.Medium.AddTo(context.Background()))
+
+	// When / Then
+	testServerFailure(t, nil, server, executor,
+		1, 0, adaptivelimiter.ErrExceeded, true)
 }
 
 // Asserts that providing a context to either the executor or a request that is canceled results in the execution being canceled.
