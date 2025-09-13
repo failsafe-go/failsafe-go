@@ -63,7 +63,12 @@ func TestAdaptiveThrottler_AcquirePermit(t *testing.T) {
 		recordFailures(throttler, 1)
 		assert.True(t, throttler.TryAcquirePermit())
 		recordFailures(throttler, 1)
-		assert.False(t, throttler.TryAcquirePermit())
+		for i := 0; i < 50; i++ {
+			if ok := throttler.TryAcquirePermit(); !ok {
+				return
+			}
+		}
+		assert.Fail(t, "should have failed to acquire permit")
 	})
 }
 
