@@ -49,21 +49,12 @@ func TestAdaptiveLimiter(t *testing.T) {
 		stats := &policytesting.Stats{}
 		lb := adaptivelimiter.NewBuilder[any]().WithLimits(2, 2, 2)
 		limiter := policytesting.WithAdaptiveLimiterStatsAndLogs(lb, stats, true).Build()
-		var p1, p2 adaptivelimiter.Permit
-		before := func() {
-			p1 = shouldAcquire(t, limiter)
-			p2 = shouldAcquire(t, limiter) // limiter should be full
-		}
-		after := func() {
-			p1.Drop()
-			p2.Drop()
-		}
+		shouldAcquire(t, limiter)
+		shouldAcquire(t, limiter) // limiter should be full
 
 		// When / Then
 		testutil.Test[any](t).
 			With(limiter).
-			Before(before).
-			After(after).
 			Reset(stats).
 			Run(testutil.RunFn(nil)).
 			AssertFailure(1, 0, adaptivelimiter.ErrExceeded, func() {

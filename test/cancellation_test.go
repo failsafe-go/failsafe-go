@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/adaptivelimiter"
 	"github.com/failsafe-go/failsafe-go/bulkhead"
 	"github.com/failsafe-go/failsafe-go/fallback"
 	"github.com/failsafe-go/failsafe-go/hedgepolicy"
@@ -96,7 +97,26 @@ func TestTimeout_Cancellation(t *testing.T) {
 			}).
 			AssertFailure(1, 1, timeout.ErrExceeded)
 	})
+}
 
+func TestAdaptiveLimiter_Cancellation(t *testing.T) {
+	t.Run("while blocked waiting for permit", func(t *testing.T) {
+		// Given
+		limiter := adaptivelimiter.NewBuilder[any]().
+			WithLimits(1, 1, 1).
+			WithQueueing(1, 1).
+			WithMaxWaitTime(time.Second).
+			Build()
+		shouldAcquire(t, limiter) // limiter should be full
+		ctxFn := testutil.ContextWithCancel(100 * time.Millisecond)
+
+		// When / Then
+		testutil.Test[any](t).
+			With(limiter).
+			Context(ctxFn).
+			Get(testutil.GetFn[any](nil, testutil.ErrInvalidState)).
+			AssertFailure(1, 0, context.Canceled)
+	})
 }
 
 func TestRetryPolicy_Cancellation(t *testing.T) {
