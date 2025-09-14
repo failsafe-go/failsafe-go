@@ -136,9 +136,6 @@ func (s *stat) remove(bucket *stat) {
 
 func NewTimedStats(bucketCount int, thresholdingPeriod time.Duration, clock Clock) ExecutionStats {
 	buckets := make([]stat, bucketCount)
-	for i := 0; i < bucketCount; i++ {
-		buckets[i] = stat{}
-	}
 	return &timedStats{
 		clock:       clock,
 		bucketCount: int64(bucketCount),
