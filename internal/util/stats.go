@@ -114,9 +114,9 @@ type timedStats struct {
 	bucketNanos int64
 
 	// Mutable state
-	buckets []stat
-	summary stat
-	head    int64
+	buckets  []stat
+	summary  stat
+	headTime int64
 }
 
 type stat struct {
@@ -146,19 +146,19 @@ func NewTimedStats(bucketCount int, thresholdingPeriod time.Duration, clock Cloc
 }
 
 func (s *timedStats) currentBucket() *stat {
-	newHead := s.clock.CurrentUnixNano() / s.bucketNanos
+	newHead := s.clock.Now().UnixNano() / s.bucketNanos
 
-	if newHead > s.head {
-		bucketsToMove := min(s.bucketCount, newHead-s.head)
+	if newHead > s.headTime {
+		bucketsToMove := min(s.bucketCount, newHead-s.headTime)
 		for i := int64(0); i < bucketsToMove; i++ {
-			currentBucket := &s.buckets[(s.head+i+1)%s.bucketCount]
+			currentBucket := &s.buckets[(s.headTime+i+1)%s.bucketCount]
 			s.summary.remove(currentBucket)
 			currentBucket.reset()
 		}
-		s.head = newHead
+		s.headTime = newHead
 	}
 
-	return &s.buckets[s.head%s.bucketCount]
+	return &s.buckets[s.headTime%s.bucketCount]
 }
 
 func (s *timedStats) ExecutionCount() uint {
@@ -204,5 +204,5 @@ func (s *timedStats) Reset() {
 		(&s.buckets[i]).reset()
 	}
 	s.summary.reset()
-	s.head = 0
+	s.headTime = 0
 }

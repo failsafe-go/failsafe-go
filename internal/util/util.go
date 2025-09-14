@@ -149,14 +149,14 @@ func Log10Func(factor int) func(limit int) int {
 }
 
 type Clock interface {
-	CurrentUnixNano() int64
+	Now() time.Time
 }
 
 type wallClock struct {
 }
 
-func (wc *wallClock) CurrentUnixNano() int64 {
-	return time.Now().UnixNano()
+func (wc *wallClock) Now() time.Time {
+	return time.Now()
 }
 
 func NewClock() Clock {

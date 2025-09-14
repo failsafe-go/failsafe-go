@@ -81,7 +81,7 @@ func newOpenState[R any](breaker *circuitBreaker[R], previousState circuitState[
 	return &openState[R]{
 		breaker:        breaker,
 		ExecutionStats: previousState,
-		startTime:      breaker.clock.CurrentUnixNano(),
+		startTime:      breaker.clock.Now().UnixNano(),
 		delay:          delay,
 	}
 }
@@ -91,12 +91,12 @@ func (s *openState[R]) state() State {
 }
 
 func (s *openState[R]) remainingDelay() time.Duration {
-	elapsedTime := s.breaker.clock.CurrentUnixNano() - s.startTime
+	elapsedTime := s.breaker.clock.Now().UnixNano() - s.startTime
 	return max(0, s.delay-time.Duration(elapsedTime))
 }
 
 func (s *openState[R]) tryAcquirePermit() bool {
-	if s.breaker.clock.CurrentUnixNano()-s.startTime >= s.delay.Nanoseconds() {
+	if s.breaker.clock.Now().UnixNano()-s.startTime >= s.delay.Nanoseconds() {
 		s.breaker.halfOpen()
 		return s.breaker.tryAcquirePermit()
 	}

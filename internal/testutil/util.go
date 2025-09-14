@@ -33,11 +33,11 @@ func ContextWithCancel(sleepTime time.Duration) func() context.Context {
 }
 
 type TestClock struct {
-	CurrentTime int64
+	Time time.Time
 }
 
-func (t *TestClock) CurrentUnixNano() int64 {
-	return t.CurrentTime
+func (t *TestClock) Now() time.Time {
+	return t.Time
 }
 
 type TestStopwatch struct {
@@ -92,6 +92,12 @@ func (w *Waiter) Resume() {
 	if remainingResumes == 0 {
 		w.done <- struct{}{}
 	}
+}
+
+var testEpoch = time.Unix(0, 0)
+
+func MockTime(offset int) time.Time {
+	return testEpoch.Add(time.Duration(offset) * time.Millisecond)
 }
 
 func MillisToNanos(millis int) int64 {
