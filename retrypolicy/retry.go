@@ -119,7 +119,7 @@ type Builder[R any] interface {
 
 	// WithBackoffFactor sets the delay between retries, exponentially backing off to the maxDelay and multiplying
 	// consecutive delays by the delayFactor. Replaces any previously configured fixed or random delays.
-	WithBackoffFactor(delay time.Duration, maxDelay time.Duration, delayFactor float32) Builder[R]
+	WithBackoffFactor(delay time.Duration, maxDelay time.Duration, delayFactor float64) Builder[R]
 
 	// WithRandomDelay sets a random delay between the delayMin and delayMax (inclusive) to occur between retries.
 	// Replaces any previously configured delay or backoff delay.
@@ -140,7 +140,7 @@ type Builder[R any] interface {
 	//
 	// Jitter should be combined with fixed, random, or exponential backoff delays. If no delays are configured, this setting
 	// is ignored.
-	WithJitterFactor(jitterFactor float32) Builder[R]
+	WithJitterFactor(jitterFactor float64) Builder[R]
 
 	// OnAbort registers the listener to be called when an execution is aborted.
 	OnAbort(listener func(failsafe.ExecutionEvent[R])) Builder[R]
@@ -169,10 +169,10 @@ type config[R any] struct {
 	returnLastFailure bool
 	delayMin          time.Duration
 	delayMax          time.Duration
-	delayFactor       float32
+	delayFactor       float64
 	maxDelay          time.Duration
 	jitter            time.Duration
-	jitterFactor      float32
+	jitterFactor      float64
 	maxDuration       time.Duration
 	maxRetries        int
 
@@ -283,7 +283,7 @@ func (c *config[R]) WithBackoff(delay time.Duration, maxDelay time.Duration) Bui
 	return c.WithBackoffFactor(delay, maxDelay, 2)
 }
 
-func (c *config[R]) WithBackoffFactor(delay time.Duration, maxDelay time.Duration, delayFactor float32) Builder[R] {
+func (c *config[R]) WithBackoffFactor(delay time.Duration, maxDelay time.Duration, delayFactor float64) Builder[R] {
 	c.BaseDelayablePolicy.WithDelay(delay)
 	c.maxDelay = maxDelay
 	c.delayFactor = delayFactor
@@ -309,7 +309,7 @@ func (c *config[R]) WithJitter(jitter time.Duration) Builder[R] {
 	return c
 }
 
-func (c *config[R]) WithJitterFactor(jitterFactor float32) Builder[R] {
+func (c *config[R]) WithJitterFactor(jitterFactor float64) Builder[R] {
 	c.jitterFactor = jitterFactor
 	return c
 }

@@ -117,9 +117,9 @@ func RandomDelay[T number](delay T, jitter T, random float64) T {
 	return delay + T(randomAddend)
 }
 
-func RandomDelayFactor[T number](delay T, jitterFactor float32, random float32) T {
+func RandomDelayFactor[T number](delay T, jitterFactor float64, random float64) T {
 	randomFactor := 1 + (1-random*2)*jitterFactor
-	return T(float32(delay) * randomFactor)
+	return T(float64(delay) * randomFactor)
 }
 
 // Smooth returns a value that is decreased by some portion of the oldValue, and increased by some portion of the
