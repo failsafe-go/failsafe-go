@@ -50,14 +50,14 @@ type usageTracker struct {
 
 	mu sync.RWMutex
 	// Guarded by mu
-	users        map[string]*userEntry
-	userElements map[string]*list.Element
-	lru          *list.List
+	users map[string]*userEntry
+	lru   *list.List
 }
 
 type userEntry struct {
-	window   *util.UsageWindow
-	quantile float64 // Negative value represents being uncalibrated
+	window     *util.UsageWindow
+	quantile   float64 // Negative value represents being uncalibrated
+	lruElement *list.Element
 }
 
 // NewUsageTracker creates a new UsageTracker with the specified configuration.
@@ -67,9 +67,8 @@ func NewUsageTracker(maxUsers int, windowDuration time.Duration) UsageTracker {
 		newWindowFn: func() *util.UsageWindow {
 			return util.NewUsageWindow(30, windowDuration, util.NewClock())
 		},
-		users:        make(map[string]*userEntry),
-		lru:          list.New(),
-		userElements: make(map[string]*list.Element),
+		users: make(map[string]*userEntry),
+		lru:   list.New(),
 	}
 }
 
@@ -87,9 +86,9 @@ func (tt *usageTracker) RecordUsage(_ context.Context, userID string, duration t
 			quantile: -1,
 		}
 		tt.users[userID] = entry
-		tt.userElements[userID] = tt.lru.PushFront(userID)
+		entry.lruElement = tt.lru.PushFront(userID)
 	} else {
-		tt.lru.MoveToFront(tt.userElements[userID])
+		tt.lru.MoveToFront(entry.lruElement)
 	}
 
 	entry.window.RecordUsage(float64(duration.Nanoseconds()))
@@ -175,7 +174,6 @@ func (tt *usageTracker) evictOldest() {
 	if oldest := tt.lru.Back(); oldest != nil {
 		userID := oldest.Value.(string)
 		delete(tt.users, userID)
-		delete(tt.userElements, userID)
 		tt.lru.Remove(oldest)
 	}
 }
