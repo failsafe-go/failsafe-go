@@ -2,6 +2,7 @@ package util
 
 import (
 	"math"
+	"time"
 )
 
 type RollingSum struct {
@@ -141,4 +142,85 @@ func (w *CorrelationWindow) Reset() {
 	w.xSamples.Reset()
 	w.ySamples.Reset()
 	w.corrSumXY = 0
+}
+
+type UsageWindow struct {
+	clock       Clock
+	bucketCount int64
+	bucketNanos int64
+
+	// Mutable state
+	buckets  []usageStat
+	summary  usageStat
+	headTime int64
+}
+
+func NewUsageWindow(bucketCount int, thresholdingPeriod time.Duration, clock Clock) *UsageWindow {
+	buckets := make([]usageStat, bucketCount)
+	return &UsageWindow{
+		clock:       clock,
+		bucketCount: int64(bucketCount),
+		bucketNanos: (thresholdingPeriod / time.Duration(bucketCount)).Nanoseconds(),
+		buckets:     buckets,
+		summary:     usageStat{},
+	}
+}
+
+type usageStat struct {
+	totalUsage float64
+	samples    uint32
+}
+
+func (s *usageStat) reset() {
+	s.totalUsage = 0
+	s.samples = 0
+}
+
+func (s *usageStat) remove(bucket *usageStat) {
+	s.totalUsage -= bucket.totalUsage
+	s.samples -= bucket.samples
+}
+
+func (w *UsageWindow) currentBucket() *usageStat {
+	newHead := w.clock.Now().UnixNano() / w.bucketNanos
+
+	if newHead > w.headTime {
+		bucketsToMove := min(w.bucketCount, newHead-w.headTime)
+		for i := int64(0); i < bucketsToMove; i++ {
+			currentBucket := &w.buckets[(w.headTime+i+1)%w.bucketCount]
+			w.summary.remove(currentBucket)
+			currentBucket.reset()
+		}
+		w.headTime = newHead
+	}
+
+	return &w.buckets[w.headTime%w.bucketCount]
+}
+
+func (w *UsageWindow) RecordUsage(usage float64) {
+	bucket := w.currentBucket()
+	bucket.totalUsage += usage
+	bucket.samples++
+	w.summary.totalUsage += usage
+	w.summary.samples++
+}
+
+func (w *UsageWindow) ExpireBuckets() {
+	w.currentBucket()
+}
+
+func (w *UsageWindow) TotalUsage() float64 {
+	return w.summary.totalUsage
+}
+
+func (w *UsageWindow) Samples() uint32 {
+	return w.summary.samples
+}
+
+func (w *UsageWindow) Reset() {
+	for i := range w.buckets {
+		(&w.buckets[i]).reset()
+	}
+	w.summary.reset()
+	w.headTime = 0
 }

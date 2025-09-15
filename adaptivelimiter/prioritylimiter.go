@@ -52,7 +52,7 @@ type PriorityLimiter[R any] interface {
 	CanAcquirePermit(ctx context.Context) bool
 
 	// CanAcquirePermitWithPriority returns whether it's currently possible to acquire a permit for the priority.
-	CanAcquirePermitWithPriority(priority priority.Priority) bool
+	CanAcquirePermitWithPriority(ctx context.Context, priority priority.Priority) bool
 
 	// CanAcquirePermitWithLevel returns whether it's currently possible to acquire a permit for the level. The level must
 	// be between 0 and 499.
@@ -68,11 +68,11 @@ type priorityLimiter[R any] struct {
 }
 
 func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
-	return l.AcquirePermitWithLevel(ctx, priority.LevelForContext(ctx))
+	return l.AcquirePermitWithLevel(ctx, l.prioritizer.LevelFromContext(ctx))
 }
 
 func (l *priorityLimiter[R]) AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) (Permit, error) {
-	level := priority.LevelForContext(ctx)
+	level := l.prioritizer.LevelFromContext(ctx)
 	if !l.CanAcquirePermitWithLevel(level) {
 		return nil, ErrExceeded
 	}
@@ -82,11 +82,11 @@ func (l *priorityLimiter[R]) AcquirePermitWithMaxWait(ctx context.Context, maxWa
 		return nil, err
 	}
 	l.prioritizer.LevelTracker.RecordLevel(level)
-	return permit, nil
+	return l.enhancedPermit(ctx, permit), nil
 }
 
 func (l *priorityLimiter[R]) AcquirePermitWithPriority(ctx context.Context, priority priority.Priority) (Permit, error) {
-	return l.AcquirePermitWithLevel(ctx, priority.RandomLevel())
+	return l.AcquirePermitWithLevel(ctx, l.prioritizer.LevelFromContextWithPriority(ctx, priority))
 }
 
 func (l *priorityLimiter[R]) AcquirePermitWithLevel(ctx context.Context, level int) (Permit, error) {
@@ -99,15 +99,15 @@ func (l *priorityLimiter[R]) AcquirePermitWithLevel(ctx context.Context, level i
 		return nil, err
 	}
 	l.prioritizer.LevelTracker.RecordLevel(level)
-	return permit, nil
+	return l.enhancedPermit(ctx, permit), nil
 }
 
 func (l *priorityLimiter[R]) CanAcquirePermit(ctx context.Context) bool {
-	return l.CanAcquirePermitWithLevel(priority.LevelForContext(ctx))
+	return l.CanAcquirePermitWithLevel(l.prioritizer.LevelFromContext(ctx))
 }
 
-func (l *priorityLimiter[R]) CanAcquirePermitWithPriority(priority priority.Priority) bool {
-	return l.CanAcquirePermitWithLevel(priority.RandomLevel())
+func (l *priorityLimiter[R]) CanAcquirePermitWithPriority(ctx context.Context, priority priority.Priority) bool {
+	return l.CanAcquirePermitWithLevel(l.prioritizer.LevelFromContextWithPriority(ctx, priority))
 }
 
 func (l *priorityLimiter[R]) CanAcquirePermitWithLevel(level int) bool {
@@ -126,7 +126,6 @@ func (l *priorityLimiter[R]) CanAcquirePermitWithLevel(level int) bool {
 		}
 	}
 
-	// Threshold against the prioritizer's rejection threshold
 	return level >= l.prioritizer.RejectionThreshold()
 }
 
@@ -137,6 +136,20 @@ func (l *priorityLimiter[R]) ToExecutor(_ R) any {
 	}
 	e.Executor = e
 	return e
+}
+
+func (l *priorityLimiter[R]) enhancedPermit(ctx context.Context, permit Permit) Permit {
+	if l.prioritizer.UsageTracker != nil && ctx != nil {
+		if value := ctx.Value(priority.UserKey); value != nil {
+			if userID, ok := value.(string); ok && userID != "" {
+				if p, ok := permit.(*recordingPermit[R]); ok {
+					p.userID = userID
+					p.usageTracker = l.prioritizer.UsageTracker
+				}
+			}
+		}
+	}
+	return permit
 }
 
 func (l *priorityLimiter[R]) canAcquirePermit(ctx context.Context) bool {

@@ -74,7 +74,11 @@ type priorityThrottler[R any] struct {
 }
 
 func (t *priorityThrottler[R]) AcquirePermit(ctx context.Context) error {
-	return t.AcquirePermitWithLevel(priority.LevelForContext(ctx))
+	level := priority.LevelFromContext(ctx)
+	if level == -1 {
+		level = 0
+	}
+	return t.AcquirePermitWithLevel(level)
 }
 
 func (t *priorityThrottler[R]) AcquirePermitWithPriority(priority priority.Priority) error {

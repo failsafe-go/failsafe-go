@@ -626,11 +626,19 @@ type recordingPermit[R any] struct {
 	limiter         *adaptiveLimiter[R]
 	startTime       time.Time
 	currentInflight int
+	userID          string
+	usageTracker    priority.UsageTracker
 }
 
 func (p *recordingPermit[R]) Record() {
 	now := time.Now()
-	p.limiter.record(now, now.Sub(p.startTime), p.currentInflight, false)
+	duration := now.Sub(p.startTime)
+
+	if p.userID != "" && p.usageTracker != nil {
+		p.usageTracker.RecordUsage(context.Background(), p.userID, duration)
+	}
+
+	p.limiter.record(now, duration, p.currentInflight, false)
 }
 
 func (p *recordingPermit[R]) Drop() {

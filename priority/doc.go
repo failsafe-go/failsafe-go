@@ -1,2 +1,2 @@
-// Package priority provides types utilities for working with priorities and levels.
+// Package priority provides types utilities for working with priorities, levels, and usage tracking.
 package priority

@@ -65,6 +65,7 @@ type ThresholdChangedEvent struct {
 type BasePrioritizerConfig[S Stats] struct {
 	logger             *slog.Logger
 	LevelTracker       LevelTracker
+	UsageTracker       UsageTracker
 	Strategy           RejectionStrategy[S]
 	onThresholdChanged func(event ThresholdChangedEvent)
 }
@@ -97,7 +98,7 @@ func (c *BasePrioritizerConfig[S]) Build() Prioritizer {
 }
 
 type Stats interface {
-	// ComputeRejectionRate returns the rate at which future executions should be rejected, given the stats.
+	// ComputeRejectionRate returns the rate at which future executions should be rejected, given the window.
 	ComputeRejectionRate() float64
 
 	// DebugLogArgs returns any args you'd like to include in the prioritizer's debug logs.
@@ -171,6 +172,41 @@ func (p *BasePrioritizer[S]) Calibrate() {
 			NewThreshold: uint(newThresh),
 		})
 	}
+
+	if p.UsageTracker != nil {
+		p.UsageTracker.Calibrate()
+	}
+}
+
+// LevelFromContext gets a level based on usage from the user in the context, else returns LevelFromContext, else 0.
+func (p *BasePrioritizer[S]) LevelFromContext(ctx context.Context) int {
+	if ctx != nil {
+		if p.UsageTracker != nil {
+			if priority := FromContext(ctx); priority != -1 {
+				return p.LevelFromContextWithPriority(ctx, priority)
+			}
+		}
+		if level := LevelFromContext(ctx); level != -1 {
+			return level
+		}
+	}
+	return 0
+}
+
+// LevelFromContextWithPriority gets a level based on usage from the user in the context and the priority, else returns
+// LevelFromContext, else a random level from the priority.
+func (p *BasePrioritizer[S]) LevelFromContextWithPriority(ctx context.Context, priority Priority) int {
+	if ctx != nil {
+		if p.UsageTracker != nil {
+			if userID := UserFromContext(ctx); userID != "" {
+				return p.UsageTracker.GetLevel(userID, priority)
+			}
+		}
+		if level := LevelFromContext(ctx); level != -1 {
+			return level
+		}
+	}
+	return priority.RandomLevel()
 }
 
 func (p *BasePrioritizer[S]) ScheduleCalibrations(ctx context.Context, interval time.Duration) context.CancelFunc {
@@ -194,21 +230,4 @@ func (p *BasePrioritizer[S]) ScheduleCalibrations(ctx context.Context, interval 
 	return func() {
 		close(done)
 	}
-}
-
-// LevelForContext returns a level for the level contained within the given context, else if a priority is contained
-// within the context, a random level is generated within that priority, else 0 is returned.
-func LevelForContext(ctx context.Context) int {
-	var level int
-	if untypedLevel := ctx.Value(LevelKey); untypedLevel != nil {
-		level, _ = untypedLevel.(int)
-	}
-	if level == 0 {
-		if untypedPriority := ctx.Value(PriorityKey); untypedPriority != nil {
-			priority, _ := untypedPriority.(Priority)
-			// Generate a random level if we only have a priority
-			level = priority.RandomLevel()
-		}
-	}
-	return level
 }

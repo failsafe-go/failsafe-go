@@ -21,6 +21,79 @@ func TestContextWithLevel(t *testing.T) {
 	assert.Equal(t, 12, ContextWithLevel(context.Background(), 12).Value(LevelKey))
 }
 
+func TestFromContext(t *testing.T) {
+	tests := []struct {
+		name     string
+		ctx      context.Context
+		expected Priority
+	}{
+		{
+			name:     "with an empty context",
+			ctx:      context.Background(),
+			expected: -1,
+		},
+		{
+			name:     "with a context with priority",
+			ctx:      ContextWithPriority(context.Background(), High),
+			expected: High,
+		},
+		{
+			name:     "with a context with an invalid priority type",
+			ctx:      context.WithValue(context.Background(), PriorityKey, "foo"),
+			expected: -1,
+		},
+		{
+			name:     "with a context with an invalid priority value",
+			ctx:      context.WithValue(context.Background(), PriorityKey, 10),
+			expected: -1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			priority := FromContext(tc.ctx)
+			assert.Equal(t, tc.expected, priority)
+		})
+	}
+}
+
+func TestLevelFromContext(t *testing.T) {
+	t.Run("with level", func(t *testing.T) {
+		// Given
+		expectedLevel := 250
+		ctx := ContextWithLevel(context.Background(), expectedLevel)
+
+		// When
+		level := LevelFromContext(ctx)
+
+		// Then
+		assert.Equal(t, expectedLevel, level)
+	})
+
+	t.Run("with priority and no level", func(t *testing.T) {
+		// Given
+		ctx := ContextWithPriority(context.Background(), High)
+
+		// When
+		level := LevelFromContext(ctx)
+
+		// Then
+		assert.GreaterOrEqual(t, level, High.MinLevel())
+		assert.LessOrEqual(t, level, High.MaxLevel())
+	})
+
+	t.Run("with no priority or level", func(t *testing.T) {
+		// Given
+		ctx := context.Background()
+
+		// When
+		level := LevelFromContext(ctx)
+
+		// Then
+		assert.Equal(t, -1, level)
+	})
+}
+
 func TestLevelTracker_RecordLevel(t *testing.T) {
 	// Given
 	tracker := NewLevelTracker()

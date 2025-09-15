@@ -187,6 +187,6 @@ func (s *wallClockStopwatch) Reset() {
 	s.startTime = time.Now()
 }
 
-func round(v float64) float64 {
+func Round(v float64) float64 {
 	return math.Round(v*100) / 100
 }

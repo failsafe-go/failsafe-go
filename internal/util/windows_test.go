@@ -3,9 +3,12 @@ package util
 import (
 	"math"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/failsafe-go/failsafe-go/internal/testutil"
 )
 
 func TestRollingSum(t *testing.T) {
@@ -170,4 +173,96 @@ func TestCorrelationWindowSliding(t *testing.T) {
 	corr, _, _ = w.Add(4.0, 40.0)
 	assert.InDelta(t, 1.0, corr, 0.0001)
 	assert.Equal(t, 3, w.xSamples.size)
+}
+
+func TestUsageWindow(t *testing.T) {
+	clock := &testutil.TestClock{
+		Time: testutil.MockTime(900),
+	}
+
+	// Given 4 buckets representing 1 second each
+	window := NewUsageWindow(4, 4*time.Second, clock)
+	assert.Equal(t, float64(0), window.TotalUsage())
+	assert.Equal(t, uint32(0), window.Samples())
+
+	// Record into bucket 1
+	recordUsage(window, []float64{100.0, 200.0, 150.0, 300.0, 250.0}) // currentTime = 0
+	assert.Equal(t, int64(0), window.headTime)
+	assert.Equal(t, float64(1000), window.TotalUsage())
+	assert.Equal(t, uint32(5), window.Samples())
+
+	// Record into bucket 2
+	clock.Time = testutil.MockTime(1000)
+	recordUsage(window, []float64{400.0, 500.0})
+	assert.Equal(t, int64(1), window.headTime)
+	assert.Equal(t, float64(1900), window.TotalUsage()) // 1000 + 900
+	assert.Equal(t, uint32(7), window.Samples())
+
+	// Record into bucket 3
+	clock.Time = testutil.MockTime(2500)
+	recordUsage(window, []float64{600.0, 700.0, 800.0})
+	assert.Equal(t, int64(2), window.headTime)
+	assert.Equal(t, float64(4000), window.TotalUsage()) // 1900 + 2100
+	assert.Equal(t, uint32(10), window.Samples())
+
+	// Record into bucket 4
+	clock.Time = testutil.MockTime(3100)
+	recordUsage(window, []float64{50.0, 75.0})
+	assert.Equal(t, int64(3), window.headTime)
+	assert.Equal(t, float64(4125), window.TotalUsage()) // 4000 + 125
+	assert.Equal(t, uint32(12), window.Samples())
+
+	// Record into bucket 2, skipping bucket 1
+	clock.Time = testutil.MockTime(5400)
+	recordUsage(window, []float64{500.0})
+	assert.Equal(t, int64(5), window.headTime)
+
+	// Assert bucket 1 was skipped and reset based on its previous start time
+	bucket1 := window.buckets[0]
+	assert.Equal(t, float64(0), bucket1.totalUsage)
+	assert.Equal(t, uint32(0), bucket1.samples)
+
+	// Should have lost bucket 1's data (1000) and gained new data (500)
+	assert.Equal(t, float64(2725), window.TotalUsage()) // 4125 - 1000 - 900 + 500
+	assert.Equal(t, uint32(6), window.Samples())        // 12 - 5 - 2 + 1
+
+	// Record into bucket 4, skipping bucket 3
+	clock.Time = testutil.MockTime(7300)
+	recordUsage(window, []float64{300.0, 400.0})
+	assert.Equal(t, int64(7), window.headTime)
+
+	// Assert bucket 3 was skipped and reset
+	bucket3 := window.buckets[2]
+	assert.Equal(t, float64(0), bucket3.totalUsage)
+	assert.Equal(t, uint32(0), bucket3.samples)
+
+	// Should have lost bucket 3's data (2100) and gained new data (700)
+	assert.Equal(t, float64(1200), window.TotalUsage()) // 2725 - 2100 - 125 + 700
+	assert.Equal(t, uint32(3), window.Samples())        // 6 - 3 - 2 + 2
+
+	// Skip all buckets by jumping way ahead in time
+	clock.Time = testutil.MockTime(22500)
+	window.currentBucket() // Force bucket calculation
+	assert.Equal(t, int64(22), window.headTime)
+
+	// All buckets should be reset
+	for _, b := range window.buckets {
+		assert.Equal(t, float64(0), b.totalUsage)
+		assert.Equal(t, uint32(0), b.samples)
+	}
+	assert.Equal(t, float64(0), window.TotalUsage())
+	assert.Equal(t, uint32(0), window.Samples())
+
+	// Record into bucket 2 after reset
+	clock.Time = testutil.MockTime(23100)
+	recordUsage(window, []float64{500.0, 750.0, 250.0})
+	assert.Equal(t, int64(23), window.headTime)
+	assert.Equal(t, float64(1500), window.TotalUsage())
+	assert.Equal(t, uint32(3), window.Samples())
+}
+
+func recordUsage(window *UsageWindow, usages []float64) {
+	for _, usage := range usages {
+		window.RecordUsage(usage)
+	}
 }

@@ -77,7 +77,7 @@ func (c *countingStats) FailureRate() float64 {
 	if c.occupiedBits == 0 {
 		return 0
 	}
-	return round(float64(c.failures) / float64(c.occupiedBits))
+	return Round(float64(c.failures) / float64(c.occupiedBits))
 }
 
 func (c *countingStats) SuccessCount() uint {
@@ -88,7 +88,7 @@ func (c *countingStats) SuccessRate() float64 {
 	if c.occupiedBits == 0 {
 		return 0
 	}
-	return round(float64(c.successes) / float64(c.occupiedBits))
+	return Round(float64(c.successes) / float64(c.occupiedBits))
 }
 
 func (c *countingStats) RecordFailure() {
@@ -174,7 +174,7 @@ func (s *timedStats) FailureRate() float64 {
 	if executions == 0 {
 		return 0
 	}
-	return round(float64(s.summary.failures) / float64(executions))
+	return Round(float64(s.summary.failures) / float64(executions))
 }
 
 func (s *timedStats) SuccessCount() uint {
@@ -186,7 +186,7 @@ func (s *timedStats) SuccessRate() float64 {
 	if executions == 0 {
 		return 0
 	}
-	return round(float64(s.summary.successes) / float64(executions))
+	return Round(float64(s.summary.successes) / float64(executions))
 }
 
 func (s *timedStats) RecordFailure() {

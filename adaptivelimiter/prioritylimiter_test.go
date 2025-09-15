@@ -3,6 +3,7 @@ package adaptivelimiter
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,7 +40,7 @@ func TestPriorityLimiter_AcquirePermitWithPriority(t *testing.T) {
 			WithLimits(1, 1, 1).
 			WithQueueing(1, 1).
 			BuildPrioritized(p)
-		limiter.AcquirePermit(context.Background()) // fill limiter
+		limiter.AcquirePermit(context.Background()) // fill the limiter
 		p.RejectionThresh.Store(200)
 
 		// When
@@ -54,7 +55,8 @@ func TestPriorityLimiter_AcquirePermitWithPriority(t *testing.T) {
 	// within the rejection threshold.
 	t.Run("above max queued executions", func(t *testing.T) {
 		p := NewPrioritizer()
-		limiter := NewBuilder[any]().WithLimits(1, 1, 1).
+		limiter := NewBuilder[any]().
+			WithLimits(1, 1, 1).
 			WithQueueing(1, 1).
 			BuildPrioritized(p)
 		shouldAcquireWithPriority(t, limiter, priority.High)    // fill the limiter
@@ -63,7 +65,37 @@ func TestPriorityLimiter_AcquirePermitWithPriority(t *testing.T) {
 
 		permit, err := limiter.AcquirePermitWithPriority(context.Background(), priority.High)
 		assert.Nil(t, permit)
-		assert.ErrorIs(t, err, ErrExceeded)
+		assert.Error(t, err, ErrExceeded)
+	})
+}
+
+func TestPriorityLimiter_CanAcquirePermit(t *testing.T) {
+	t.Run("with usage tracker", func(t *testing.T) {
+		// Given
+		tracker := priority.NewUsageTracker(10, time.Minute)
+		p := NewPrioritizerBuilder().
+			WithUsageTracker(tracker).
+			Build().(*priority.BasePrioritizer[*queueStats])
+		limiter := NewBuilder[any]().
+			WithLimits(1, 1, 1).
+			WithQueueing(1, 1).
+			BuildPrioritized(p)
+		shouldAcquireWithPriority(t, limiter, priority.High) // fill the limiter
+		p.RejectionThresh.Store(275)
+
+		bgCtx := context.Background()
+		tracker.RecordUsage(bgCtx, "user1", 100*time.Millisecond)
+		tracker.RecordUsage(bgCtx, "user2", 200*time.Millisecond)
+		tracker.Calibrate()
+
+		// When / Then - user 1's level is above the threshold
+		mediumCtx := priority.ContextWithPriority(bgCtx, priority.Medium)
+		userCtx := priority.ContextWithUserID(mediumCtx, "user1")
+		assert.True(t, limiter.CanAcquirePermit(userCtx))
+
+		// When / Then - user 2's level is below the threshold
+		userCtx = priority.ContextWithUserID(mediumCtx, "user2")
+		assert.False(t, limiter.CanAcquirePermit(userCtx))
 	})
 }
 

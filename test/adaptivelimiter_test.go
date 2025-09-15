@@ -269,6 +269,56 @@ func TestPriorityLimiter(t *testing.T) {
 				assert.Equal(t, 1, stats.LimitsExceeded())
 			})
 	})
+
+	t.Run("with usage tracker", func(t *testing.T) {
+		// Given
+		tracker := priority.NewUsageTracker(10, time.Minute)
+		p := adaptivelimiter.NewPrioritizerBuilder().
+			WithUsageTracker(tracker).
+			Build()
+		limiter := adaptivelimiter.NewBuilder[string]().
+			WithLimits(1, 1, 1).
+			WithQueueing(1, 1).
+			BuildPrioritized(p)
+
+		// Prepare to fill/drain the limiter before/after each execution
+		before := func() {
+			shouldAcquireAndDropAfterWait(t, limiter, 1, 100*time.Millisecond) // fill limiter
+		}
+		after := func() {
+			waitForLimiterToEmpty(t, limiter)
+		}
+
+		// Add some usage
+		bgCtx := context.Background()
+		tracker.RecordUsage(bgCtx, "user1", 100*time.Millisecond)
+		tracker.RecordUsage(bgCtx, "user2", 200*time.Millisecond)
+		tracker.Calibrate()
+
+		// Set the rejection threshold
+		testutil.GetPrioritizerRejectionThreshold(p).Store(275)
+
+		// When / Then - user 1's level is above the threshold
+		mediumCtx := priority.ContextWithPriority(bgCtx, priority.Medium)
+		userCtx := priority.ContextWithUserID(mediumCtx, "user1") // Should get level 200
+		testutil.Test[string](t).
+			With(limiter).
+			Before(before).
+			After(after).
+			Context(testutil.ContextFn(userCtx)).
+			Get(testutil.GetFn("test", nil)).
+			AssertSuccess(1, 1, "test")
+
+		// When / Then - user 2's level is below the threshold
+		userCtx = priority.ContextWithUserID(mediumCtx, "user2") // Should get level 250
+		testutil.Test[string](t).
+			With(limiter).
+			Before(before).
+			After(after).
+			Context(testutil.ContextFn(userCtx)).
+			Get(testutil.GetFn("test", nil)).
+			AssertFailure(1, 0, adaptivelimiter.ErrExceeded)
+	})
 }
 
 type blockingLimiter interface {

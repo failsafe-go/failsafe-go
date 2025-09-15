@@ -31,6 +31,20 @@ func (p Priority) AddTo(ctx context.Context) context.Context {
 	return ContextWithPriority(ctx, p)
 }
 
+// MaxLevel returns the max level for the priority.
+func (p Priority) MaxLevel() int {
+	return p.levelRange().upper
+}
+
+// MinLevel returns the min level for the priority.
+func (p Priority) MinLevel() int {
+	return p.levelRange().lower
+}
+
+func (p Priority) levelRange() levelRange {
+	return priorityLevelRanges[p]
+}
+
 // levelRange provides a wider range of levels that allow for rejecting a subset of executions within a Priority.
 type levelRange struct {
 	lower, upper int
@@ -60,6 +74,32 @@ func ContextWithPriority(ctx context.Context, priority Priority) context.Context
 // ContextWithLevel returns a context with the level value stored with the LevelKey.
 func ContextWithLevel(ctx context.Context, level int) context.Context {
 	return context.WithValue(ctx, LevelKey, level)
+}
+
+// FromContext returns the priority from the context, else -1.
+func FromContext(ctx context.Context) Priority {
+	if untypedPriority := ctx.Value(PriorityKey); untypedPriority != nil {
+		if priority, ok := untypedPriority.(Priority); ok {
+			return priority
+		}
+	}
+	return -1
+}
+
+// LevelFromContext returns a level for the level contained within the given context, else if a priority is contained
+// within the context, a random level is generated within that priority, else -1 is returned.
+func LevelFromContext(ctx context.Context) int {
+	if untypedLevel := ctx.Value(LevelKey); untypedLevel != nil {
+		if level, ok := untypedLevel.(int); ok {
+			return level
+		}
+	}
+	if untypedPriority := ctx.Value(PriorityKey); untypedPriority != nil {
+		if priority, ok := untypedPriority.(Priority); ok {
+			return priority.RandomLevel()
+		}
+	}
+	return -1
 }
 
 // LevelTracker tracks priority levels for executions, which can be used to prioritize rejections.

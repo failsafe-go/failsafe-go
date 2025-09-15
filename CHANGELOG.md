@@ -1,5 +1,9 @@
 ## Upcoming Release
 
+### Improvements
+
+- Added fairness when prioritizing executions, based on usage.
+
 ## 0.8.0
 
 ### Improvements

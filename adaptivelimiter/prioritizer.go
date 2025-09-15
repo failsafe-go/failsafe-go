@@ -10,10 +10,33 @@ func NewPrioritizer() priority.Prioritizer {
 }
 
 // NewPrioritizerBuilder returns a new PrioritizerBuilder.
-func NewPrioritizerBuilder() priority.PrioritizerBuilder {
-	return &priority.BasePrioritizerConfig[*queueStats]{
-		Strategy: &queueRejectionStrategy{},
+func NewPrioritizerBuilder() PrioritizerBuilder {
+	return &prioritizerConfig{
+		BasePrioritizerConfig: &priority.BasePrioritizerConfig[*queueStats]{
+			Strategy: &queueRejectionStrategy{},
+		},
 	}
+}
+
+// PrioritizerBuilder builds Prioritizer instances.
+//
+// This type is not concurrency safe.
+type PrioritizerBuilder interface {
+	priority.PrioritizerBuilder
+
+	// WithUsageTracker configures a usage tracker to use with the prioritizer. The usage tracker tracks usage as total
+	// execution duration, to enforce fairness when rejecting executions.
+	WithUsageTracker(usageTracker priority.UsageTracker) PrioritizerBuilder
+}
+
+// BasePrioritizerConfig provides a base for implementing a PrioritizerBuilder.
+type prioritizerConfig struct {
+	*priority.BasePrioritizerConfig[*queueStats]
+}
+
+func (c *prioritizerConfig) WithUsageTracker(usageTracker priority.UsageTracker) PrioritizerBuilder {
+	c.UsageTracker = usageTracker
+	return c
 }
 
 // Implements priority.RejectionStrategy.
