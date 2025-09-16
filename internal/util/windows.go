@@ -167,7 +167,7 @@ func NewUsageWindow(bucketCount int, thresholdingPeriod time.Duration, clock Clo
 }
 
 type usageStat struct {
-	totalUsage float64
+	totalUsage int64
 	samples    uint32
 }
 
@@ -197,7 +197,7 @@ func (w *UsageWindow) currentBucket() *usageStat {
 	return &w.buckets[w.headTime%w.bucketCount]
 }
 
-func (w *UsageWindow) RecordUsage(usage float64) {
+func (w *UsageWindow) RecordUsage(usage int64) {
 	bucket := w.currentBucket()
 	bucket.totalUsage += usage
 	bucket.samples++
@@ -209,7 +209,7 @@ func (w *UsageWindow) ExpireBuckets() {
 	w.currentBucket()
 }
 
-func (w *UsageWindow) TotalUsage() float64 {
+func (w *UsageWindow) TotalUsage() int64 {
 	return w.summary.totalUsage
 }
 

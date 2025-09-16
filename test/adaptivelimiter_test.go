@@ -290,16 +290,15 @@ func TestPriorityLimiter(t *testing.T) {
 		}
 
 		// Add some usage
-		bgCtx := context.Background()
-		tracker.RecordUsage(bgCtx, "user1", 100*time.Millisecond)
-		tracker.RecordUsage(bgCtx, "user2", 200*time.Millisecond)
+		tracker.RecordUsage("user1", 100*time.Millisecond.Nanoseconds())
+		tracker.RecordUsage("user2", 200*time.Millisecond.Nanoseconds())
 		tracker.Calibrate()
 
 		// Set the rejection threshold
 		testutil.GetPrioritizerRejectionThreshold(p).Store(275)
 
 		// When / Then - user 1's level is above the threshold
-		mediumCtx := priority.ContextWithPriority(bgCtx, priority.Medium)
+		mediumCtx := priority.ContextWithPriority(context.Background(), priority.Medium)
 		userCtx := priority.ContextWithUserID(mediumCtx, "user1") // Should get level 200
 		testutil.Test[string](t).
 			With(limiter).

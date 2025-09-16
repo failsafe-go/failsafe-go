@@ -48,9 +48,7 @@ func TestCountingStats(t *testing.T) {
 }
 
 func TestTimedStats(t *testing.T) {
-	clock := &testutil.TestClock{
-		Time: testutil.MockTime(900),
-	}
+	clock := testutil.NewTestClock(900)
 
 	// Given 4 buckets representing 1 second each
 	stats := NewTimedStats(4, 4*time.Second, clock).(*timedStats)
@@ -70,7 +68,7 @@ func TestTimedStats(t *testing.T) {
 	assert.Equal(t, uint(50), stats.ExecutionCount())
 
 	// Record into bucket 2
-	clock.Time = testutil.MockTime(1000)
+	clock.SetTime(1000)
 	recordSuccesses(stats, 10)
 	assert.Equal(t, int64(1), stats.headTime)
 	assert.Equal(t, uint(20), stats.SuccessCount())
@@ -80,7 +78,7 @@ func TestTimedStats(t *testing.T) {
 	assert.Equal(t, uint(60), stats.ExecutionCount())
 
 	// Record into bucket 3
-	clock.Time = testutil.MockTime(2500)
+	clock.SetTime(2500)
 	recordFailures(stats, 20)
 	assert.Equal(t, int64(2), stats.headTime)
 	assert.Equal(t, uint(20), stats.SuccessCount())
@@ -90,7 +88,7 @@ func TestTimedStats(t *testing.T) {
 	assert.Equal(t, uint(80), stats.ExecutionCount())
 
 	// Record into bucket 4
-	clock.Time = testutil.MockTime(3100)
+	clock.SetTime(3100)
 	recordExecutions(stats, 25, func(i int) bool {
 		return i%5 == 0
 	})
@@ -102,7 +100,7 @@ func TestTimedStats(t *testing.T) {
 	assert.Equal(t, uint(105), stats.ExecutionCount())
 
 	// Record into bucket 2, skipping bucket 1
-	clock.Time = testutil.MockTime(5400)
+	clock.SetTime(5400)
 	recordSuccesses(stats, 8)
 	assert.Equal(t, int64(5), stats.headTime)
 	// Assert bucket 1 was skipped and Reset based on its previous start time
@@ -116,7 +114,7 @@ func TestTimedStats(t *testing.T) {
 	assert.Equal(t, uint(53), stats.ExecutionCount())
 
 	// Record into bucket 4, skipping bucket 3
-	clock.Time = testutil.MockTime(7300)
+	clock.SetTime(7300)
 	recordFailures(stats, 5)
 	assert.Equal(t, int64(7), stats.headTime)
 	// Assert bucket 3 was skipped and Reset based on its previous start time
@@ -130,7 +128,7 @@ func TestTimedStats(t *testing.T) {
 	assert.Equal(t, uint(13), stats.ExecutionCount())
 
 	// Skip all buckets, starting at 1 again
-	clock.Time = testutil.MockTime(22500)
+	clock.SetTime(22500)
 	stats.currentBucket()
 	assert.Equal(t, int64(22), stats.headTime)
 	for _, b := range stats.buckets {
@@ -142,7 +140,7 @@ func TestTimedStats(t *testing.T) {
 	assert.Equal(t, uint(0), stats.ExecutionCount())
 
 	// Record into bucket 2
-	clock.Time = testutil.MockTime(23100)
+	clock.SetTime(23100)
 	recordSuccesses(stats, 3)
 	assert.Equal(t, int64(23), stats.headTime)
 	assert.Equal(t, uint(3), stats.SuccessCount())

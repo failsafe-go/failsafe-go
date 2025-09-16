@@ -126,7 +126,7 @@ func NewBuilder[R any]() Builder[R] {
 		BaseDelayablePolicy: &policy.BaseDelayablePolicy[R]{
 			Delay: time.Minute,
 		},
-		clock:                       util.NewClock(),
+		clock:                       util.WallClock,
 		failureThreshold:            1,
 		failureThresholdingCapacity: 1,
 	}

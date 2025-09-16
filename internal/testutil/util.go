@@ -36,8 +36,18 @@ type TestClock struct {
 	Time time.Time
 }
 
-func (t *TestClock) Now() time.Time {
-	return t.Time
+func NewTestClock(millis int) *TestClock {
+	result := &TestClock{}
+	result.SetTime(millis)
+	return result
+}
+
+func (tc *TestClock) SetTime(millis int) {
+	tc.Time = time.Unix(0, 0).Add(time.Duration(millis) * time.Millisecond)
+}
+
+func (tc *TestClock) Now() time.Time {
+	return tc.Time
 }
 
 type TestStopwatch struct {
@@ -92,12 +102,6 @@ func (w *Waiter) Resume() {
 	if remainingResumes == 0 {
 		w.done <- struct{}{}
 	}
-}
-
-var testEpoch = time.Unix(0, 0)
-
-func MockTime(offset int) time.Time {
-	return testEpoch.Add(time.Duration(offset) * time.Millisecond)
 }
 
 func MillisToNanos(millis int) int64 {

@@ -154,7 +154,7 @@ func (c *config[R]) WithMaxRejectionRate(maxRejectionRate float64) Builder[R] {
 func (c *config[R]) Build() AdaptiveThrottler[R] {
 	return &adaptiveThrottler[R]{
 		config:         c,
-		ExecutionStats: util.NewTimedStats(20, c.thresholdingPeriod, util.NewClock()),
+		ExecutionStats: util.NewTimedStats(20, c.thresholdingPeriod, util.WallClock),
 	}
 }
 

@@ -8,6 +8,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/failsafe-go/failsafe-go/internal/testutil"
+	"github.com/failsafe-go/failsafe-go/internal/util"
+	"github.com/failsafe-go/failsafe-go/priority"
 )
 
 func TestAdaptiveLimiter_Defaults(t *testing.T) {
@@ -258,6 +262,44 @@ func TestAdaptiveLimiter_Reset(t *testing.T) {
 	assert.Equal(t, 0.0, corr)
 }
 
+func TestRecordingPermit_Record(t *testing.T) {
+	limiter := NewBuilder[any]().Build().(*adaptiveLimiter[any])
+
+	t.Run("should release semaphore and record time", func(t *testing.T) {
+		clock := testutil.NewTestClock(500)
+		tracker := &mockUsageTracker{}
+		permit := createPermit(limiter, "user1", clock, tracker)
+		assert.Equal(t, 1, limiter.Inflight())
+
+		clock.SetTime(800)
+		permit.Record()
+		assert.Equal(t, 0, limiter.Inflight())
+		assert.Equal(t, "user1", tracker.userID)
+		assert.Equal(t, 300*time.Millisecond, time.Duration(tracker.usage))
+	})
+}
+
+type mockUsageTracker struct {
+	userID string
+	usage  int64
+}
+
+func (m *mockUsageTracker) RecordUsage(userID string, usage int64) {
+	m.userID = userID
+	m.usage = usage
+}
+
+func (m *mockUsageTracker) GetUsage(_ string) int64 {
+	return 0
+}
+
+func (m *mockUsageTracker) GetLevel(_ string, _ priority.Priority) int {
+	return 0
+}
+
+func (m *mockUsageTracker) Calibrate() {
+}
+
 func acquireAsync(limiter AdaptiveLimiter[any]) {
 	go limiter.AcquirePermit(context.Background())
 }
@@ -266,4 +308,16 @@ func assertQueued(t *testing.T, metrics Metrics, queued int) {
 	assert.Eventually(t, func() bool {
 		return metrics.Queued() == queued
 	}, 300*time.Millisecond, 10*time.Millisecond)
+}
+
+func createPermit(limiter *adaptiveLimiter[any], userID string, clock util.Clock, tracker priority.UsageTracker) *recordingPermit[any] {
+	limiter.semaphore.Acquire(context.Background())
+	return &recordingPermit[any]{
+		clock:           clock,
+		limiter:         limiter,
+		startTime:       clock.Now(),
+		currentInflight: 1,
+		userID:          userID,
+		usageTracker:    tracker,
+	}
 }

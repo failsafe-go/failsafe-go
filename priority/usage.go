@@ -28,14 +28,13 @@ func UserFromContext(ctx context.Context) string {
 	return ""
 }
 
-// UsageTracker tracks resource usage per user as execution duration for fair execution prioritization.
+// UsageTracker tracks resource usage per user as execution usages for fair execution prioritization.
 type UsageTracker interface {
-	// RecordUsage calculates and records usage from execution context and duration.
-	// ctx could allow usage information from downstream to be passed back upstream for the tracker.
-	RecordUsage(ctx context.Context, userID string, duration time.Duration)
+	// RecordUsage calculates and records usage for the user.
+	RecordUsage(userID string, usage int64)
 
 	// GetUsage returns the total recorded usage for a user.
-	GetUsage(userID string) float64
+	GetUsage(userID string) int64
 
 	// GetLevel returns the priority level for a user based on their recent usage.
 	GetLevel(userID string, priority Priority) int
@@ -65,14 +64,14 @@ func NewUsageTracker(maxUsers int, windowDuration time.Duration) UsageTracker {
 	return &usageTracker{
 		maxUsers: maxUsers,
 		newWindowFn: func() *util.UsageWindow {
-			return util.NewUsageWindow(30, windowDuration, util.NewClock())
+			return util.NewUsageWindow(30, windowDuration, util.WallClock)
 		},
 		users: make(map[string]*userEntry),
 		lru:   list.New(),
 	}
 }
 
-func (tt *usageTracker) RecordUsage(_ context.Context, userID string, duration time.Duration) {
+func (tt *usageTracker) RecordUsage(userID string, usage int64) {
 	tt.mu.Lock()
 	defer tt.mu.Unlock()
 
@@ -91,7 +90,7 @@ func (tt *usageTracker) RecordUsage(_ context.Context, userID string, duration t
 		tt.lru.MoveToFront(entry.lruElement)
 	}
 
-	entry.window.RecordUsage(float64(duration.Nanoseconds()))
+	entry.window.RecordUsage(usage)
 }
 
 func (tt *usageTracker) GetLevel(userID string, priority Priority) int {
@@ -100,12 +99,12 @@ func (tt *usageTracker) GetLevel(userID string, priority Priority) int {
 	tt.mu.RUnlock()
 
 	lRange := priority.levelRange()
-	// Handle users that have no recorded durations
+	// Handle users that have no recorded usages
 	if entry == nil {
 		return lRange.upper
 	}
 
-	// Handle new entries with no recently recorded durations
+	// Handle new entries with no recently recorded usages
 	totalUsage := entry.window.TotalUsage()
 	if totalUsage == 0 {
 		return lRange.upper
@@ -120,7 +119,7 @@ func (tt *usageTracker) GetLevel(userID string, priority Priority) int {
 	return lRange.lower + int(99.0*fairnessScore)
 }
 
-func (tt *usageTracker) GetUsage(userID string) float64 {
+func (tt *usageTracker) GetUsage(userID string) int64 {
 	tt.mu.RLock()
 	defer tt.mu.RUnlock()
 
@@ -136,7 +135,7 @@ func (tt *usageTracker) Calibrate() {
 	tt.mu.Lock()
 	defer tt.mu.Unlock()
 
-	usages := make([]float64, 0, len(tt.users))
+	usages := make([]int64, 0, len(tt.users))
 	for _, entry := range tt.users {
 		entry.window.ExpireBuckets()
 		if usage := entry.window.TotalUsage(); usage > 0 {
@@ -159,7 +158,7 @@ func (tt *usageTracker) Calibrate() {
 }
 
 // computeQuantile returns the quantile for a usage, among the sortedUsages.
-func (tt *usageTracker) computeQuantile(usage float64, sortedUsages []float64) float64 {
+func (tt *usageTracker) computeQuantile(usage int64, sortedUsages []int64) float64 {
 	if len(sortedUsages) == 0 {
 		return 0
 	}

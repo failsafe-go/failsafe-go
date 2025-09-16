@@ -152,15 +152,13 @@ type Clock interface {
 	Now() time.Time
 }
 
+var WallClock = &wallClock{}
+
 type wallClock struct {
 }
 
 func (wc *wallClock) Now() time.Time {
 	return time.Now()
-}
-
-func NewClock() Clock {
-	return &wallClock{}
 }
 
 type Stopwatch interface {

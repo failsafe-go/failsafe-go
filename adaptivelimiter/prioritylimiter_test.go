@@ -83,13 +83,12 @@ func TestPriorityLimiter_CanAcquirePermit(t *testing.T) {
 		shouldAcquireWithPriority(t, limiter, priority.High) // fill the limiter
 		p.RejectionThresh.Store(275)
 
-		bgCtx := context.Background()
-		tracker.RecordUsage(bgCtx, "user1", 100*time.Millisecond)
-		tracker.RecordUsage(bgCtx, "user2", 200*time.Millisecond)
+		tracker.RecordUsage("user1", 100)
+		tracker.RecordUsage("user2", 200)
 		tracker.Calibrate()
 
 		// When / Then - user 1's level is above the threshold
-		mediumCtx := priority.ContextWithPriority(bgCtx, priority.Medium)
+		mediumCtx := priority.ContextWithPriority(context.Background(), priority.Medium)
 		userCtx := priority.ContextWithUserID(mediumCtx, "user1")
 		assert.True(t, limiter.CanAcquirePermit(userCtx))
 

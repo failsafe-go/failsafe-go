@@ -62,6 +62,24 @@ type PriorityLimiter[R any] interface {
 	Reset()
 }
 
+// PriorityPermit is a permit to perform an execution that must be completed by calling Record, RecordUsage, or Drop.
+type PriorityPermit interface {
+	// Record records an execution completion and releases a permit back to the limiter. The execution duration will be used
+	// to influence the limiter. If a priority.UsageTracker is configured with the associated Prioritizer, then usage will
+	// also be recorded and will influence execution priority if the limiter becomes overloaded.
+	Record()
+
+	// RecordUsage records an execution completion and releases a permit back to the limiter. The execution duration will be used
+	// to influence the limiter. If a priority.UsageTracker is configured with the associated Prioritizer, then the usage
+	// for the userID will also be recorded and will influence execution priority if the limiter becomes overloaded.
+	RecordUsage(userID string, usage float64)
+
+	// Drop releases an execution permit back to the limiter without recording a completion. This should be used when an
+	// execution completes prematurely, such as via a timeout, and we don't want the execution duration to influence the
+	// limiter.
+	Drop()
+}
+
 type priorityLimiter[R any] struct {
 	*queueingLimiter[R]
 	prioritizer *priority.BasePrioritizer[*queueStats]

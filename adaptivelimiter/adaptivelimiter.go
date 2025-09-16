@@ -432,6 +432,7 @@ func (l *adaptiveLimiter[R]) TryAcquirePermit() (Permit, bool) {
 
 func (l *adaptiveLimiter[R]) newPermit() Permit {
 	return &recordingPermit[R]{
+		clock:           util.WallClock,
 		limiter:         l,
 		startTime:       time.Now(),
 		currentInflight: l.semaphore.Used(),
@@ -623,6 +624,7 @@ func (l *adaptiveLimiter[R]) configRef() *config[R] {
 }
 
 type recordingPermit[R any] struct {
+	clock           util.Clock
 	limiter         *adaptiveLimiter[R]
 	startTime       time.Time
 	currentInflight int
@@ -631,17 +633,30 @@ type recordingPermit[R any] struct {
 }
 
 func (p *recordingPermit[R]) Record() {
-	now := time.Now()
+	if p.userID != "" && p.usageTracker != nil {
+		p.RecordUsage(p.userID, -1)
+		return
+	}
+
+	now := p.clock.Now()
+	p.limiter.record(now, now.Sub(p.startTime), p.currentInflight, false)
+}
+
+func (p *recordingPermit[R]) RecordUsage(userID string, usage int64) {
+	now := p.clock.Now()
 	duration := now.Sub(p.startTime)
 
-	if p.userID != "" && p.usageTracker != nil {
-		p.usageTracker.RecordUsage(context.Background(), p.userID, duration)
+	if userID != "" && p.usageTracker != nil {
+		if usage == -1 {
+			usage = duration.Nanoseconds()
+		}
+		p.usageTracker.RecordUsage(userID, usage)
 	}
 
 	p.limiter.record(now, duration, p.currentInflight, false)
 }
 
 func (p *recordingPermit[R]) Drop() {
-	now := time.Now()
+	now := p.clock.Now()
 	p.limiter.record(now, now.Sub(p.startTime), p.currentInflight, true)
 }
