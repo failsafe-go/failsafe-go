@@ -1,8 +1,10 @@
 ## Upcoming Release
 
+## 0.8.1
+
 ### Improvements
 
-- Added fairness when prioritizing executions, based on usage.
+- New `UsageTracker` which can track usage and enforce fairness when prioritizing executions.
 
 ## 0.8.0
 
