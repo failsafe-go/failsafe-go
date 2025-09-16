@@ -1,5 +1,11 @@
 ## Upcoming Release
 
+## 0.8.2
+
+### Improvements
+
+- Improve `UsageTracker` performance.
+
 ## 0.8.1
 
 ### Improvements
@@ -10,8 +16,8 @@
 
 ### Improvements
 
-- New AdaptiveThrottler policy.
-- Improved gRPC tap.ServerInHandle support to perform CanAcquire checks on policies, when possible, so as to not block execution.
+- New `AdaptiveThrottler` policy.
+- Improved gRPC `tap.ServerInHandle` support to perform `CanAcquirePermit` checks on policies, when possible, so as to not block execution.
 
 ### API Changes
 
@@ -22,7 +28,7 @@
 
 ### Improvements
 
-- New AdaptiveLimiter policy.
+- New `AdaptiveLimiter` policy.
 - Added grpc and http integration for adaptive limiters.
 - Added support for failsafehttp server Handlers.
 
@@ -41,7 +47,7 @@
 
 ### Bug Fixes
 
-- Fixed #65 - Mixing failsafehttp.RetryPolicy with HedgePolicy causes contexts to be canceled early.
+- Fixed #65 - Mixing `failsafehttp.RetryPolicy` with `HedgePolicy` causes contexts to be canceled early.
 
 ### Improvements
 
@@ -70,7 +76,7 @@
 ### Improvements
 
 - Added gRPC unary client, unary server, and server inHandle support.
-- Expose Context() in event listeners.
+- Expose `Context()` in event listeners.
 - Improve HTTP context cancellation.
 - Add `Metrics()` to `circuitbreaker.StateChangedEvent`.
 - Default `failsafehttp.RetryPolicyBuilder()` to abort on `context.Canceled`.
@@ -97,7 +103,7 @@
 
 ### Improvements
 
-- Better support for HedgePolicy and Timeout composition
+- Better support for `HedgePolicy` and `Timeout` composition
 
 ## 0.6.0
 
@@ -107,7 +113,7 @@
 
 ### Bug Fixes
 
-- Fixed #32 - RetryPolicy with no max retries.
+- Fixed #32 - `RetryPolicy` with no max retries.
 
 ## 0.5.0
 
@@ -119,7 +125,7 @@
 
 ### Bug Fixes
 
-- Fixed #29 - RetryPolicy `WithMaxDuration` not working
+- Fixed #29 - `RetryPolicy` `WithMaxDuration` not working
 
 ## 0.4.4
 
@@ -141,13 +147,13 @@
 
 ### Bug Fixes
 
-- Fixed #23 - RetryPolicy backoff not computing
+- Fixed #23 - `RetryPolicy` backoff not computing
 
 ## 0.4.1
 
 ### Bug Fixes
 
-- Fixed #22 - RetryPolicy with ReturnLastFailure returning too late
+- Fixed #22 - `RetryPolicy` with `ReturnLastFailure` returning too late
 
 ## 0.4.0
 
