@@ -2,6 +2,8 @@ package priority
 
 import (
 	"context"
+	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -250,6 +252,33 @@ func TestUserFromContext(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			userID := UserFromContext(tc.ctx)
 			assert.Equal(t, tc.expected, userID)
+		})
+	}
+}
+
+func BenchmarkUsageTracker_Calibrate(b *testing.B) {
+	userCounts := []int{10, 100, 1000, 10000}
+
+	for _, userCount := range userCounts {
+		b.Run(fmt.Sprintf("users_%d", userCount), func(b *testing.B) {
+			tracker := NewUsageTracker(userCount*2, time.Minute)
+			ctx := context.Background()
+			rng := rand.New(rand.NewSource(42)) // Use the same seed value for all benchmarks
+			for i := 0; i < userCount; i++ {
+				userID := fmt.Sprintf("user_%d", i)
+				minUsage := 50 * time.Millisecond
+				maxUsage := 5 * time.Second
+				usageRange := maxUsage - minUsage
+				randomUsage := minUsage + time.Duration(rng.Int63n(int64(usageRange)))
+				tracker.RecordUsage(ctx, userID, randomUsage)
+			}
+
+			// Reset timer to exclude setup time
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				tracker.Calibrate()
+			}
 		})
 	}
 }
