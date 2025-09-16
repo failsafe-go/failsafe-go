@@ -272,7 +272,7 @@ func TestPriorityLimiter(t *testing.T) {
 
 	t.Run("with usage tracker", func(t *testing.T) {
 		// Given
-		tracker := priority.NewUsageTracker(10, time.Minute)
+		tracker := priority.NewUsageTracker(time.Minute, 10)
 		p := adaptivelimiter.NewPrioritizerBuilder().
 			WithUsageTracker(tracker).
 			Build()

@@ -8,12 +8,15 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/failsafe-go/failsafe-go/internal/testutil"
+	"github.com/failsafe-go/failsafe-go/internal/util"
 )
 
 func TestUsageTracker_RecordUsage(t *testing.T) {
 	t.Run("with a single user", func(t *testing.T) {
 		// Given
-		tracker := NewUsageTracker(10, time.Minute)
+		tracker := NewUsageTracker(time.Minute, 10)
 		userID := "user1"
 		usage := int64(100)
 
@@ -21,13 +24,13 @@ func TestUsageTracker_RecordUsage(t *testing.T) {
 		tracker.RecordUsage(userID, usage)
 
 		// Then
-		actual := tracker.GetUsage(userID)
+		actual, _ := tracker.GetUsage(userID)
 		assert.Equal(t, usage, actual)
 	})
 
 	t.Run("with multiple users", func(t *testing.T) {
 		// Given
-		tracker := NewUsageTracker(10, time.Minute)
+		tracker := NewUsageTracker(time.Minute, 10)
 
 		// When
 		tracker.RecordUsage("user1", 100)
@@ -35,8 +38,8 @@ func TestUsageTracker_RecordUsage(t *testing.T) {
 		tracker.RecordUsage("user2", 200)
 
 		// Then
-		usage1 := tracker.GetUsage("user1")
-		usage2 := tracker.GetUsage("user2")
+		usage1, _ := tracker.GetUsage("user1")
+		usage2, _ := tracker.GetUsage("user2")
 
 		assert.Equal(t, int64(150), usage1)
 		assert.Equal(t, int64(200), usage2)
@@ -46,7 +49,7 @@ func TestUsageTracker_RecordUsage(t *testing.T) {
 func TestUsageTracker_GetLevel(t *testing.T) {
 	t.Run("with an unknown user", func(t *testing.T) {
 		// Given
-		tracker := NewUsageTracker(10, time.Minute)
+		tracker := NewUsageTracker(time.Minute, 10)
 
 		// When
 		level := tracker.GetLevel("unknown", High)
@@ -57,7 +60,7 @@ func TestUsageTracker_GetLevel(t *testing.T) {
 
 	t.Run("with an uncalibrated user", func(t *testing.T) {
 		// Given
-		tracker := NewUsageTracker(10, time.Minute)
+		tracker := NewUsageTracker(time.Minute, 10)
 
 		// When
 		tracker.RecordUsage("user1", 100)
@@ -69,7 +72,7 @@ func TestUsageTracker_GetLevel(t *testing.T) {
 
 	t.Run("with different priorities", func(t *testing.T) {
 		// Given
-		tracker := NewUsageTracker(10, time.Minute)
+		tracker := NewUsageTracker(time.Minute, 10)
 		tracker.RecordUsage("user1", 100)
 		tracker.Calibrate()
 
@@ -90,7 +93,7 @@ func TestUsageTracker_GetLevel(t *testing.T) {
 
 	t.Run("with calibrated users with different usage", func(t *testing.T) {
 		// Given
-		tracker := NewUsageTracker(10, time.Minute)
+		tracker := NewUsageTracker(time.Minute, 10)
 		tracker.RecordUsage("user1", 50)
 		tracker.RecordUsage("user2", 100)
 		tracker.RecordUsage("user3", 200)
@@ -109,45 +112,71 @@ func TestUsageTracker_GetLevel(t *testing.T) {
 }
 
 func TestUsageTracker_LRU(t *testing.T) {
-	t.Run("when a user is evicted", func(t *testing.T) {
+	t.Run("should limit to max users", func(t *testing.T) {
 		// Given
-		maxUsers := 2
-		tracker := NewUsageTracker(maxUsers, time.Minute)
+		tracker := NewUsageTracker(time.Minute, 2)
 		tracker.RecordUsage("user1", 100)
 		tracker.RecordUsage("user2", 200)
-
-		// when
-		tracker.RecordUsage("user3", 300)
-
-		// Then
-		var zero = int64(0)
-		assert.Equal(t, zero, tracker.GetUsage("user1"))
-		assert.Greater(t, tracker.GetUsage("user2"), zero)
-		assert.Greater(t, tracker.GetUsage("user3"), zero)
-	})
-
-	t.Run("when the most recent user changes", func(t *testing.T) {
-		// Given
-		maxUsers := 2
-		tracker := NewUsageTracker(maxUsers, time.Minute)
-		tracker.RecordUsage("user1", 100)
-		tracker.RecordUsage("user2", 200)
+		_, user1Exists := tracker.GetUsage("user1")
+		_, user2Exists := tracker.GetUsage("user2")
+		assert.True(t, user1Exists)
+		assert.True(t, user2Exists)
 
 		// When
-		tracker.RecordUsage("user1", 50)
 		tracker.RecordUsage("user3", 300)
+		_, user1Exists = tracker.GetUsage("user1")
+		_, user2Exists = tracker.GetUsage("user2")
+		_, user3Exists := tracker.GetUsage("user3")
+		assert.False(t, user1Exists)
+		assert.True(t, user2Exists)
+		assert.True(t, user3Exists)
+	})
+}
+
+func TestUsageTracker_Cleanup(t *testing.T) {
+	createTracker := func() (*usageTracker, *testutil.TestClock) {
+		tracker := NewUsageTracker(100*time.Millisecond, 10).(*usageTracker)
+		clock := testutil.NewTestClock(0)
+		tracker.clock = clock
+		tracker.newWindowFn = func() *util.UsageWindow {
+			return util.NewUsageWindow(30, 100*time.Millisecond, clock)
+		}
+		return tracker, clock
+	}
+
+	// Asserts that cleanup removes an inactive user, leaving space for a new user
+	t.Run("should allow more users after cleanup", func(t *testing.T) {
+		// Given
+		tracker, clock := createTracker()
+		tracker.RecordUsage("user1", 100)
+		tracker.RecordUsage("user2", 200)
+		_, user1Exists := tracker.GetUsage("user1")
+		_, user2Exists := tracker.GetUsage("user2")
+		assert.True(t, user1Exists)
+		assert.True(t, user2Exists)
+
+		// When
+		clock.SetTime(110)
+		tracker.RecordUsage("active_user", 50)
+		clock.SetTime(210)
+		tracker.RecordUsage("active_user2", 80)
+		tracker.Calibrate()
 
 		// Then
-		var zero = int64(0)
-		assert.Greater(t, tracker.GetUsage("user1"), zero)
-		assert.Equal(t, zero, tracker.GetUsage("user2"))
-		assert.Greater(t, tracker.GetUsage("user3"), zero)
+		activeUsage, activeOk := tracker.GetUsage("active_user")
+		_, inactiveOk := tracker.GetUsage("inactive_user")
+		activeUsage2, active2Ok := tracker.GetUsage("active_user2")
+		assert.Equal(t, int64(0), activeUsage)
+		assert.True(t, activeOk)
+		assert.False(t, inactiveOk)
+		assert.Equal(t, int64(80), activeUsage2)
+		assert.True(t, active2Ok)
 	})
 }
 
 func TestUsageTracker_ComputeQuantile(t *testing.T) {
 	// Given
-	tracker := NewUsageTracker(10, time.Minute).(*usageTracker)
+	tracker := NewUsageTracker(time.Minute, 10).(*usageTracker)
 
 	tests := []struct {
 		name         string
@@ -255,13 +284,14 @@ func TestUserFromContext(t *testing.T) {
 
 func BenchmarkUsageTracker_Calibrate(b *testing.B) {
 	userCounts := []int{10, 100, 1000, 10000}
-	var minUsage int64 = 50
-	var maxUsage int64 = 5
+	var minUsage int64 = 5
+	var maxUsage int64 = 50
+	rng := rand.New(rand.NewSource(42))
 
 	for _, userCount := range userCounts {
 		b.Run(fmt.Sprintf("users_%d", userCount), func(b *testing.B) {
-			tracker := NewUsageTracker(userCount*2, time.Minute)
-			rng := rand.New(rand.NewSource(42)) // Use the same seed value for all benchmarks
+			tracker := NewUsageTracker(time.Minute, userCount*2)
+
 			for i := 0; i < userCount; i++ {
 				userID := fmt.Sprintf("user_%d", i)
 				usageRange := maxUsage - minUsage

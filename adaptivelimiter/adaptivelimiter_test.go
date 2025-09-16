@@ -289,8 +289,8 @@ func (m *mockUsageTracker) RecordUsage(userID string, usage int64) {
 	m.usage = usage
 }
 
-func (m *mockUsageTracker) GetUsage(_ string) int64 {
-	return 0
+func (m *mockUsageTracker) GetUsage(_ string) (int64, bool) {
+	return 0, false
 }
 
 func (m *mockUsageTracker) GetLevel(_ string, _ priority.Priority) int {

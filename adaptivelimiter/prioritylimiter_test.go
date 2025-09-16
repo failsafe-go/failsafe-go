@@ -72,7 +72,7 @@ func TestPriorityLimiter_AcquirePermitWithPriority(t *testing.T) {
 func TestPriorityLimiter_CanAcquirePermit(t *testing.T) {
 	t.Run("with usage tracker", func(t *testing.T) {
 		// Given
-		tracker := priority.NewUsageTracker(10, time.Minute)
+		tracker := priority.NewUsageTracker(time.Minute, 10)
 		p := NewPrioritizerBuilder().
 			WithUsageTracker(tracker).
 			Build().(*priority.BasePrioritizer[*queueStats])

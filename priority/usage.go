@@ -33,8 +33,9 @@ type UsageTracker interface {
 	// RecordUsage calculates and records usage for the user.
 	RecordUsage(userID string, usage int64)
 
-	// GetUsage returns the total recorded usage for a user.
-	GetUsage(userID string) int64
+	// GetUsage returns the total recorded usage for a user, returning the usage and true if the user exists in the tracker,
+	// else 0 and false.
+	GetUsage(userID string) (int64, bool)
 
 	// GetLevel returns the priority level for a user based on their recent usage.
 	GetLevel(userID string, priority Priority) int
@@ -44,8 +45,10 @@ type UsageTracker interface {
 }
 
 type usageTracker struct {
-	maxUsers    int
-	newWindowFn func() *util.UsageWindow
+	clock              util.Clock
+	newWindowFn        func() *util.UsageWindow
+	maxUsers           int
+	expirationDuration time.Duration
 
 	mu sync.RWMutex
 	// Guarded by mu
@@ -56,18 +59,23 @@ type usageTracker struct {
 type userEntry struct {
 	window     *util.UsageWindow
 	quantile   float64 // Negative value represents being uncalibrated
+	lastActive time.Time
 	lruElement *list.Element
 }
 
-// NewUsageTracker creates a new UsageTracker with the specified configuration.
-func NewUsageTracker(maxUsers int, windowDuration time.Duration) UsageTracker {
+// NewUsageTracker creates a new UsageTracker with the specified configuration. The UsageTracker will track up to the
+// maxUsers, and track any recent usage within the usageWindow. If a user hasn't had activity in 2x the usageWindow,
+// they're removed from the tracker.
+func NewUsageTracker(usageWindow time.Duration, maxUsers int) UsageTracker {
 	return &usageTracker{
-		maxUsers: maxUsers,
+		clock: util.WallClock,
 		newWindowFn: func() *util.UsageWindow {
-			return util.NewUsageWindow(30, windowDuration, util.WallClock)
+			return util.NewUsageWindow(30, usageWindow, util.WallClock)
 		},
-		users: make(map[string]*userEntry),
-		lru:   list.New(),
+		maxUsers:           maxUsers,
+		expirationDuration: 2 * usageWindow,
+		users:              make(map[string]*userEntry),
+		lru:                list.New(),
 	}
 }
 
@@ -90,6 +98,7 @@ func (tt *usageTracker) RecordUsage(userID string, usage int64) {
 		tt.lru.MoveToFront(entry.lruElement)
 	}
 
+	entry.lastActive = tt.clock.Now()
 	entry.window.RecordUsage(usage)
 }
 
@@ -119,15 +128,15 @@ func (tt *usageTracker) GetLevel(userID string, priority Priority) int {
 	return lRange.lower + int(99.0*fairnessScore)
 }
 
-func (tt *usageTracker) GetUsage(userID string) int64 {
+func (tt *usageTracker) GetUsage(userID string) (int64, bool) {
 	tt.mu.RLock()
 	defer tt.mu.RUnlock()
 
 	entry := tt.users[userID]
 	if entry == nil {
-		return 0
+		return 0, false
 	}
-	return entry.window.TotalUsage()
+	return entry.window.TotalUsage(), true
 }
 
 // Calibrate has an O(n log n) time complexity, where n is the number of userse.
@@ -135,11 +144,17 @@ func (tt *usageTracker) Calibrate() {
 	tt.mu.Lock()
 	defer tt.mu.Unlock()
 
+	now := tt.clock.Now()
+	cleanupThreshold := now.Add(-tt.expirationDuration)
 	usages := make([]int64, 0, len(tt.users))
-	for _, entry := range tt.users {
+
+	for userID, entry := range tt.users {
 		entry.window.ExpireBuckets()
 		if usage := entry.window.TotalUsage(); usage > 0 {
 			usages = append(usages, usage)
+		} else if entry.lastActive.Before(cleanupThreshold) {
+			delete(tt.users, userID)
+			tt.lru.Remove(entry.lruElement)
 		}
 	}
 
