@@ -139,7 +139,7 @@ func (tt *usageTracker) GetUsage(userID string) (int64, bool) {
 	return entry.window.TotalUsage(), true
 }
 
-// Calibrate has an O(n log n) time complexity, where n is the number of userse.
+// Calibrate has an O(n log n) time complexity, where n is the number of users.
 func (tt *usageTracker) Calibrate() {
 	tt.mu.Lock()
 	defer tt.mu.Unlock()
