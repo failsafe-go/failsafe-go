@@ -13,8 +13,8 @@ import (
 // UserKey is a key to use with a Context that stores a user ID.
 const UserKey key = 2
 
-// ContextWithUserID returns a context with the userID stored with the UserKey.
-func ContextWithUserID(ctx context.Context, userID string) context.Context {
+// ContextWithUser returns a context with the userID stored with the UserKey.
+func ContextWithUser(ctx context.Context, userID string) context.Context {
 	return context.WithValue(ctx, UserKey, userID)
 }
 

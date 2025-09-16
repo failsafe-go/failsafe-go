@@ -89,11 +89,11 @@ func TestPriorityLimiter_CanAcquirePermit(t *testing.T) {
 
 		// When / Then - user 1's level is above the threshold
 		mediumCtx := priority.ContextWithPriority(context.Background(), priority.Medium)
-		userCtx := priority.ContextWithUserID(mediumCtx, "user1")
+		userCtx := priority.ContextWithUser(mediumCtx, "user1")
 		assert.True(t, limiter.CanAcquirePermit(userCtx))
 
 		// When / Then - user 2's level is below the threshold
-		userCtx = priority.ContextWithUserID(mediumCtx, "user2")
+		userCtx = priority.ContextWithUser(mediumCtx, "user2")
 		assert.False(t, limiter.CanAcquirePermit(userCtx))
 	})
 }

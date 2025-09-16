@@ -299,7 +299,7 @@ func TestPriorityLimiter(t *testing.T) {
 
 		// When / Then - user 1's level is above the threshold
 		mediumCtx := priority.ContextWithPriority(context.Background(), priority.Medium)
-		userCtx := priority.ContextWithUserID(mediumCtx, "user1") // Should get level 200
+		userCtx := priority.ContextWithUser(mediumCtx, "user1") // Should get level 200
 		testutil.Test[string](t).
 			With(limiter).
 			Before(before).
@@ -309,7 +309,7 @@ func TestPriorityLimiter(t *testing.T) {
 			AssertSuccess(1, 1, "test")
 
 		// When / Then - user 2's level is below the threshold
-		userCtx = priority.ContextWithUserID(mediumCtx, "user2") // Should get level 250
+		userCtx = priority.ContextWithUser(mediumCtx, "user2") // Should get level 250
 		testutil.Test[string](t).
 			With(limiter).
 			Before(before).

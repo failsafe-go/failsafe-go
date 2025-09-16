@@ -218,7 +218,7 @@ func TestUsageTracker_ComputeQuantile(t *testing.T) {
 
 func TestContextWithUserID(t *testing.T) {
 	userID := "test-user"
-	newCtx := ContextWithUserID(context.Background(), userID)
+	newCtx := ContextWithUser(context.Background(), userID)
 	assert.Equal(t, userID, newCtx.Value(UserKey))
 }
 
@@ -230,7 +230,7 @@ func TestUserFromContext(t *testing.T) {
 	}{
 		{
 			name:     "with user ID",
-			ctx:      ContextWithUserID(context.Background(), "test-user"),
+			ctx:      ContextWithUser(context.Background(), "test-user"),
 			expected: "test-user",
 		},
 		{
