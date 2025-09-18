@@ -46,7 +46,7 @@ type UsageTracker interface {
 
 type usageTracker struct {
 	clock              util.Clock
-	newWindowFn        func() *util.UsageWindow
+	newWindowFn        func() *usageWindow
 	maxUsers           int
 	expirationDuration time.Duration
 
@@ -57,7 +57,7 @@ type usageTracker struct {
 }
 
 type userEntry struct {
-	window     *util.UsageWindow
+	window     *usageWindow
 	quantile   float64 // Negative value represents being uncalibrated
 	lastActive time.Time
 	lruElement *list.Element
@@ -66,14 +66,14 @@ type userEntry struct {
 // NewUsageTracker creates a new UsageTracker with the specified configuration. The UsageTracker will track up to the
 // maxUsers, and track any recent usage within the usageWindow. If a user hasn't had activity in 2x the usageWindow,
 // they're removed from the tracker.
-func NewUsageTracker(usageWindow time.Duration, maxUsers int) UsageTracker {
+func NewUsageTracker(windowDuration time.Duration, maxUsers int) UsageTracker {
 	return &usageTracker{
 		clock: util.WallClock,
-		newWindowFn: func() *util.UsageWindow {
-			return util.NewUsageWindow(30, usageWindow, util.WallClock)
+		newWindowFn: func() *usageWindow {
+			return newUsageWindow(30, windowDuration, util.WallClock)
 		},
 		maxUsers:           maxUsers,
-		expirationDuration: 2 * usageWindow,
+		expirationDuration: 2 * windowDuration,
 		users:              make(map[string]*userEntry),
 		lru:                list.New(),
 	}
@@ -191,4 +191,55 @@ func (tt *usageTracker) evictOldest() {
 		delete(tt.users, userID)
 		tt.lru.Remove(oldest)
 	}
+}
+
+type usageStat struct {
+	totalUsage int64
+	samples    uint32
+}
+
+type usageWindow struct {
+	util.BucketedWindow[usageStat]
+}
+
+func newUsageWindow(bucketCount int, thresholdingPeriod time.Duration, clock util.Clock) *usageWindow {
+	buckets := make([]usageStat, bucketCount)
+
+	return &usageWindow{
+		util.BucketedWindow[usageStat]{
+			Clock:       clock,
+			BucketCount: int64(bucketCount),
+			BucketNanos: (thresholdingPeriod / time.Duration(bucketCount)).Nanoseconds(),
+			Buckets:     buckets,
+			Summary:     usageStat{},
+			AddFn: func(summary *usageStat, bucket *usageStat) {
+				summary.totalUsage += bucket.totalUsage
+				summary.samples += bucket.samples
+			},
+			RemoveFn: func(summary *usageStat, bucket *usageStat) {
+				summary.totalUsage -= bucket.totalUsage
+				summary.samples -= bucket.samples
+			},
+			ResetFn: func(s *usageStat) {
+				s.totalUsage = 0
+				s.samples = 0
+			},
+		},
+	}
+}
+
+func (w *usageWindow) RecordUsage(usage int64) {
+	bucket := w.ExpireBuckets()
+	bucket.totalUsage += usage
+	bucket.samples++
+	w.Summary.totalUsage += usage
+	w.Summary.samples++
+}
+
+func (w *usageWindow) TotalUsage() int64 {
+	return w.Summary.totalUsage
+}
+
+func (w *usageWindow) Samples() uint32 {
+	return w.Summary.samples
 }
