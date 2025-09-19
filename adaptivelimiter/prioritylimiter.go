@@ -175,5 +175,5 @@ func (l *priorityLimiter[R]) canAcquirePermit(ctx context.Context) bool {
 }
 
 func (l *priorityLimiter[R]) configRef() *config[R] {
-	return l.config
+	return &l.config
 }

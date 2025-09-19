@@ -87,15 +87,14 @@ func (c *config[R]) OnFull(listener func(event failsafe.ExecutionEvent[R])) Buil
 }
 
 func (c *config[R]) Build() Bulkhead[R] {
-	cCopy := *c
 	return &bulkhead[R]{
-		config:    &cCopy, // TODO copy base fields
+		config:    *c, // TODO copy base fields
 		semaphore: make(chan struct{}, c.maxConcurrency),
 	}
 }
 
 type bulkhead[R any] struct {
-	*config[R]
+	config[R]
 	semaphore chan struct{}
 }
 

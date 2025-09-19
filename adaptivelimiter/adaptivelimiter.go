@@ -17,8 +17,16 @@ import (
 	"github.com/failsafe-go/failsafe-go/priority"
 )
 
-// ErrExceeded is returned when an execution exceeds the current limit.
-var ErrExceeded = errors.New("limit exceeded")
+var (
+	// ErrExceeded is returned when an execution exceeds the current limit.
+	ErrExceeded = errors.New("limit exceeded")
+
+	// Limit thresholding and adjustment functions
+	alphaFunc    = util.Log10Func(3)
+	betaFunc     = util.Log10Func(6)
+	increaseFunc = util.Log10Func(1)
+	decreaseFunc = util.Log10Func(1)
+)
 
 const (
 	warmupSamples   = 10
@@ -206,10 +214,6 @@ type config[R any] struct {
 	initialRejectionFactor float64
 	maxRejectionFactor     float64
 
-	// Limit thresholding and adjustment functions
-	alphaFunc, betaFunc        func(int) int
-	increaseFunc, decreaseFunc func(int) int
-
 	// Listeners
 	onLimitExceeded func(failsafe.ExecutionEvent[R])
 	onLimitChanged  func(LimitChangedEvent)
@@ -242,11 +246,6 @@ func NewBuilder[R any]() Builder[R] {
 		recentQuantile:          0.9,
 		baselineWindowAge:       10,
 		correlationWindowSize:   50,
-
-		alphaFunc:    util.Log10Func(3),
-		betaFunc:     util.Log10Func(6),
-		increaseFunc: util.Log10Func(1),
-		decreaseFunc: util.Log10Func(1),
 	}
 }
 
@@ -319,12 +318,11 @@ func (c *config[R]) OnLimitChanged(listener func(event LimitChangedEvent)) Build
 }
 
 func (c *config[R]) Build() AdaptiveLimiter[R] {
-	cCopy := *c
 	limiter := &adaptiveLimiter[R]{
-		config:                &cCopy,
+		config:                *c,
 		semaphore:             util.NewDynamicSemaphore(int(c.initialLimit)),
 		limit:                 float64(c.initialLimit),
-		recentRTT:             &tdigestSample{TDigest: tdigest.NewWithCompression(100)},
+		recentRTT:             tdigestSample{TDigest: tdigest.NewWithCompression(100)},
 		medianFilter:          util.NewMedianFilter(smoothedSamples),
 		smoothedRecentRTT:     util.NewEwma(smoothedSamples, warmupSamples),
 		baselineRTT:           util.NewEwma(c.baselineWindowAge, warmupSamples),
@@ -334,7 +332,7 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 	}
 	if c.initialRejectionFactor != 0 && c.maxRejectionFactor != 0 {
 		if c.maxWaitTime == 0 {
-			cCopy.maxWaitTime = -1 // Wait indefinitely for queued executions
+			limiter.config.maxWaitTime = -1 // Wait indefinitely for queued executions
 		}
 		return &queueingLimiter[R]{adaptiveLimiter: limiter}
 	}
@@ -389,21 +387,21 @@ func (td *tdigestSample) Reset() {
 }
 
 type adaptiveLimiter[R any] struct {
-	*config[R]
+	config[R]
 
 	// Mutable state
 	semaphore *util.DynamicSemaphore
 	mu        sync.RWMutex
 
 	// Guarded by mu
-	limit                 float64        // The current concurrency limit
-	recentRTT             *tdigestSample // Recent execution times
-	medianFilter          *util.MedianFilter
-	smoothedRecentRTT     *util.Ewma
-	baselineRTT           *util.Ewma              // Tracks baseline execution time
-	nextUpdateTime        time.Time               // Tracks when the limit can next be updated
-	throughputCorrelation *util.CorrelationWindow // Tracks the correlation between concurrency and throughput
-	rttCorrelation        *util.CorrelationWindow // Tracks the correlation between concurrency and round trip times (RTT)
+	limit                 float64       // The current concurrency limit
+	recentRTT             tdigestSample // Recent execution times
+	medianFilter          util.MedianFilter
+	smoothedRecentRTT     util.Ewma
+	baselineRTT           util.Ewma              // Tracks baseline execution time
+	nextUpdateTime        time.Time              // Tracks when the limit can next be updated
+	throughputCorrelation util.CorrelationWindow // Tracks the correlation between concurrency and throughput
+	rttCorrelation        util.CorrelationWindow // Tracks the correlation between concurrency and round trip times (RTT)
 }
 
 func (l *adaptiveLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
@@ -511,8 +509,8 @@ func (l *adaptiveLimiter[R]) updateLimit(recentRTT float64, inflight int) {
 
 	// Additional values for thresholding the limit
 	overloaded := l.semaphore.IsFull()
-	alpha := l.alphaFunc(int(l.limit)) // alpha is the queueSize threshold below which we increase
-	beta := l.betaFunc(int(l.limit))   // beta is the queueSize threshold above which we decrease
+	alpha := alphaFunc(int(l.limit)) // alpha is the queueSize threshold below which we increase
+	beta := betaFunc(int(l.limit))   // beta is the queueSize threshold above which we decrease
 
 	change, reason := computeChange(queueSize, alpha, beta, overloaded, throughputCorr, throughputCV, rttCorr)
 
@@ -521,10 +519,10 @@ func (l *adaptiveLimiter[R]) updateLimit(recentRTT float64, inflight int) {
 	switch change {
 	case decrease:
 		direction = "decrease"
-		newLimit = l.limit - float64(l.decreaseFunc(int(l.limit)))
+		newLimit = l.limit - float64(decreaseFunc(int(l.limit)))
 	case increase:
 		direction = "increase"
-		newLimit = l.limit + float64(l.increaseFunc(int(l.limit)))
+		newLimit = l.limit + float64(increaseFunc(int(l.limit)))
 	default:
 		direction = "hold"
 	}
@@ -533,7 +531,7 @@ func (l *adaptiveLimiter[R]) updateLimit(recentRTT float64, inflight int) {
 	if newLimit > float64(inflight)*l.maxLimitFactor {
 		direction = "decrease"
 		reason = "max"
-		newLimit = l.limit - float64(l.decreaseFunc(int(l.limit)))
+		newLimit = l.limit - float64(decreaseFunc(int(l.limit)))
 	}
 
 	// Clamp the limit
@@ -620,7 +618,7 @@ func (l *adaptiveLimiter[R]) canAcquirePermit(_ context.Context) bool {
 }
 
 func (l *adaptiveLimiter[R]) configRef() *config[R] {
-	return l.config
+	return &l.config
 }
 
 type recordingPermit[R any] struct {

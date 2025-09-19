@@ -15,8 +15,8 @@ type RollingSum struct {
 	sumSquares float64
 }
 
-func NewRollingSum(capacity uint) *RollingSum {
-	return &RollingSum{samples: make([]float64, capacity)}
+func NewRollingSum(capacity uint) RollingSum {
+	return RollingSum{samples: make([]float64, capacity)}
 }
 
 // Add adds the value to the window if it's non-zero, updates the sums, and returns the old value along with whether the
@@ -80,13 +80,13 @@ type CorrelationWindow struct {
 	warmupSamples uint8
 
 	// Mutable state
-	xSamples  *RollingSum
-	ySamples  *RollingSum
+	xSamples  RollingSum
+	ySamples  RollingSum
 	corrSumXY float64
 }
 
-func NewCorrelationWindow(capacity uint, warmupSamples uint8) *CorrelationWindow {
-	return &CorrelationWindow{
+func NewCorrelationWindow(capacity uint, warmupSamples uint8) CorrelationWindow {
+	return CorrelationWindow{
 		warmupSamples: warmupSamples,
 		xSamples:      NewRollingSum(capacity),
 		ySamples:      NewRollingSum(capacity),

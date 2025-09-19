@@ -10,8 +10,13 @@ import (
 	"github.com/failsafe-go/failsafe-go/internal/util"
 )
 
-// UserKey is a key to use with a Context that stores a user ID.
-const UserKey key = 2
+const (
+	// UserKey is a key to use with a Context that stores a user ID.
+	UserKey key = 2
+
+	// The max level value for a priority class
+	maxLevel = 99.0
+)
 
 // ContextWithUser returns a context with the userID stored with the UserKey.
 func ContextWithUser(ctx context.Context, userID string) context.Context {
@@ -79,33 +84,33 @@ func NewUsageTracker(windowDuration time.Duration, maxUsers int) UsageTracker {
 	}
 }
 
-func (tt *usageTracker) RecordUsage(userID string, usage int64) {
-	tt.mu.Lock()
-	defer tt.mu.Unlock()
+func (ut *usageTracker) RecordUsage(userID string, usage int64) {
+	ut.mu.Lock()
+	defer ut.mu.Unlock()
 
-	entry := tt.users[userID]
+	entry := ut.users[userID]
 	if entry == nil {
-		if len(tt.users) >= tt.maxUsers {
-			tt.evictOldest()
+		if len(ut.users) >= ut.maxUsers {
+			ut.evictOldest()
 		}
 		entry = &userEntry{
-			window:   tt.newWindowFn(),
+			window:   ut.newWindowFn(),
 			quantile: -1,
 		}
-		tt.users[userID] = entry
-		entry.lruElement = tt.lru.PushFront(userID)
+		ut.users[userID] = entry
+		entry.lruElement = ut.lru.PushFront(userID)
 	} else {
-		tt.lru.MoveToFront(entry.lruElement)
+		ut.lru.MoveToFront(entry.lruElement)
 	}
 
-	entry.lastActive = tt.clock.Now()
+	entry.lastActive = ut.clock.Now()
 	entry.window.RecordUsage(usage)
 }
 
-func (tt *usageTracker) GetLevel(userID string, priority Priority) int {
-	tt.mu.RLock()
-	entry := tt.users[userID]
-	tt.mu.RUnlock()
+func (ut *usageTracker) GetLevel(userID string, priority Priority) int {
+	ut.mu.RLock()
+	entry := ut.users[userID]
+	ut.mu.RUnlock()
 
 	lRange := priority.levelRange()
 	// Handle users that have no recorded usages
@@ -125,14 +130,14 @@ func (tt *usageTracker) GetLevel(userID string, priority Priority) int {
 	}
 
 	fairnessScore := 1.0 - entry.quantile
-	return lRange.lower + int(99.0*fairnessScore)
+	return lRange.lower + int(maxLevel*fairnessScore)
 }
 
-func (tt *usageTracker) GetUsage(userID string) (int64, bool) {
-	tt.mu.RLock()
-	defer tt.mu.RUnlock()
+func (ut *usageTracker) GetUsage(userID string) (int64, bool) {
+	ut.mu.RLock()
+	defer ut.mu.RUnlock()
 
-	entry := tt.users[userID]
+	entry := ut.users[userID]
 	if entry == nil {
 		return 0, false
 	}
@@ -140,21 +145,21 @@ func (tt *usageTracker) GetUsage(userID string) (int64, bool) {
 }
 
 // Calibrate has an O(n log n) time complexity, where n is the number of users.
-func (tt *usageTracker) Calibrate() {
-	tt.mu.Lock()
-	defer tt.mu.Unlock()
+func (ut *usageTracker) Calibrate() {
+	ut.mu.Lock()
+	defer ut.mu.Unlock()
 
-	now := tt.clock.Now()
-	cleanupThreshold := now.Add(-tt.expirationDuration)
-	usages := make([]int64, 0, len(tt.users))
+	now := ut.clock.Now()
+	cleanupThreshold := now.Add(-ut.expirationDuration)
+	usages := make([]int64, 0, len(ut.users))
 
-	for userID, entry := range tt.users {
+	for userID, entry := range ut.users {
 		entry.window.ExpireBuckets()
 		if usage := entry.window.TotalUsage(); usage > 0 {
 			usages = append(usages, usage)
 		} else if entry.lastActive.Before(cleanupThreshold) {
-			delete(tt.users, userID)
-			tt.lru.Remove(entry.lruElement)
+			delete(ut.users, userID)
+			ut.lru.Remove(entry.lruElement)
 		}
 	}
 
@@ -163,9 +168,9 @@ func (tt *usageTracker) Calibrate() {
 	})
 
 	// Update percentiles for all active users
-	for _, entry := range tt.users {
+	for _, entry := range ut.users {
 		if usage := entry.window.TotalUsage(); usage > 0 {
-			entry.quantile = tt.computeQuantile(usage, usages)
+			entry.quantile = ut.computeQuantile(usage, usages)
 		} else {
 			entry.quantile = -1
 		}
@@ -173,7 +178,7 @@ func (tt *usageTracker) Calibrate() {
 }
 
 // computeQuantile returns the quantile for a usage, among the sortedUsages.
-func (tt *usageTracker) computeQuantile(usage int64, sortedUsages []int64) float64 {
+func (ut *usageTracker) computeQuantile(usage int64, sortedUsages []int64) float64 {
 	if len(sortedUsages) == 0 {
 		return 0
 	}
@@ -185,11 +190,11 @@ func (tt *usageTracker) computeQuantile(usage int64, sortedUsages []int64) float
 	return util.Round(float64(index) / float64(len(sortedUsages)))
 }
 
-func (tt *usageTracker) evictOldest() {
-	if oldest := tt.lru.Back(); oldest != nil {
+func (ut *usageTracker) evictOldest() {
+	if oldest := ut.lru.Back(); oldest != nil {
 		userID := oldest.Value.(string)
-		delete(tt.users, userID)
-		tt.lru.Remove(oldest)
+		delete(ut.users, userID)
+		ut.lru.Remove(oldest)
 	}
 }
 

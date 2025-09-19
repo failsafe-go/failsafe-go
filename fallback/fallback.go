@@ -118,14 +118,13 @@ func (c *config[R]) OnFallbackExecuted(listener func(event failsafe.ExecutionDon
 }
 
 func (c *config[R]) Build() Fallback[R] {
-	cCopy := *c
 	return &fallback[R]{
-		config: &cCopy, // TODO copy base fields
+		config: *c, // TODO copy base fields
 	}
 }
 
 type fallback[R any] struct {
-	*config[R]
+	config[R]
 }
 
 func (fb *fallback[R]) ToExecutor(_ R) any {

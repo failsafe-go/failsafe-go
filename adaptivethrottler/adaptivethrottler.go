@@ -153,7 +153,7 @@ func (c *config[R]) WithMaxRejectionRate(maxRejectionRate float64) Builder[R] {
 
 func (c *config[R]) Build() AdaptiveThrottler[R] {
 	return &adaptiveThrottler[R]{
-		config:         c,
+		config:         *c,
 		ExecutionStats: util.NewTimedStats(20, c.thresholdingPeriod, util.WallClock),
 	}
 }
@@ -168,7 +168,7 @@ func (c *config[R]) BuildPrioritized(p priority.Prioritizer) PriorityThrottler[R
 }
 
 type adaptiveThrottler[R any] struct {
-	*config[R]
+	config[R]
 	mu sync.Mutex
 
 	// Guarded by mu

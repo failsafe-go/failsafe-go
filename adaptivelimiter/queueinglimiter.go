@@ -69,7 +69,7 @@ func (l *queueingLimiter[R]) canAcquirePermit(_ context.Context) bool {
 }
 
 func (l *queueingLimiter[R]) configRef() *config[R] {
-	return l.config
+	return &l.config
 }
 
 func (l *queueingLimiter[R]) getQueueStats() *queueStats {

@@ -93,7 +93,7 @@ func (c *BasePrioritizerConfig[S]) Build() Prioritizer {
 		pCopy.LevelTracker = NewLevelTracker()
 	}
 	return &BasePrioritizer[S]{
-		BasePrioritizerConfig: &pCopy, // TODO copy base fields
+		BasePrioritizerConfig: pCopy, // TODO copy base fields
 	}
 }
 
@@ -111,7 +111,7 @@ type RejectionStrategy[S any] interface {
 
 // BasePrioritizer provides a base implementation of a Prioritizer.
 type BasePrioritizer[S Stats] struct {
-	*BasePrioritizerConfig[S]
+	BasePrioritizerConfig[S]
 
 	// Mutable state
 	mu              sync.Mutex

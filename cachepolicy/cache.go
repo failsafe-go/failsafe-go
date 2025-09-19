@@ -114,12 +114,12 @@ func (c *config[R]) OnResultCached(listener func(event failsafe.ExecutionEvent[R
 
 func (c *config[R]) Build() CachePolicy[R] {
 	return &cachePolicy[R]{
-		config: c, // TODO copy base fields
+		config: *c, // TODO copy base fields
 	}
 }
 
 type cachePolicy[R any] struct {
-	*config[R]
+	config[R]
 }
 
 func (c *cachePolicy[R]) ToExecutor(_ R) any {

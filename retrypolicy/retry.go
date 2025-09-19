@@ -162,9 +162,9 @@ type Builder[R any] interface {
 }
 
 type config[R any] struct {
-	*policy.BaseFailurePolicy[R]
-	*policy.BaseDelayablePolicy[R]
-	*policy.BaseAbortablePolicy[R]
+	policy.BaseFailurePolicy[R]
+	policy.BaseDelayablePolicy[R]
+	policy.BaseAbortablePolicy[R]
 
 	returnLastFailure bool
 	delayMin          time.Duration
@@ -185,7 +185,7 @@ type config[R any] struct {
 var _ Builder[any] = &config[any]{}
 
 type retryPolicy[R any] struct {
-	*config[R]
+	config[R]
 }
 
 // NewWithDefaults creates a RetryPolicy for execution result type R that allows 3 execution attempts max with no delay. To
@@ -198,9 +198,9 @@ func NewWithDefaults[R any]() RetryPolicy[R] {
 // allows 3 execution attempts max with no delay, unless configured otherwise.
 func NewBuilder[R any]() Builder[R] {
 	return &config[R]{
-		BaseFailurePolicy:   &policy.BaseFailurePolicy[R]{},
-		BaseDelayablePolicy: &policy.BaseDelayablePolicy[R]{},
-		BaseAbortablePolicy: &policy.BaseAbortablePolicy[R]{},
+		BaseFailurePolicy:   policy.BaseFailurePolicy[R]{},
+		BaseDelayablePolicy: policy.BaseDelayablePolicy[R]{},
+		BaseAbortablePolicy: policy.BaseAbortablePolicy[R]{},
 		maxRetries:          defaultMaxRetries,
 	}
 }
@@ -349,16 +349,15 @@ func (c *config[R]) allowsRetries() bool {
 }
 
 func (c *config[R]) Build() RetryPolicy[R] {
-	cCopy := *c
 	return &retryPolicy[R]{
-		config: &cCopy, // TODO copy base fields
+		config: *c, // TODO copy base fields
 	}
 }
 
 func (rp *retryPolicy[R]) ToExecutor(_ R) any {
 	rpe := &executor[R]{
 		BaseExecutor: &policy.BaseExecutor[R]{
-			BaseFailurePolicy: rp.BaseFailurePolicy,
+			BaseFailurePolicy: &rp.BaseFailurePolicy,
 		},
 		retryPolicy: rp,
 	}

@@ -240,27 +240,28 @@ func (c *config[R]) OnRateLimitExceeded(listener func(event failsafe.ExecutionEv
 }
 
 func (c *config[R]) Build() RateLimiter[R] {
-	if c.interval != 0 {
-		return &rateLimiter[R]{
-			config: c,
-			stats: &smoothStats[R]{
-				config:    c, // TODO copy base fields
-				stopwatch: util.NewStopwatch(),
-			},
-		}
+	result := &rateLimiter[R]{
+		config: *c, // TODO copy base fields
 	}
-	return &rateLimiter[R]{
-		config: c,
-		stats: &burstyStats[R]{
-			config:           c, // TODO copy base fields
+
+	if c.interval != 0 {
+		result.stats = &smoothStats[R]{
+			config:    &result.config,
+			stopwatch: util.NewStopwatch(),
+		}
+	} else {
+		result.stats = &burstyStats[R]{
+			config:           &result.config,
 			stopwatch:        util.NewStopwatch(),
 			availablePermits: c.periodPermits,
-		},
+		}
 	}
+
+	return result
 }
 
 type rateLimiter[R any] struct {
-	*config[R]
+	config[R]
 	stats stats
 }
 

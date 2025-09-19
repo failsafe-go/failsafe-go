@@ -54,7 +54,7 @@ type Builder[R any] interface {
 }
 
 type config[R any] struct {
-	*policy.BaseAbortablePolicy[R]
+	policy.BaseAbortablePolicy[R]
 
 	delayFunc failsafe.DelayFunc[R]
 	maxHedges int
@@ -103,7 +103,7 @@ func NewBuilderWithDelay[R any](delay time.Duration) Builder[R] {
 // HedgePolicy is exceeded.
 func NewBuilderWithDelayFunc[R any](delayFunc failsafe.DelayFunc[R]) Builder[R] {
 	return &config[R]{
-		BaseAbortablePolicy: &policy.BaseAbortablePolicy[R]{},
+		BaseAbortablePolicy: policy.BaseAbortablePolicy[R]{},
 		delayFunc:           delayFunc,
 		maxHedges:           1,
 	}
@@ -140,20 +140,20 @@ func (c *config[R]) WithMaxHedges(maxHedges int) Builder[R] {
 }
 
 func (c *config[R]) Build() HedgePolicy[R] {
-	hCopy := *c
-	if !hCopy.BaseAbortablePolicy.IsConfigured() {
+	cCopy := *c
+	if !cCopy.BaseAbortablePolicy.IsConfigured() {
 		// Cancel hedges by default after any result is received
-		hCopy.AbortIf(func(r R, err error) bool {
+		cCopy.AbortIf(func(r R, err error) bool {
 			return true
 		})
 	}
 	return &hedgePolicy[R]{
-		config: &hCopy, // TODO copy base fields
+		config: cCopy, // TODO copy base fields
 	}
 }
 
 type hedgePolicy[R any] struct {
-	*config[R]
+	config[R]
 }
 
 var _ HedgePolicy[any] = &hedgePolicy[any]{}

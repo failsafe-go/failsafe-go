@@ -14,7 +14,7 @@ func TestGetFixedOrRandomDelay(t *testing.T) {
 	rpc := NewBuilder[any]().WithBackoffFactor(2*time.Second, 30*time.Second, 2).(*config[any])
 	rpe := &executor[any]{
 		retryPolicy: &retryPolicy[any]{
-			config: rpc,
+			config: *rpc,
 		},
 	}
 	exec := &testutil.TestExecution[any]{}

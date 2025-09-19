@@ -62,14 +62,13 @@ func (c *config[R]) OnTimeoutExceeded(listener func(event failsafe.ExecutionDone
 }
 
 func (c *config[R]) Build() Timeout[R] {
-	cCopy := *c
 	return &timeout[R]{
-		config: &cCopy, // TODO copy base fields
+		config: *c, // TODO copy base fields
 	}
 }
 
 type timeout[R any] struct {
-	*config[R]
+	config[R]
 }
 
 func (t *timeout[R]) ToExecutor(_ R) any {
