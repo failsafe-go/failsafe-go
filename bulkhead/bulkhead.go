@@ -12,7 +12,7 @@ import (
 // ErrFull is returned when an execution is attempted against a Bulkhead that is full.
 var ErrFull = errors.New("bulkhead full")
 
-// Bulkhead is a policy restricts concurrent executions as a way of preventing system overload.
+// Bulkhead is a policy that restricts concurrent executions as a way of preventing system overload.
 //
 // R is the execution result type. This type is concurrency safe.
 type Bulkhead[R any] interface {
