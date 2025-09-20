@@ -1,5 +1,11 @@
 ## Upcoming Release
 
+## 0.8.3
+
+### Improvements
+
+- New `Budget` policy, which can set a max budget for retries or hedges across a system.
+
 ## 0.8.2
 
 ### Improvements
