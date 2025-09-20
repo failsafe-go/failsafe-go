@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 	"errors"
+	"testing"
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
@@ -94,6 +95,17 @@ func ErrorNTimesThenError[R any](err error, errorTimes int, finalError error) fu
 			return *new(R), err
 		}
 		return *new(R), finalError
+	}
+}
+
+func SlowNTimesThenReturn[R any](t *testing.T, slowTimes int, sleepTime time.Duration, delayedResult R, fastResult R) func(failsafe.Execution[R]) (R, error) {
+	return func(exec failsafe.Execution[R]) (R, error) {
+		if exec.Attempts() <= slowTimes {
+			time.Sleep(sleepTime)
+			return delayedResult, nil
+		}
+		WaitAndAssertCanceled(t, time.Second, exec)
+		return fastResult, nil
 	}
 }
 
