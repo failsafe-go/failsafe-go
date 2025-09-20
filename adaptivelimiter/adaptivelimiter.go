@@ -135,10 +135,10 @@ type Builder[R any] interface {
 	WithRecentQuantile(quantile float64) Builder[R]
 
 	// WithBaselineWindow configures how the baseline execution times are maintained and updated. The baseline represents
-	// the long-term average execution performance that recent execution times are compared against to detect overload.
-	// The baselineAge controls how many samples back the baseline effectively remembers - smaller values make the baseline
-	// adapt faster to recent changes, while larger values keep it more stable by retaining influence from older measurements.
-	// The default value is 10.
+	// the long-term average execution times that recent execution times are compared against to detect overload. When the
+	// recent window is filled an aggregated recent sample is added to the baseline window. The baselineAge controls how
+	// many samples the baseline window remembers - smaller values make the baseline adapt faster to recent changes, while
+	// larger values keep it more stable by retaining influence from older measurements. The default value is 10.
 	WithBaselineWindow(baselineAge uint) Builder[R]
 
 	// WithCorrelationWindow configures how many recent limit and execution time measurements are stored to detect whether
