@@ -2,13 +2,13 @@
 package policytesting
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"sync/atomic"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/adaptivelimiter"
+	"github.com/failsafe-go/failsafe-go/budget"
 	"github.com/failsafe-go/failsafe-go/bulkhead"
 	"github.com/failsafe-go/failsafe-go/cachepolicy"
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
@@ -125,19 +125,29 @@ func WithFallbackStatsAndLogs[R any](fb fallback.Builder[R], stats *Stats) fallb
 func WithHedgeStatsAndLogs[R any](hp hedgepolicy.Builder[R], stats *Stats) hedgepolicy.Builder[R] {
 	hp.OnHedge(func(e failsafe.ExecutionEvent[R]) {
 		stats.hedges.Add(1)
-		fmt.Printf("hedge %p starting [attempts: %v]\n", hp, e.Attempts())
+		fmt.Printf("hedge %p executing [attempts: %v]\n", hp, e.Attempts())
 	})
 	return hp
 }
 
 func WithBulkheadStatsAndLogs[R any](bh bulkhead.Builder[R], stats *Stats, withLogging bool) bulkhead.Builder[R] {
 	bh.OnFull(func(event failsafe.ExecutionEvent[R]) {
+		stats.fulls.Add(1)
 		if withLogging {
-			stats.fulls.Add(1)
 			fmt.Printf("bulkhead %p full\n", bh)
 		}
 	})
 	return bh
+}
+
+func WithBudgetStatsAndLogs[R any](b budget.Builder[R], stats *Stats, withLogging bool) budget.Builder[R] {
+	b.OnBudgetExceeded(func(event failsafe.ExecutionEvent[R]) {
+		stats.budgetExceeded.Add(1)
+		if withLogging {
+			fmt.Printf("budget %p exceeded\n", b)
+		}
+	})
+	return b
 }
 
 func WithCacheStats[R any](cp cachepolicy.Builder[R], stats *Stats) cachepolicy.Builder[R] {
@@ -189,6 +199,9 @@ type Stats struct {
 	// Bulkhead specific stats
 	fulls atomic.Int32
 
+	// Budget stats
+	budgetExceeded atomic.Int32
+
 	// Cache specific stats
 	caches      atomic.Int32
 	cacheHits   atomic.Int32
@@ -236,6 +249,10 @@ func (s *Stats) Fulls() int {
 	return int(s.fulls.Load())
 }
 
+func (s *Stats) BudgetExceededs() int {
+	return int(s.budgetExceeded.Load())
+}
+
 func (s *Stats) CacheHits() int {
 	return int(s.cacheHits.Load())
 }
@@ -268,15 +285,11 @@ func (s *Stats) Reset() {
 	// Bulkhead specific stats
 	s.fulls.Store(0)
 
+	// Budget specific stats
+	s.budgetExceeded.Store(0)
+
 	// Cache specific stats
 	s.caches.Store(0)
 	s.cacheHits.Store(0)
 	s.cacheMisses.Store(0)
-}
-
-func SetupFn(stats *Stats) func() context.Context {
-	return func() context.Context {
-		stats.Reset()
-		return nil
-	}
 }

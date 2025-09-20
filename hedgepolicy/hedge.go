@@ -7,12 +7,12 @@ import (
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
-// HedgePolicy is a policy that performes additional executions if the initial execution is slow to complete. This policy
-// differs from RetryPolicy since multiple hedged execution may be in progress at the same time. By default, any
-// outstanding hedges are canceled after the first execution result or error returns. The CancelOn and CancelIf methods
-// can be used to configure a hedge policy to cancel after different results, errors, or conditions. Once the max hedges
-// have been started, they are left to run until a cancellable result is returned, then the remaining hedges are
-// canceled.
+// HedgePolicy is a policy that performes additional execution attempts if the initial execution is slow to complete,
+// with a delay between attempts. This policy differs from RetryPolicy since multiple hedged executions may be in
+// progress at the same time. By default, any outstanding hedges are canceled after the first execution result or error
+// returns. The CancelOn and CancelIf methods can be used to configure a hedge policy to cancel after different results,
+// errors, or conditions. Once the max hedges have been started, they are left to run until a cancellable result is
+// returned, then the remaining hedges are canceled.
 //
 // If the execution is configured with a Context, a child context will be created for each attempt and outstanding
 // contexts are canceled when the HedgePolicy is exceeded.

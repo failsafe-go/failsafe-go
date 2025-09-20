@@ -38,14 +38,7 @@ func TestHedgePolicy(t *testing.T) {
 		testutil.Test[bool](t).
 			With(hp).
 			Reset(stats).
-			Get(func(exec failsafe.Execution[bool]) (bool, error) {
-				if exec.Attempts() == 1 {
-					time.Sleep(100 * time.Millisecond)
-					return true, nil
-				}
-				testutil.WaitAndAssertCanceled(t, time.Second, exec)
-				return false, testutil.ErrInvalidState
-			}).
+			Get(testutil.SlowNTimesThenReturn(t, 1, 100*time.Millisecond, true, false)).
 			AssertSuccess(3, -1, true, func() {
 				assert.Equal(t, 2, stats.Hedges())
 			})
@@ -125,17 +118,7 @@ func TestHedgePolicy(t *testing.T) {
 			testutil.Test[any](t).
 				With(hp).
 				Reset(stats).
-				Get(func(exec failsafe.Execution[any]) (any, error) {
-					attempts := exec.Attempts()
-					if attempts <= 3 {
-						// First 3 results return before being canceled
-						time.Sleep(100 * time.Millisecond)
-					} else {
-						// Last 2 results are cancelled before being returned
-						testutil.WaitAndAssertCanceled(t, 100*time.Millisecond, exec)
-					}
-					return attempts, nil
-				}).
+				Get(testutil.SlowNTimesThenReturn[any](t, 3, 100*time.Millisecond, 3, 0)).
 				AssertSuccess(5, -1, 3, func() {
 					assert.Equal(t, 4, stats.Hedges())
 				})
