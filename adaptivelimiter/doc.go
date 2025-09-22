@@ -1,2 +1,2 @@
-// Package adaptivelimiter provides a AdaptiveLimiter and PriorityLimiter policies.
+// Package adaptivelimiter provides AdaptiveLimiter and PriorityLimiter policies.
 package adaptivelimiter
