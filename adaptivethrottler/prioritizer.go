@@ -1,7 +1,7 @@
 package adaptivethrottler
 
 import (
-	priorityInternal "github.com/failsafe-go/failsafe-go/internal/priority"
+	"github.com/failsafe-go/failsafe-go/internal"
 	"github.com/failsafe-go/failsafe-go/priority"
 )
 
@@ -12,7 +12,7 @@ func NewPrioritizer() priority.Prioritizer {
 
 // NewPrioritizerBuilder returns a new PrioritizerBuilder.
 func NewPrioritizerBuilder() priority.PrioritizerBuilder {
-	return &priorityInternal.BasePrioritizerConfig[*throttlerStats]{
+	return &internal.BasePrioritizerConfig[*throttlerStats]{
 		Strategy: &throttlerRejectionStrategy{},
 	}
 }

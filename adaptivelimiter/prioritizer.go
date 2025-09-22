@@ -1,7 +1,7 @@
 package adaptivelimiter
 
 import (
-	priorityInternal "github.com/failsafe-go/failsafe-go/internal/priority"
+	"github.com/failsafe-go/failsafe-go/internal"
 	"github.com/failsafe-go/failsafe-go/priority"
 )
 
@@ -13,7 +13,7 @@ func NewPrioritizer() priority.Prioritizer {
 // NewPrioritizerBuilder returns a new PrioritizerBuilder.
 func NewPrioritizerBuilder() PrioritizerBuilder {
 	return &prioritizerConfig{
-		BasePrioritizerConfig: &priorityInternal.BasePrioritizerConfig[*queueStats]{
+		BasePrioritizerConfig: &internal.BasePrioritizerConfig[*queueStats]{
 			Strategy: &queueRejectionStrategy{},
 		},
 	}
@@ -32,7 +32,7 @@ type PrioritizerBuilder interface {
 
 // BasePrioritizerConfig provides a base for implementing a PrioritizerBuilder.
 type prioritizerConfig struct {
-	*priorityInternal.BasePrioritizerConfig[*queueStats]
+	*internal.BasePrioritizerConfig[*queueStats]
 }
 
 func (c *prioritizerConfig) WithUsageTracker(usageTracker priority.UsageTracker) PrioritizerBuilder {

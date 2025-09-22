@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	priorityInternal "github.com/failsafe-go/failsafe-go/internal/priority"
+	"github.com/failsafe-go/failsafe-go/internal"
 	"github.com/failsafe-go/failsafe-go/priority"
 )
 
@@ -22,7 +22,7 @@ func TestPriorityLimiter_AcquirePermitWithPriority(t *testing.T) {
 
 	t.Run("above prioritizer rejection threshold", func(t *testing.T) {
 		// Given
-		p := NewPrioritizer().(*priorityInternal.BasePrioritizer[*queueStats])
+		p := NewPrioritizer().(*internal.BasePrioritizer[*queueStats])
 		limiter := NewBuilder[any]().BuildPrioritized(p)
 		p.RejectionThresh.Store(200)
 
@@ -36,7 +36,7 @@ func TestPriorityLimiter_AcquirePermitWithPriority(t *testing.T) {
 
 	t.Run("below prioritizer rejection threshold", func(t *testing.T) {
 		// Given
-		p := NewPrioritizer().(*priorityInternal.BasePrioritizer[*queueStats])
+		p := NewPrioritizer().(*internal.BasePrioritizer[*queueStats])
 		limiter := NewBuilder[any]().
 			WithLimits(1, 1, 1).
 			WithQueueing(1, 1).
@@ -76,7 +76,7 @@ func TestPriorityLimiter_CanAcquirePermit(t *testing.T) {
 		tracker := priority.NewUsageTracker(time.Minute, 10)
 		p := NewPrioritizerBuilder().
 			WithUsageTracker(tracker).
-			Build().(*priorityInternal.BasePrioritizer[*queueStats])
+			Build().(*internal.BasePrioritizer[*queueStats])
 		limiter := NewBuilder[any]().
 			WithLimits(1, 1, 1).
 			WithQueueing(1, 1).

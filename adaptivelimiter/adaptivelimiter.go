@@ -11,8 +11,9 @@ import (
 
 	"github.com/influxdata/tdigest"
 
+	"github.com/failsafe-go/failsafe-go/internal"
+
 	"github.com/failsafe-go/failsafe-go"
-	priorityInternal "github.com/failsafe-go/failsafe-go/internal/priority"
 	"github.com/failsafe-go/failsafe-go/internal/util"
 	"github.com/failsafe-go/failsafe-go/policy"
 	"github.com/failsafe-go/failsafe-go/priority"
@@ -347,7 +348,7 @@ func (c *config[R]) BuildPrioritized(p priority.Prioritizer) PriorityLimiter[R] 
 	}
 	limiter := &priorityLimiter[R]{
 		queueingLimiter: c.Build().(*queueingLimiter[R]),
-		prioritizer:     p.(*priorityInternal.BasePrioritizer[*queueStats]),
+		prioritizer:     p.(*internal.BasePrioritizer[*queueStats]),
 	}
 	limiter.prioritizer.Register(limiter.getQueueStats)
 	return limiter
