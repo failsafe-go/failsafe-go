@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/budget"
 	"github.com/failsafe-go/failsafe-go/common"
 	"github.com/failsafe-go/failsafe-go/internal"
 	"github.com/failsafe-go/failsafe-go/internal/util"
@@ -27,10 +28,17 @@ var _ policy.Executor[any] = &executor[any]{}
 func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyResult[R]) func(failsafe.Execution[R]) *common.PolicyResult[R] {
 	return func(exec failsafe.Execution[R]) *common.PolicyResult[R] {
 		execInternal := exec.(policy.ExecutionInternal[R])
+		isRetry := false
 
 		for {
+			// Perform the execution
 			result := innerFn(exec)
-			// Check for cancellation during executing
+
+			if isRetry && e.budget != nil {
+				e.budget.ReleaseRetryPermit()
+			}
+
+			// Check for cancellation during execution
 			if canceled, cancelResult := execInternal.IsCanceledWithResult(); canceled {
 				return cancelResult
 			}
@@ -68,10 +76,17 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 				return cancelResult
 			}
 
-			// Call retry listener
+			// Check the retry budget, if any
+			if e.budget != nil && !e.budget.TryAcquireRetryPermit() {
+				e.budget.OnBudgetExceeded(budget.RetryExecution, exec)
+				return internal.FailureResult[R](budget.ErrExceeded)
+			}
+
 			if e.onRetry != nil {
 				e.onRetry(failsafe.ExecutionEvent[R]{ExecutionAttempt: execInternal.CopyWithResult(result)})
 			}
+
+			isRetry = true
 		}
 	}
 }

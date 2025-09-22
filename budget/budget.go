@@ -5,171 +5,157 @@ import (
 	"sync/atomic"
 
 	"github.com/failsafe-go/failsafe-go"
-	"github.com/failsafe-go/failsafe-go/policy"
 )
 
 // ErrExceeded is returned when an execution attempt exceeds the budget.
 var ErrExceeded = errors.New("budget exceeded")
 
-// Budget is a policy that restricts concurrent executions as a way of preventing system overload.
+// Budget restricts concurrent executions as a way of preventing system overload.
 //
 // R is the execution result type. This type is concurrency safe.
-type Budget[R any] interface {
-	failsafe.Policy[R]
+type Budget interface {
+	// RetryRate returns the current rate of retries relative to total executions, from 0 to 1.
+	RetryRate() float64
 
-	// AcquireRetryPermit acquires a permit to retry an execution, else returns ErrExceeded if the budget is exceeded.
-	AcquireRetryPermit() error
-
-	// AcquireHedgePermit acquires a permit to perform a hedged execution, else returns ErrExceeded if the budget is exceeded.
-	AcquireHedgePermit() error
-
-	// TryAcquireRetryPermit attempts to acquire a permit to retry an execution and returns whether it was successful.
-	TryAcquireRetryPermit() bool
-
-	// TryAcquireHedgePermit acquires a permit to perform a hedged execution and returns whether it was successful.
-	TryAcquireHedgePermit() bool
-
-	// ReleaseRetryPermit releases a previously acquired retry permit back to the budget.
-	ReleaseRetryPermit()
-
-	// ReleaseHedgePermit releases a previously acquired hedge permit back to the budget.
-	ReleaseHedgePermit()
-}
-
-// TypeBuilder selects the execution type to apply budgeting to.
-//
-// R is the execution result type. This type is not concurrency safe.
-type TypeBuilder[R any] interface {
-	// ForRetries configures the budget to be applied to retries.
-	ForRetries() Builder[R]
-
-	// ForHedges configures the budget to be applied to hedges.
-	ForHedges() Builder[R]
+	// HedgeRate returns the current rate of hedges relative to total executions, from 0 to 1.
+	HedgeRate() float64
 }
 
 // Builder builds Budget instances.
 //
 // R is the execution result type. This type is not concurrency safe.
-type Builder[R any] interface {
-	TypeBuilder[R]
-
+type Builder interface {
 	// WithMaxRate configures the max rate of inflight executions that can be retries and/or hedges.
-	WithMaxRate(maxRate float64) Builder[R]
+	WithMaxRate(maxRate float64) Builder
 
 	// WithMinConcurrency configures the min number of budgeted retries and/or hedges that can be executed, regardless of
 	// the total number of inflight executions.
-	WithMinConcurrency(minConcurrency uint) Builder[R]
+	WithMinConcurrency(minConcurrency uint) Builder
 
 	// OnBudgetExceeded registers the listener to be called when the budget is exceeded.
-	OnBudgetExceeded(listener func(failsafe.ExecutionEvent[R])) Builder[R]
+	OnBudgetExceeded(listener func(ExceededEvent)) Builder
 
 	// Build returns a new Budget using the builder's configuration.
-	Build() Budget[R]
+	Build() Budget
 }
 
-type config[R any] struct {
-	forRetries       bool
-	forHedges        bool
+// ExecutionType indicates the type of execution used by the budget.
+type ExecutionType string
+
+const (
+	// RetryExecution indicates a retry execution was used with the budget.
+	RetryExecution ExecutionType = "retry"
+	// HedgeExecution indicates a hedge execution was used with the budget.
+	HedgeExecution ExecutionType = "hedge"
+)
+
+// ExceededEvent indicates a budget limit has been exceeded.
+type ExceededEvent struct {
+	// ExecutionType indicates the type of execution that exceeded the budget.
+	ExecutionType ExecutionType
+
+	// ExecutionInfo provides information about the execution that caused the budget to be exceeded.
+	failsafe.ExecutionInfo
+
+	// Budget provides access to the current budget state.
+	Budget
+}
+
+type config struct {
 	maxRate          float64
 	minConcurrency   uint
-	onBudgetExceeded func(failsafe.ExecutionEvent[R])
+	onBudgetExceeded func(ExceededEvent)
 }
 
-var _ Builder[any] = &config[any]{}
+var _ Builder = &config{}
+
+// New returns a new budget with a default maxRate of .2 and minConcurrency of 3.
+func New() Budget {
+	return NewBuilder().Build()
+}
 
 // NewBuilder returns a TypeBuilder for execution result type R which builds Budgets with a default maxRate of .2 and
 // minConcurrency of 3.
-func NewBuilder[R any]() TypeBuilder[R] {
-	return &config[R]{
+func NewBuilder() Builder {
+	return &config{
 		maxRate:        .2,
 		minConcurrency: 3,
 	}
 }
 
-func (c *config[R]) ForRetries() Builder[R] {
-	c.forRetries = true
-	return c
-}
-
-func (c *config[R]) ForHedges() Builder[R] {
-	c.forHedges = true
-	return c
-}
-
-func (c *config[R]) WithMaxRate(maxRate float64) Builder[R] {
+func (c *config) WithMaxRate(maxRate float64) Builder {
 	c.maxRate = maxRate
 	return c
 }
 
-func (c *config[R]) WithMinConcurrency(minConcurrency uint) Builder[R] {
+func (c *config) WithMinConcurrency(minConcurrency uint) Builder {
 	c.minConcurrency = minConcurrency
 	return c
 }
 
-func (c *config[R]) OnBudgetExceeded(listener func(failsafe.ExecutionEvent[R])) Builder[R] {
+func (c *config) OnBudgetExceeded(listener func(ExceededEvent)) Builder {
 	c.onBudgetExceeded = listener
 	return c
 }
 
-func (c *config[R]) Build() Budget[R] {
-	return &budget[R]{
+func (c *config) Build() Budget {
+	return &budget{
 		config: *c, // TODO copy base fields
 	}
 }
 
-type budget[R any] struct {
-	config[R]
+type budget struct {
+	config
 
 	executions atomic.Int32
 	retries    atomic.Int32
 	hedges     atomic.Int32
 }
 
-func (b *budget[R]) AcquireRetryPermit() error {
-	rate := float64(b.retries.Load()) / float64(b.executions.Load())
-	if rate > b.maxRate {
-		return ErrExceeded
+func (b *budget) TryAcquireRetryPermit() bool {
+	if b.RetryRate() > b.maxRate {
+		return false
 	}
 
 	b.retries.Add(1)
 	b.executions.Add(1)
-	return nil
+	return true
 }
 
-func (b *budget[R]) AcquireHedgePermit() error {
-	rate := float64(b.hedges.Load()) / float64(b.executions.Load())
-	if rate > b.maxRate {
-		return ErrExceeded
+func (b *budget) TryAcquireHedgePermit() bool {
+	if b.HedgeRate() > b.maxRate {
+		return false
 	}
 
-	b.retries.Add(1)
+	b.hedges.Add(1)
 	b.executions.Add(1)
-	return nil
+	return true
 }
 
-func (b *budget[R]) TryAcquireRetryPermit() bool {
-	return b.AcquireRetryPermit() == nil
-}
-
-func (b *budget[R]) TryAcquireHedgePermit() bool {
-	return b.AcquireHedgePermit() == nil
-}
-
-func (b *budget[R]) ReleaseRetryPermit() {
+func (b *budget) ReleaseRetryPermit() {
 	b.retries.Add(-1)
 	b.executions.Add(-1)
 }
 
-func (b *budget[R]) ReleaseHedgePermit() {
+func (b *budget) ReleaseHedgePermit() {
 	b.hedges.Add(-1)
 	b.executions.Add(-1)
 }
 
-func (b *budget[R]) ToExecutor(_ R) any {
-	be := &executor[R]{
-		BaseExecutor: &policy.BaseExecutor[R]{},
-		budget:       b,
+func (b *budget) RetryRate() float64 {
+	return float64(b.retries.Load()) / float64(b.executions.Load())
+}
+
+func (b *budget) HedgeRate() float64 {
+	return float64(b.hedges.Load()) / float64(b.executions.Load())
+}
+
+func (b *budget) OnBudgetExceeded(executionType ExecutionType, info failsafe.ExecutionInfo) {
+	if b.onBudgetExceeded != nil {
+		b.onBudgetExceeded(ExceededEvent{
+			ExecutionType: executionType,
+			ExecutionInfo: info,
+			Budget:        b,
+		})
 	}
-	be.Executor = be
-	return be
 }

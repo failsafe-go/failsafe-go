@@ -1,4 +1,4 @@
-package priority
+package internal
 
 import (
 	"context"

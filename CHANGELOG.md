@@ -1,5 +1,11 @@
 ## Upcoming Release
 
+## 0.8.4
+
+### Improvements
+
+- `Budget` can be configured directly on retry and hedge policies.
+
 ## 0.8.3
 
 ### Improvements

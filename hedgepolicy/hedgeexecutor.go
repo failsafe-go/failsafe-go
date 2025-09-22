@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/budget"
 	"github.com/failsafe-go/failsafe-go/common"
+	"github.com/failsafe-go/failsafe-go/internal"
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
@@ -37,6 +39,13 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 				executions[execIdx] = parentExecution.CopyForCancellable().(policy.ExecutionInternal[R])
 			} else {
 				executions[execIdx] = parentExecution.CopyForHedge().(policy.ExecutionInternal[R])
+
+				// Check the hedge budget, if any
+				if e.budget != nil && !e.budget.TryAcquireHedgePermit() {
+					e.budget.OnBudgetExceeded(budget.HedgeExecution, exec)
+					return internal.FailureResult[R](budget.ErrExceeded)
+				}
+
 				if e.onHedge != nil {
 					e.onHedge(failsafe.ExecutionEvent[R]{ExecutionAttempt: executions[execIdx].CopyWithResult(nil)})
 				}
@@ -45,6 +54,9 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 			// Perform execution
 			go func(hedgeExec policy.ExecutionInternal[R], execIdx int) {
 				result := innerFn(hedgeExec)
+				if execIdx > 0 && e.budget != nil {
+					e.budget.ReleaseHedgePermit()
+				}
 				isFinalResult := int(resultCount.Add(1)) == e.maxHedges+1
 				isCancellable := e.IsAbortable(result.Result, result.Error)
 				if (isFinalResult || isCancellable) && resultSent.CompareAndSwap(false, true) {

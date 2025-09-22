@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/budget"
+	"github.com/failsafe-go/failsafe-go/internal"
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
@@ -52,8 +54,7 @@ func AsExceededError(err error) *ExceededError {
 	return nil
 }
 
-// RetryPolicy is a policy that defines when retries should be performed. See Builder for configuration
-// options.
+// RetryPolicy is a policy that defines when retries should be performed. See Builder for configuration options.
 //
 // R is the execution result type. This type is concurrency safe.
 type RetryPolicy[R any] interface {
@@ -142,6 +143,9 @@ type Builder[R any] interface {
 	// is ignored.
 	WithJitterFactor(jitterFactor float64) Builder[R]
 
+	// WithBudget configures a retry budget. When the retryBudget is exceeded, retries will stop with budget.ErrExceeded.
+	WithBudget(retryBudget budget.Budget) Builder[R]
+
 	// OnAbort registers the listener to be called when an execution is aborted.
 	OnAbort(listener func(failsafe.ExecutionEvent[R])) Builder[R]
 
@@ -175,6 +179,7 @@ type config[R any] struct {
 	jitterFactor      float64
 	maxDuration       time.Duration
 	maxRetries        int
+	budget            internal.Budget
 
 	onAbort           func(failsafe.ExecutionEvent[R])
 	onRetry           func(failsafe.ExecutionEvent[R])
@@ -312,6 +317,11 @@ func (c *config[R]) WithJitter(jitter time.Duration) Builder[R] {
 func (c *config[R]) WithJitterFactor(jitterFactor float64) Builder[R] {
 	c.jitterFactor = jitterFactor
 	return c
+}
+
+func (c *config[R]) WithBudget(retryBudget budget.Budget) Builder[R] {
+	c.budget = retryBudget.(internal.Budget)
+	return c.AbortOnErrors(budget.ErrExceeded)
 }
 
 func (c *config[R]) OnSuccess(listener func(event failsafe.ExecutionEvent[R])) Builder[R] {

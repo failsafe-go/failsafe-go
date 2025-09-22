@@ -140,8 +140,8 @@ func WithBulkheadStatsAndLogs[R any](bh bulkhead.Builder[R], stats *Stats, withL
 	return bh
 }
 
-func WithBudgetStatsAndLogs[R any](b budget.Builder[R], stats *Stats, withLogging bool) budget.Builder[R] {
-	b.OnBudgetExceeded(func(event failsafe.ExecutionEvent[R]) {
+func WithBudgetStatsAndLogs(b budget.Builder, stats *Stats, withLogging bool) budget.Builder {
+	b.OnBudgetExceeded(func(event budget.ExceededEvent) {
 		stats.budgetExceeded.Add(1)
 		if withLogging {
 			fmt.Printf("budget %p exceeded\n", b)

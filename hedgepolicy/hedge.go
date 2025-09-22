@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/budget"
+	"github.com/failsafe-go/failsafe-go/internal"
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
@@ -42,12 +44,15 @@ type Builder[R any] interface {
 	// CancelIf specifies that any outstanding hedges should be canceled if the predicate matches the result or error.
 	CancelIf(predicate func(R, error) bool) Builder[R]
 
-	// OnHedge registers the listener to be called when a hedge is about to be attempted.
-	OnHedge(listener func(failsafe.ExecutionEvent[R])) Builder[R]
-
 	// WithMaxHedges sets the max number of hedges to perform when an execution attempt doesn't complete in time, which is 1
 	// by default.
 	WithMaxHedges(maxHedges int) Builder[R]
+
+	// WithBudget configures a hedge budget. When the hedgeBudget is exceeded, hedges will stop with budget.ErrExceeded.
+	WithBudget(hedgeBudget budget.Budget) Builder[R]
+
+	// OnHedge registers the listener to be called when a hedge is about to be attempted.
+	OnHedge(listener func(failsafe.ExecutionEvent[R])) Builder[R]
 
 	// Build returns a new HedgePolicy using the builder's configuration.
 	Build() HedgePolicy[R]
@@ -58,6 +63,7 @@ type config[R any] struct {
 
 	delayFunc failsafe.DelayFunc[R]
 	maxHedges int
+	budget    internal.Budget
 	onHedge   func(failsafe.ExecutionEvent[R])
 }
 
@@ -129,13 +135,18 @@ func (c *config[R]) CancelIf(predicate func(R, error) bool) Builder[R] {
 	return c
 }
 
-func (c *config[R]) OnHedge(listener func(failsafe.ExecutionEvent[R])) Builder[R] {
-	c.onHedge = listener
+func (c *config[R]) WithMaxHedges(maxHedges int) Builder[R] {
+	c.maxHedges = maxHedges
 	return c
 }
 
-func (c *config[R]) WithMaxHedges(maxHedges int) Builder[R] {
-	c.maxHedges = maxHedges
+func (c *config[R]) WithBudget(hedgeBudget budget.Budget) Builder[R] {
+	c.budget = hedgeBudget.(internal.Budget)
+	return c
+}
+
+func (c *config[R]) OnHedge(listener func(failsafe.ExecutionEvent[R])) Builder[R] {
+	c.onHedge = listener
 	return c
 }
 
