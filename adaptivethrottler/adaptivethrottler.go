@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
+	priorityInternal "github.com/failsafe-go/failsafe-go/internal/priority"
 	"github.com/failsafe-go/failsafe-go/internal/util"
 	"github.com/failsafe-go/failsafe-go/policy"
 	"github.com/failsafe-go/failsafe-go/priority"
@@ -161,7 +162,7 @@ func (c *config[R]) Build() AdaptiveThrottler[R] {
 func (c *config[R]) BuildPrioritized(p priority.Prioritizer) PriorityThrottler[R] {
 	throttler := &priorityThrottler[R]{
 		adaptiveThrottler: c.Build().(*adaptiveThrottler[R]),
-		prioritizer:       p.(*priority.BasePrioritizer[*throttlerStats]),
+		prioritizer:       p.(*priorityInternal.BasePrioritizer[*throttlerStats]),
 	}
 	throttler.prioritizer.Register(throttler.getThrottlerStats)
 	return throttler

@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	priorityInternal "github.com/failsafe-go/failsafe-go/internal/priority"
 	"github.com/failsafe-go/failsafe-go/priority"
 )
 
@@ -17,7 +18,7 @@ func TestPriorityThrottler_AcquirePermitWithPriority(t *testing.T) {
 
 	t.Run("above prioritizer rejection threshold", func(t *testing.T) {
 		// Given
-		p := NewPrioritizer().(*priority.BasePrioritizer[*throttlerStats])
+		p := NewPrioritizer().(*priorityInternal.BasePrioritizer[*throttlerStats])
 		throttler := NewBuilder[any]().BuildPrioritized(p)
 		p.RejectionThresh.Store(200)
 
@@ -30,7 +31,7 @@ func TestPriorityThrottler_AcquirePermitWithPriority(t *testing.T) {
 
 	t.Run("below prioritizer rejection threshold", func(t *testing.T) {
 		// Given
-		p := NewPrioritizer().(*priority.BasePrioritizer[*throttlerStats])
+		p := NewPrioritizer().(*priorityInternal.BasePrioritizer[*throttlerStats])
 		throttler := NewBuilder[any]().WithMaxRejectionRate(1).BuildPrioritized(p)
 		p.RejectionThresh.Store(200)
 

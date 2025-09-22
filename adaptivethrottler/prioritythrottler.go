@@ -5,6 +5,7 @@ import (
 	"math/rand"
 
 	"github.com/failsafe-go/failsafe-go"
+	priorityInternal "github.com/failsafe-go/failsafe-go/internal/priority"
 	"github.com/failsafe-go/failsafe-go/policy"
 	"github.com/failsafe-go/failsafe-go/priority"
 )
@@ -70,7 +71,7 @@ type PriorityThrottler[R any] interface {
 
 type priorityThrottler[R any] struct {
 	*adaptiveThrottler[R]
-	prioritizer *priority.BasePrioritizer[*throttlerStats]
+	prioritizer *priorityInternal.BasePrioritizer[*throttlerStats]
 }
 
 func (t *priorityThrottler[R]) AcquirePermit(ctx context.Context) error {

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
+	priorityInternal "github.com/failsafe-go/failsafe-go/internal/priority"
 	"github.com/failsafe-go/failsafe-go/policy"
 	"github.com/failsafe-go/failsafe-go/priority"
 )
@@ -82,7 +83,7 @@ type PriorityPermit interface {
 
 type priorityLimiter[R any] struct {
 	*queueingLimiter[R]
-	prioritizer *priority.BasePrioritizer[*queueStats]
+	prioritizer *priorityInternal.BasePrioritizer[*queueStats]
 }
 
 func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
