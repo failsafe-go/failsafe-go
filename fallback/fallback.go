@@ -129,7 +129,7 @@ type fallback[R any] struct {
 
 func (fb *fallback[R]) ToExecutor(_ R) any {
 	fbe := &executor[R]{
-		BaseExecutor: &policy.BaseExecutor[R]{
+		BaseExecutor: policy.BaseExecutor[R]{
 			BaseFailurePolicy: fb.BaseFailurePolicy,
 		},
 		fallback: fb,

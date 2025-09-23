@@ -279,12 +279,6 @@ func TestRecordingPermit_Record(t *testing.T) {
 	})
 }
 
-func BenchmarkAdaptiveLimiter(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		_ = NewWithDefaults[any]()
-	}
-}
-
 type mockUsageTracker struct {
 	userID string
 	usage  int64

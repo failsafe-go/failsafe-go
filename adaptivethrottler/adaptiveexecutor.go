@@ -8,7 +8,7 @@ import (
 
 // executor is a policy.Executor that handles failures according to an AdaptiveThrottler.
 type executor[R any] struct {
-	*policy.BaseExecutor[R]
+	policy.BaseExecutor[R]
 	*adaptiveThrottler[R]
 }
 

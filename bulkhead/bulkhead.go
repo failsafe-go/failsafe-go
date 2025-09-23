@@ -155,7 +155,7 @@ func (b *bulkhead[R]) ReleasePermit() {
 
 func (b *bulkhead[R]) ToExecutor(_ R) any {
 	be := &executor[R]{
-		BaseExecutor: &policy.BaseExecutor[R]{},
+		BaseExecutor: policy.BaseExecutor[R]{},
 		bulkhead:     b,
 	}
 	be.Executor = be

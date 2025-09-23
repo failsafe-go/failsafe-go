@@ -124,7 +124,7 @@ type cachePolicy[R any] struct {
 
 func (c *cachePolicy[R]) ToExecutor(_ R) any {
 	ce := &executor[R]{
-		BaseExecutor: &policy.BaseExecutor[R]{},
+		BaseExecutor: policy.BaseExecutor[R]{},
 		cachePolicy:  c,
 	}
 	ce.Executor = ce

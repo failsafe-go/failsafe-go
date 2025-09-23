@@ -120,7 +120,7 @@ func (t *priorityThrottler[R]) RejectionRate() float64 {
 
 func (t *priorityThrottler[R]) ToExecutor(_ R) any {
 	pte := &priorityExecutor[R]{
-		BaseExecutor: &policy.BaseExecutor[R]{
+		BaseExecutor: policy.BaseExecutor[R]{
 			BaseFailurePolicy: t.BaseFailurePolicy,
 		},
 		priorityThrottler: t,

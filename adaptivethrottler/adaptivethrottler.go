@@ -243,7 +243,7 @@ func (t *adaptiveThrottler[R]) recordResult(result R, err error) {
 
 func (t *adaptiveThrottler[R]) ToExecutor(_ R) any {
 	ate := &executor[R]{
-		BaseExecutor: &policy.BaseExecutor[R]{
+		BaseExecutor: policy.BaseExecutor[R]{
 			BaseFailurePolicy: t.BaseFailurePolicy,
 		},
 		adaptiveThrottler: t,

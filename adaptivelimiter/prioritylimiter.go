@@ -150,7 +150,7 @@ func (l *priorityLimiter[R]) CanAcquirePermitWithLevel(level int) bool {
 
 func (l *priorityLimiter[R]) ToExecutor(_ R) any {
 	e := &executor[R]{
-		BaseExecutor:    &policy.BaseExecutor[R]{},
+		BaseExecutor:    policy.BaseExecutor[R]{},
 		blockingLimiter: l,
 	}
 	e.Executor = e

@@ -171,7 +171,7 @@ var _ HedgePolicy[any] = &hedgePolicy[any]{}
 
 func (h *hedgePolicy[R]) ToExecutor(_ R) any {
 	he := &executor[R]{
-		BaseExecutor: &policy.BaseExecutor[R]{},
+		BaseExecutor: policy.BaseExecutor[R]{},
 		hedgePolicy:  h,
 	}
 	he.Executor = he

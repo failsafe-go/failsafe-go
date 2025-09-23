@@ -2,7 +2,6 @@ package circuitbreaker
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -67,13 +66,4 @@ func TestGetSuccessAndFailureStats(t *testing.T) {
 	assert.Equal(t, .33, breaker.Metrics().FailureRate())
 	assert.Equal(t, uint(10), breaker.Metrics().Successes())
 	assert.Equal(t, .67, breaker.Metrics().SuccessRate())
-}
-
-func BenchmarkTimedCircuitBreaker(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		_ = NewBuilder[any]().
-			WithDelay(time.Minute).
-			WithFailureThresholdPeriod(10, time.Minute).
-			Build()
-	}
 }

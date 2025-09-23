@@ -56,9 +56,3 @@ func TestAsExceededError(t *testing.T) {
 	assert.NotNil(t, AsExceededError(e))
 	assert.Nil(t, AsExceededError(errors.New("test error")))
 }
-
-func BenchmarkRetryPolicy(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		_ = NewWithDefaults[any]()
-	}
-}

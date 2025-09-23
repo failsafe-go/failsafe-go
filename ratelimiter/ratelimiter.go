@@ -333,7 +333,7 @@ func (r *rateLimiter[R]) TryReservePermits(requestedPermits uint, maxWaitTime ti
 
 func (r *rateLimiter[R]) ToExecutor(_ R) any {
 	rle := &executor[R]{
-		BaseExecutor: &policy.BaseExecutor[R]{},
+		BaseExecutor: policy.BaseExecutor[R]{},
 		rateLimiter:  r,
 	}
 	rle.Executor = rle

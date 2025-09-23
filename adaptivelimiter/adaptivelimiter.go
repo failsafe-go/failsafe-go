@@ -608,7 +608,7 @@ func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, g
 
 func (l *adaptiveLimiter[R]) ToExecutor(_ R) any {
 	e := &executor[R]{
-		BaseExecutor:    &policy.BaseExecutor[R]{},
+		BaseExecutor:    policy.BaseExecutor[R]{},
 		blockingLimiter: l,
 	}
 	e.Executor = e

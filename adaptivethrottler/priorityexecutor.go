@@ -8,7 +8,7 @@ import (
 
 // priorityExecutor is a policy.Executor that handles failures according to a PriorityThrottler.
 type priorityExecutor[R any] struct {
-	*policy.BaseExecutor[R]
+	policy.BaseExecutor[R]
 	*priorityThrottler[R]
 }
 

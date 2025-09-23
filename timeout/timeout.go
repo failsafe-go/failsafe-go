@@ -73,7 +73,7 @@ type timeout[R any] struct {
 
 func (t *timeout[R]) ToExecutor(_ R) any {
 	te := &executor[R]{
-		BaseExecutor: &policy.BaseExecutor[R]{},
+		BaseExecutor: policy.BaseExecutor[R]{},
 		timeout:      t,
 	}
 	te.Executor = te
