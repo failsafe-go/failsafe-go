@@ -320,6 +320,12 @@ func TestPriorityLimiter(t *testing.T) {
 	})
 }
 
+func BenchmarkAdaptiveLimiterConstruction(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_ = adaptivelimiter.NewWithDefaults[any]()
+	}
+}
+
 type blockingLimiter interface {
 	AcquirePermitWithMaxWait(ctx context.Context, maxWaitTime time.Duration) (adaptivelimiter.Permit, error)
 }

@@ -169,3 +169,18 @@ func TestRetryPolicy(t *testing.T) {
 		assert.ElementsMatch(t, expected, delays)
 	})
 }
+
+func BenchmarkRetryPolicyConstruction(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_ = retrypolicy.NewWithDefaults[any]()
+	}
+}
+
+func BenchmarkRetryPolicyExecution(b *testing.B) {
+	rp := retrypolicy.NewWithDefaults[any]()
+	for i := 0; i < b.N; i++ {
+		_ = failsafe.Run(func() error {
+			return testutil.ErrInvalidState
+		}, rp)
+	}
+}

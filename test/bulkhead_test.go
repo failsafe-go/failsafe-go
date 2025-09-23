@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/bulkhead"
 	"github.com/failsafe-go/failsafe-go/internal/policytesting"
 	"github.com/failsafe-go/failsafe-go/internal/testutil"
@@ -88,4 +89,19 @@ func TestBulkHead(t *testing.T) {
 			Run(testutil.RunFn(nil)).
 			AssertSuccess(1, 1, nil)
 	})
+}
+
+func BenchmarkBulkheadConstruction(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_ = bulkhead.New[any](10)
+	}
+}
+
+func BenchmarkBulkheadExecution(b *testing.B) {
+	bh := bulkhead.New[any](10)
+	for i := 0; i < b.N; i++ {
+		_ = failsafe.Run(func() error {
+			return nil
+		}, bh)
+	}
 }

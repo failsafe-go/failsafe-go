@@ -271,3 +271,12 @@ func TestCircuitBreaker(t *testing.T) {
 		assert.True(t, called)
 	})
 }
+
+func BenchmarkTimedCircuitBreakerConstruction(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_ = circuitbreaker.NewBuilder[any]().
+			WithDelay(time.Minute).
+			WithFailureThresholdPeriod(10, time.Minute).
+			Build()
+	}
+}
