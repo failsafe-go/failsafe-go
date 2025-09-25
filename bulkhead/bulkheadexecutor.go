@@ -20,7 +20,7 @@ var _ policy.Executor[any] = &executor[any]{}
 func (e *executor[R]) PreExecute(exec policy.ExecutionInternal[R]) *common.PolicyResult[R] {
 	if err := e.AcquirePermitWithMaxWait(exec.Context(), e.maxWaitTime); err != nil {
 		// Check for cancellation while waiting for a permit
-		if canceled, cancelResult := exec.(policy.ExecutionInternal[R]).IsCanceledWithResult(); canceled {
+		if canceled, cancelResult := exec.IsCanceledWithResult(); canceled {
 			return cancelResult
 		}
 		if e.onFull != nil && errors.Is(err, ErrFull) {

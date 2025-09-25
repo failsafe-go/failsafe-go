@@ -18,12 +18,11 @@ type executor[R any] struct {
 var _ policy.Executor[any] = &executor[any]{}
 
 func (e *executor[R]) PreExecute(exec policy.ExecutionInternal[R]) *common.PolicyResult[R] {
-	execInternal := exec.(policy.ExecutionInternal[R])
 	if cacheKey := e.getCacheKey(exec.Context()); cacheKey != "" {
 		if cacheResult, found := e.cache.Get(cacheKey); found {
 			if e.onHit != nil {
 				e.onHit(failsafe.ExecutionDoneEvent[R]{
-					ExecutionInfo: execInternal,
+					ExecutionInfo: exec,
 					Result:        cacheResult,
 				})
 			}
@@ -37,7 +36,7 @@ func (e *executor[R]) PreExecute(exec policy.ExecutionInternal[R]) *common.Polic
 	}
 	if e.onMiss != nil {
 		e.onMiss(failsafe.ExecutionEvent[R]{
-			ExecutionAttempt: execInternal,
+			ExecutionAttempt: exec,
 		})
 	}
 	return nil
