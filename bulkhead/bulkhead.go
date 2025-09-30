@@ -16,7 +16,7 @@ var ErrFull = errors.New("bulkhead full")
 //
 // R is the execution result type. This type is concurrency safe.
 type Bulkhead[R any] interface {
-	failsafe.Policy[R]
+	failsafe.ResultAgnosticPolicy[R]
 
 	// AcquirePermit attempts to acquire a permit to perform an execution within the Bulkhead, waiting until one is
 	// available or the execution is canceled. Returns context.Canceled if the ctx is canceled. Callers should call
@@ -97,6 +97,8 @@ type bulkhead[R any] struct {
 	config[R]
 	semaphore chan struct{}
 }
+
+func (*bulkhead[R]) ResultAgnostic() {}
 
 func (b *bulkhead[R]) AcquirePermit(ctx context.Context) error {
 	if ctx == nil {

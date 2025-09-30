@@ -24,7 +24,7 @@ func TestRetryPolicy_Composition(t *testing.T) {
 	t.Run("with CircuitBreaker - success after failures", func(t *testing.T) {
 		// Given
 		rp := retrypolicy.NewBuilder[bool]().WithMaxRetries(-1).Build()
-		cb := circuitbreaker.NewBuilder[bool]().
+		cb := circuitbreaker.NewBuilder[any]().
 			WithFailureThreshold(3).
 			WithDelay(10 * time.Minute).
 			Build()
@@ -36,7 +36,8 @@ func TestRetryPolicy_Composition(t *testing.T) {
 
 		// When / Then
 		testutil.Test[bool](t).
-			With(rp, cb).
+			With(rp).
+			ComposeAny(cb).
 			Before(before).
 			Get(stub).
 			AssertSuccess(3, 3, true, func() {
@@ -123,14 +124,15 @@ func TestRetryPolicy_Composition(t *testing.T) {
 	})
 
 	t.Run("with Bulkhead", func(t *testing.T) {
-		rp := retrypolicy.NewBuilder[any]().WithMaxAttempts(7).Build()
+		rp := retrypolicy.NewBuilder[string]().WithMaxAttempts(7).Build()
 		bh := bulkhead.New[any](2)
 		bh.TryAcquirePermit()
 		bh.TryAcquirePermit() // bulkhead should be full
 
-		testutil.Test[any](t).
-			With(rp, bh).
-			Run(testutil.RunFn(errors.New("test"))).
+		testutil.Test[string](t).
+			With(rp).
+			ComposeAny(bh).
+			Get(testutil.GetFn("test", errors.New("test"))).
 			AssertFailure(7, 0, bulkhead.ErrFull)
 	})
 
@@ -175,17 +177,18 @@ func TestRetryPolicy_Composition(t *testing.T) {
 func TestCircuitBreaker_Composition(t *testing.T) {
 	t.Run("with RetryPolicy", func(t *testing.T) {
 		// Given
-		rp := retrypolicy.NewWithDefaults[any]()
+		rp := retrypolicy.NewWithDefaults[string]()
 		cb := circuitbreaker.NewBuilder[any]().WithFailureThreshold(3).Build()
 		before := func() {
 			policytesting.Reset(cb)
 		}
 
 		// When / Then
-		testutil.Test[any](t).
-			With(cb, rp).
+		testutil.Test[string](t).
+			WithAny(cb).
+			Compose(rp).
 			Before(before).
-			Run(testutil.RunFn(testutil.ErrInvalidState)).
+			Get(testutil.GetFn("test", testutil.ErrInvalidState)).
 			AssertFailure(3, 3, testutil.ErrInvalidState, func() {
 				assert.Equal(t, uint(0), cb.Metrics().Successes())
 				assert.Equal(t, uint(1), cb.Metrics().Failures())
@@ -195,18 +198,19 @@ func TestCircuitBreaker_Composition(t *testing.T) {
 
 	t.Run("with Timeout", func(t *testing.T) {
 		// Given
-		to := timeout.New[string](50 * time.Millisecond)
-		cb := circuitbreaker.NewWithDefaults[string]()
+		to := timeout.New[any](50 * time.Millisecond)
+		cb := circuitbreaker.NewWithDefaults[any]()
 		assert.True(t, cb.IsClosed())
 		before := func() {
 			policytesting.Reset(cb)
 		}
 
 		// When / Then
-		testutil.Test[string](t).
-			With(cb, to).
+		testutil.Test[any](t).
+			WithAny(cb).
+			ComposeAny(to).
 			Before(before).
-			Run(func(execution failsafe.Execution[string]) error {
+			Run(func(execution failsafe.Execution[any]) error {
 				time.Sleep(100 * time.Millisecond)
 				return nil
 			}).
@@ -265,14 +269,15 @@ func TestFallback_Composition(t *testing.T) {
 			assert.ErrorIs(t, testutil.ErrInvalidState, exec.LastError())
 			return true, nil
 		})
-		cb := circuitbreaker.NewBuilder[bool]().WithSuccessThreshold(3).Build()
+		cb := circuitbreaker.NewBuilder[any]().WithSuccessThreshold(3).Build()
 		before := func() {
 			policytesting.Reset(cb)
 		}
 
 		// When / Then
 		testutil.Test[bool](t).
-			With(fb, cb).
+			With(fb).
+			ComposeAny(cb).
 			Before(before).
 			Get(testutil.GetFn(false, testutil.ErrInvalidState)).
 			AssertSuccess(1, 1, true)
@@ -390,7 +395,7 @@ func TestMultiPolicy_Composition(t *testing.T) {
 	t.Run("with Fallback -> RetryPolicy -> CircuitBreaker", func(t *testing.T) {
 		// Given
 		rp := retrypolicy.NewWithDefaults[string]()
-		cb := circuitbreaker.NewBuilder[string]().WithFailureThreshold(5).Build()
+		cb := circuitbreaker.NewBuilder[any]().WithFailureThreshold(5).Build()
 		fb := fallback.NewWithResult("test")
 		before := func() {
 			policytesting.Reset(cb)
@@ -398,7 +403,8 @@ func TestMultiPolicy_Composition(t *testing.T) {
 
 		// When / Then
 		testutil.Test[string](t).
-			With(fb, rp, cb).
+			With(fb, rp).
+			ComposeAny(cb).
 			Before(before).
 			Get(testutil.GetFn[string]("", testutil.ErrInvalidState)).
 			AssertSuccess(3, 3, "test", func() {

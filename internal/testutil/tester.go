@@ -23,7 +23,6 @@ type Tester[R any] struct {
 	BeforeFn  func()
 	AfterFn   func()
 	ContextFn func() context.Context
-	Policies  []failsafe.Policy[R]
 	Executor  failsafe.Executor[R]
 	run       WhenRun[R]
 	get       WhenGet[R]
@@ -64,7 +63,22 @@ func (t *Tester[R]) Reset(stats ...Resetable) *Tester[R] {
 }
 
 func (t *Tester[R]) With(policies ...failsafe.Policy[R]) *Tester[R] {
-	t.Policies = policies
+	t.Executor = failsafe.With[R](policies...)
+	return t
+}
+
+func (t *Tester[R]) WithAny(policy failsafe.ResultAgnosticPolicy[any]) *Tester[R] {
+	t.Executor = failsafe.WithAny[R](policy)
+	return t
+}
+
+func (t *Tester[R]) Compose(policy failsafe.Policy[R]) *Tester[R] {
+	t.Executor.Compose(policy)
+	return t
+}
+
+func (t *Tester[R]) ComposeAny(policy failsafe.ResultAgnosticPolicy[any]) *Tester[R] {
+	t.Executor.ComposeAny(policy)
 	return t
 }
 
@@ -106,9 +120,6 @@ func (t *Tester[R]) AssertFailureAs(expectedAttempts int, expectedExecutions int
 
 func (t *Tester[R]) exec(async bool) (R, error, AssertFunc[R]) {
 	t.T.Helper()
-	if t.Executor == nil {
-		t.Executor = failsafe.NewExecutor[R](t.Policies...)
-	}
 	executorFn, assertFn := PrepareTest(t.T, t.BeforeFn, t.ContextFn, t.Executor)
 
 	var result R

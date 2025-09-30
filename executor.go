@@ -57,6 +57,13 @@ func GetWithExecutionAsync[R any](fn func(exec Execution[R]) (R, error), policie
 //
 // This type is concurrency safe.
 type Executor[R any] interface {
+	// Compose returns the Executor with the currently configured policies composed around the innerPolicy.
+	Compose(innerPolicy Policy[R]) Executor[R]
+
+	// ComposeAny returns the Rxecutor with the currently configured policies composed around the innerPolicy. This method
+	// allows composing policies that have any result type with policies that have a specific result type.
+	ComposeAny(innerPolicy ResultAgnosticPolicy[any]) Executor[R]
+
 	// Context returns the configured Context, else context.Background() by default.
 	Context() context.Context
 
@@ -139,10 +146,41 @@ type executor[R any] struct {
 //
 //	Fallback(RetryPolicy(CircuitBreaker(func)))
 func NewExecutor[R any](policies ...Policy[R]) Executor[R] {
+	return With[R](policies...)
+}
+
+// With creates and returns a new Executor for result type R that will handle failures according to the given
+// policies. The policies are composed around a func and will handle its results in reverse order. For example, consider:
+//
+//	failsafe.NewExecutor(fallback, retryPolicy, circuitBreaker).Get(fn)
+//
+// This creates the following composition when executing a func and handling its result:
+//
+//	Fallback(RetryPolicy(CircuitBreaker(func)))
+func With[R any](policies ...Policy[R]) Executor[R] {
 	return &executor[R]{
 		policies: policies,
 		ctx:      context.Background(),
 	}
+}
+
+// WithAny creates and returns a new Executor that can be used to compose other policies with the result type R, for the
+// policy that has any result type. The executor will handle failures according to the given policies.
+func WithAny[R any](policy ResultAgnosticPolicy[any]) Executor[R] {
+	return &executor[R]{
+		policies: []Policy[R]{&policyAnyWrapper[R]{inner: policy}},
+		ctx:      context.Background(),
+	}
+}
+
+func (e *executor[R]) Compose(innerPolicy Policy[R]) Executor[R] {
+	e.policies = append(e.policies, innerPolicy)
+	return e
+}
+
+func (e *executor[R]) ComposeAny(innerPolicy ResultAgnosticPolicy[any]) Executor[R] {
+	e.policies = append(e.policies, &policyAnyWrapper[R]{inner: innerPolicy})
+	return e
 }
 
 func (e *executor[R]) Context() context.Context {
@@ -287,4 +325,30 @@ func (e *executor[R]) execute(fn func(exec Execution[R]) (R, error), outerExec *
 		e.onDone(newExecutionDoneEvent(outerExec, er))
 	}
 	return er
+}
+
+// policyAnyWrapper adapts Policy[R] to Policy[any], allowing Policy[any] to be used in compositions with Policy[R].
+type policyAnyWrapper[R any] struct {
+	inner Policy[any]
+}
+
+func (p *policyAnyWrapper[R]) ToExecutor(_ R) any {
+	anyExecutor := p.inner.ToExecutor(nil).(policyExecutor[any])
+	return &policyExecutorAnyWrapper[R]{inner: anyExecutor}
+}
+
+type policyExecutorAnyWrapper[R any] struct {
+	inner policyExecutor[any]
+}
+
+func (pe *policyExecutorAnyWrapper[R]) Apply(innerFn func(Execution[R]) *common.PolicyResult[R]) func(Execution[R]) *common.PolicyResult[R] {
+	return func(exec Execution[R]) *common.PolicyResult[R] {
+		// Adapt func(Execution[any]) *PolicyResult[any] to func(Execution[R]) *PolicyResult[R]
+		anyFn := pe.inner.Apply(func(anyExec Execution[any]) *common.PolicyResult[any] {
+			result := innerFn(exec)
+			return resultToAny(result)
+		})
+		anyResult := anyFn(&executionAnyWrapper[R]{exec.(*execution[R])})
+		return resultFromAny[R](anyResult)
+	}
 }

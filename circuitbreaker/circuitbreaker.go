@@ -62,7 +62,8 @@ A circuit breaker can be count based or time based:
 R is the execution result type. This type is concurrency safe.
 */
 type CircuitBreaker[R any] interface {
-	failsafe.Policy[R]
+	failsafe.ResultAgnosticPolicy[R]
+
 	// Open opens the CircuitBreaker.
 	Open()
 
@@ -168,6 +169,8 @@ type circuitBreaker[R any] struct {
 	// Guarded by mu
 	state circuitState[R]
 }
+
+func (*circuitBreaker[R]) ResultAgnostic() {}
 
 func (cb *circuitBreaker[R]) TryAcquirePermit() bool {
 	cb.mu.Lock()

@@ -86,10 +86,6 @@ func (t *tester) AssertError(expectedAttempts int, expectedExecutions int, expec
 
 func (t *tester) assertResult(expectedAttempts int, expectedExecutions int, expectedStatus int, expectedResult string, expectedError error, expectedSuccess bool, expectedFailure bool, then ...func()) {
 	t.tester.T.Helper()
-	if t.tester.Executor == nil {
-		t.tester.Executor = failsafe.NewExecutor[*http.Response](t.tester.Policies...)
-	}
-
 	executorFn, assertResult := testutil.PrepareTest(t.tester.T, t.tester.BeforeFn, nil, t.tester.Executor)
 	assertHttpResult := func(resp *http.Response, err error) {
 		// Read body

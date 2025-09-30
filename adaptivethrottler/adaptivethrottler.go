@@ -21,7 +21,7 @@ const executionPadding = 1
 // AdaptiveThrottler throttles load probabalistically based on recent failures.
 // This approach is described in the Google SRE book: https://sre.google/sre-book/handling-overload/#client-side-throttling-a7sYUg
 type AdaptiveThrottler[R any] interface {
-	failsafe.Policy[R]
+	failsafe.ResultAgnosticPolicy[R]
 	Metrics
 
 	// AcquirePermit attempts to acquire a permit to perform an execution via the throttler, returning ErrExceeded if one
@@ -176,6 +176,8 @@ type adaptiveThrottler[R any] struct {
 	util.ExecutionStats
 	rejectionRate float64
 }
+
+func (*adaptiveThrottler[R]) ResultAgnostic() {}
 
 func (t *adaptiveThrottler[R]) AcquirePermit() error {
 	t.mu.Lock()

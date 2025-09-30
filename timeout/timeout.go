@@ -17,7 +17,7 @@ var ErrExceeded = errors.New("timeout exceeded")
 //
 // R is the execution result type. This type is concurrency safe.
 type Timeout[R any] interface {
-	failsafe.Policy[R]
+	failsafe.ResultAgnosticPolicy[R]
 }
 
 // Builder builds Timeout instances.
@@ -70,6 +70,8 @@ func (c *config[R]) Build() Timeout[R] {
 type timeout[R any] struct {
 	config[R]
 }
+
+func (*timeout[R]) ResultAgnostic() {}
 
 func (t *timeout[R]) ToExecutor(_ R) any {
 	te := &executor[R]{

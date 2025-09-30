@@ -16,7 +16,7 @@ import (
 //
 // R is the execution result type. This type is concurrency safe.
 type PriorityLimiter[R any] interface {
-	failsafe.Policy[R]
+	failsafe.ResultAgnosticPolicy[R]
 	Metrics
 
 	// AcquirePermit attempts to acquire a permit for an execution at the priority or level contained in the context,
@@ -85,6 +85,8 @@ type priorityLimiter[R any] struct {
 	*queueingLimiter[R]
 	prioritizer *internal.BasePrioritizer[*queueStats]
 }
+
+func (*priorityLimiter[R]) ResultAgnostic() {}
 
 func (l *priorityLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
 	return l.AcquirePermitWithLevel(ctx, l.prioritizer.LevelFromContext(ctx))

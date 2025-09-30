@@ -50,7 +50,7 @@ This helps integrate with scenarios where you need to wait externally.
 R is the execution result type. This type is concurrency safe.
 */
 type RateLimiter[R any] interface {
-	failsafe.Policy[R]
+	failsafe.ResultAgnosticPolicy[R]
 
 	// AcquirePermit attempts to acquire a permit to perform an execution against the rate limiter, waiting until one is
 	// available or the ctx is canceled. Returns an error if the ctx is canceled.
@@ -264,6 +264,8 @@ type rateLimiter[R any] struct {
 	config[R]
 	stats stats
 }
+
+func (*rateLimiter[R]) ResultAgnostic() {}
 
 func (r *rateLimiter[R]) AcquirePermit(ctx context.Context) error {
 	return r.AcquirePermits(ctx, 1)

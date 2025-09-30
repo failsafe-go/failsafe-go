@@ -74,6 +74,8 @@ type priorityThrottler[R any] struct {
 	prioritizer *internal.BasePrioritizer[*throttlerStats]
 }
 
+func (*priorityThrottler[R]) ResultAgnostic() {}
+
 func (t *priorityThrottler[R]) AcquirePermit(ctx context.Context) error {
 	level := priority.LevelFromContext(ctx)
 	if level == -1 {

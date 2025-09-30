@@ -53,7 +53,7 @@ const (
 //
 // R is the execution result type. This type is concurrency safe.
 type AdaptiveLimiter[R any] interface {
-	failsafe.Policy[R]
+	failsafe.ResultAgnosticPolicy[R]
 	Metrics
 
 	// AcquirePermit attempts to acquire a permit to perform an execution via the limiter, waiting until one is available or
@@ -405,6 +405,8 @@ type adaptiveLimiter[R any] struct {
 	throughputCorrelation util.CorrelationWindow // Tracks the correlation between concurrency and throughput
 	rttCorrelation        util.CorrelationWindow // Tracks the correlation between concurrency and round trip times (RTT)
 }
+
+func (*adaptiveLimiter[R]) ResultAgnostic() {}
 
 func (l *adaptiveLimiter[R]) AcquirePermit(ctx context.Context) (Permit, error) {
 	if err := l.semaphore.Acquire(ctx); err != nil {
