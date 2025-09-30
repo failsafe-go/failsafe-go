@@ -1,5 +1,11 @@
 ## Upcoming Release
 
+## 0.8.5
+
+### Improvements
+
+- Add support for `failsafe.WithAny` and `ComposeAny` which allows shared policies with `any` as the result type, such as common circuit breakers, to be composed with policies that have specific result types.
+
 ## 0.8.4
 
 ### Improvements
