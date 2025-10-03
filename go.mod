@@ -1,13 +1,13 @@
 module github.com/failsafe-go/failsafe-go
 
-go 1.21
+go 1.23
 
 require (
 	github.com/bits-and-blooms/bitset v1.24.0
 	github.com/influxdata/tdigest v0.0.1
 	github.com/stretchr/testify v1.9.0
 	google.golang.org/grpc v1.67.1
-	google.golang.org/protobuf v1.36.4
+	google.golang.org/protobuf v1.36.9
 )
 
 require (
