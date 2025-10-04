@@ -1,5 +1,13 @@
 ## Upcoming Release
 
+## 0.9.0
+
+### API Changes
+
+- `failsafe.Get`, `Run`, and similar methods were removed. `failsafe.With` is now the standard way of using Failsafe. `failsafe.NewExecutor` was also removed in favor of `failsafe.With`.
+  - This consolidation was meant to provide a single way of using the API, and better matches how Failsafe-go composes policies around a function, ex: `failsafe.With(retryPolicy, circuitBreaker).Get(fn)` creates a composition that can be read from left to right: `retryPolicy(circuitBreaker(fn))`. The original purpose for the `failsafe.Get` function was to workaround a limitation in Go's generic type inference, which is no longer needed after Go 1.21.
+- `Executor.RunWithExecutionAsync` was renamed to `Executor.RunAsyncWithExecution`, and similar for get.
+
 ## 0.8.5
 
 ### Improvements
