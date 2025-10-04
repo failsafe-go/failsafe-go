@@ -21,7 +21,7 @@ const (
 //
 // R is the response type.
 func NewUnaryClientInterceptor[R any](policies ...failsafe.Policy[R]) grpc.UnaryClientInterceptor {
-	return NewUnaryClientInterceptorWithExecutor(failsafe.NewExecutor(policies...))
+	return NewUnaryClientInterceptorWithExecutor(failsafe.With(policies...))
 }
 
 // NewUnaryClientInterceptorWithExecutor returns a grpc.UnaryClientInterceptor that wraps the invoker with a failsafe.Executor.

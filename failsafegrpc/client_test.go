@@ -27,7 +27,7 @@ func TestClientSuccess(t *testing.T) {
 	// Given
 	mockedResponse := "pong"
 	server := testutil.MockGrpcResponses(mockedResponse)
-	executor := failsafe.NewExecutor[any](NewRetryPolicyBuilder[any]().Build())
+	executor := failsafe.With(NewRetryPolicyBuilder[any]().Build())
 
 	// When / Then
 	testClientSuccess(t, nil, server, executor,
@@ -58,7 +58,7 @@ func TestClientRetryPolicy(t *testing.T) {
 			// Given
 			mockedErr := status.Error(tc.code, "err")
 			server := testutil.MockGrpcError(mockedErr)
-			executor := failsafe.NewExecutor[any](retrypolicy.NewBuilder[any]().ReturnLastFailure().Build())
+			executor := failsafe.With(retrypolicy.NewBuilder[any]().ReturnLastFailure().Build())
 
 			// When / Then
 			testClientFailure(t, nil, server, executor,
@@ -70,7 +70,7 @@ func TestClientRetryPolicy(t *testing.T) {
 func TestClientRetryPolicyWithUnavailableThenSuccess(t *testing.T) {
 	// Given
 	server := testutil.MockFlakyGrpcServer(2, status.Error(codes.Unavailable, "err"), "pong")
-	executor := failsafe.NewExecutor[any](NewRetryPolicyBuilder[any]().ReturnLastFailure().Build())
+	executor := failsafe.With(NewRetryPolicyBuilder[any]().ReturnLastFailure().Build())
 
 	// When / Then
 	testClientSuccess(t, nil, server, executor,
@@ -85,7 +85,7 @@ func TestClientRetryOnResult(t *testing.T) {
 			return response.Msg == "retry"
 		}).
 		Build()
-	executor := failsafe.NewExecutor[*pbfixtures.PingResponse](retryPolicy)
+	executor := failsafe.With(retryPolicy)
 
 	// When / Then
 	testClientSuccess(t, nil, server, executor,
@@ -100,7 +100,7 @@ func TestClientRetryPolicyFallback(t *testing.T) {
 		exec.LastResult().Msg = "pong"
 		return nil, nil
 	})
-	executor := failsafe.NewExecutor[*pbfixtures.PingResponse](fb, rp)
+	executor := failsafe.With(fb, rp)
 
 	// When / Then
 	testClientSuccess(t, nil, server, executor,
@@ -116,7 +116,7 @@ func TestHedgePolicy(t *testing.T) {
 		return context.Background()
 	}
 	hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelay[*http.Response](80*time.Millisecond), stats).Build()
-	executor := failsafe.NewExecutor[*http.Response](hp)
+	executor := failsafe.With(hp)
 
 	// When / Then
 	testClientSuccess(t, setup, server, executor,
@@ -167,7 +167,7 @@ func TestClientCancelWithContext(t *testing.T) {
 			// Given
 			server := testutil.MockDelayedGrpcResponse("pong", time.Second)
 			rp := retrypolicy.NewBuilder[any]().AbortOnErrors(tc.expectedErr).Build()
-			executor := failsafe.NewExecutor[any](rp)
+			executor := failsafe.With(rp)
 			if tc.executorCtx != nil {
 				executor = executor.WithContext(tc.executorCtx)
 			}

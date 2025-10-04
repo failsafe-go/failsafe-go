@@ -60,9 +60,9 @@ func TestRetryPolicy(t *testing.T) {
 		underlyingErr := errors.New("test")
 
 		// When / Then for last error
-		err := failsafe.Run(func() error {
+		err := failsafe.With(rp1).Run(func() error {
 			return underlyingErr
-		}, rp1)
+		})
 		var reErr retrypolicy.ExceededError
 		assert.True(t, errors.As(err, &reErr))
 		assert.Equal(t, underlyingErr, reErr.LastError)
@@ -72,9 +72,9 @@ func TestRetryPolicy(t *testing.T) {
 		rp2 := retrypolicy.NewBuilder[bool]().HandleResult(false).Build()
 
 		// When / Then for last result
-		_, err = failsafe.Get[bool](func() (bool, error) {
+		_, err = failsafe.With(rp2).Get(func() (bool, error) {
 			return false, nil
-		}, rp2)
+		})
 		assert.True(t, errors.As(err, &reErr))
 		assert.Nil(t, reErr.LastError)
 		assert.Equal(t, false, reErr.LastResult)
@@ -161,9 +161,9 @@ func TestRetryPolicy(t *testing.T) {
 				delays = append(delays, e.Delay)
 			}).Build()
 
-		failsafe.Run(func() error {
+		failsafe.With(rp).Run(func() error {
 			return testutil.ErrInvalidState
-		}, rp)
+		})
 
 		expected := []time.Duration{time.Millisecond, 2 * time.Millisecond, 4 * time.Millisecond, 8 * time.Millisecond, 10 * time.Millisecond, 10 * time.Millisecond}
 		assert.ElementsMatch(t, expected, delays)
@@ -179,8 +179,8 @@ func BenchmarkRetryPolicyConstruction(b *testing.B) {
 func BenchmarkRetryPolicyExecution(b *testing.B) {
 	rp := retrypolicy.NewWithDefaults[any]()
 	for i := 0; i < b.N; i++ {
-		_ = failsafe.Run(func() error {
+		_ = failsafe.With(rp).Run(func() error {
 			return testutil.ErrInvalidState
-		}, rp)
+		})
 	}
 }

@@ -64,7 +64,7 @@ func TestExecution_Cancellation(t *testing.T) {
 		rp := retrypolicy.NewWithDefaults[any]()
 
 		// When
-		result := failsafe.NewExecutor[any](rp).RunWithExecutionAsync(func(e failsafe.Execution[any]) error {
+		result := failsafe.With(rp).RunAsyncWithExecution(func(e failsafe.Execution[any]) error {
 			testutil.WaitAndAssertCanceled(t, time.Second, e)
 			return nil
 		})
@@ -86,7 +86,7 @@ func TestTimeout_Cancellation(t *testing.T) {
 	t.Run("during execution", func(t *testing.T) {
 		// Given
 		to := timeout.New[any](100 * time.Millisecond)
-		executor := failsafe.NewExecutor[any](to).WithContext(context.Background())
+		executor := failsafe.With(to).WithContext(context.Background())
 
 		// When / Then
 		testutil.Test[any](t).
@@ -140,7 +140,7 @@ func TestRetryPolicy_Cancellation(t *testing.T) {
 		rp := policytesting.WithRetryLogs[any](retrypolicy.NewBuilder[any]().WithDelay(time.Second)).Build()
 
 		// When
-		result := failsafe.NewExecutor[any](rp).RunAsync(func() error {
+		result := failsafe.With(rp).RunAsync(func() error {
 			return testutil.ErrInvalidState
 		})
 		assert.False(t, result.IsDone())
@@ -199,7 +199,7 @@ func TestFallback_Cancellation(t *testing.T) {
 		})
 
 		// When
-		result := failsafe.NewExecutor[any](fb).RunAsync(func() error {
+		result := failsafe.With(fb).RunAsync(func() error {
 			return testutil.ErrInvalidState
 		})
 		assert.False(t, result.IsDone())
@@ -252,7 +252,7 @@ func TestRateLimit_Cancellation(t *testing.T) {
 		rl.TryAcquirePermit() // All permits used
 
 		// When
-		result := failsafe.NewExecutor[any](rl).RunAsync(func() error {
+		result := failsafe.With(rl).RunAsync(func() error {
 			return nil
 		})
 		assert.False(t, result.IsDone())
@@ -305,7 +305,7 @@ func TestBulkhead_Cancellation(t *testing.T) {
 		bh.TryAcquirePermit() // bulkhead should be full
 
 		// When
-		result := failsafe.NewExecutor[any](bh).RunAsync(func() error {
+		result := failsafe.With(bh).RunAsync(func() error {
 			return testutil.ErrInvalidState
 		})
 		assert.False(t, result.IsDone())

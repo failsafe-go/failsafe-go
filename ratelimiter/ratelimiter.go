@@ -122,7 +122,7 @@ type Builder[R any] interface {
 	// WithMaxWaitTime configures the maxWaitTime to wait for permits to be available. If permits cannot be acquired before
 	// the maxWaitTime is exceeded, then the rate limiter will return ErrExceeded.
 	//
-	// This setting only applies when the resulting RateLimiter is used with the failsafe.Run or related APIs. It does not
+	// This setting only applies when the resulting RateLimiter is used with the failsafe.Executor APIs. It does not
 	// apply when the RateLimiter is used in a standalone way.
 	WithMaxWaitTime(maxWaitTime time.Duration) Builder[R]
 

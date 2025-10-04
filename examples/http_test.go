@@ -54,12 +54,12 @@ func TestHttpWithRetryPolicy(t *testing.T) {
 		defer server.Close()
 
 		fmt.Println("Sending ping")
-		resp, err := failsafe.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
+		resp, err := failsafe.With(retryPolicy).GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
 			// Include the execution context in the request, so that cancellations are propagated
 			req, _ := http.NewRequestWithContext(exec.Context(), http.MethodGet, server.URL, strings.NewReader("ping"))
 			client := &http.Client{}
 			return client.Do(req)
-		}, retryPolicy)
+		})
 
 		readAndPrintResponse(resp, err)
 	})
@@ -174,12 +174,12 @@ func TestHttpWithHedgePolicy(t *testing.T) {
 	// Use the HedgePolicy with an HTTP client via a failsafe execution
 	t.Run("with failsafe execution", func(t *testing.T) {
 		fmt.Println("Sending ping")
-		resp, err := failsafe.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
+		resp, err := failsafe.With(hedgePolicy).GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
 			// Include the execution context in the request, so that cancellations are propagated
 			req, _ := http.NewRequestWithContext(exec.Context(), http.MethodGet, server.URL, nil)
 			client := &http.Client{}
 			return client.Do(req)
-		}, hedgePolicy)
+		})
 
 		readAndPrintResponse(resp, err)
 	})

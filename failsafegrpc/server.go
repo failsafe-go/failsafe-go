@@ -20,7 +20,7 @@ import (
 // rejected. Since a tap.ServerInHandle is meant to be non-blocking, be sure that any policies you're using do not have a
 // wait time configured.
 func NewServerInHandle[R any](policies ...failsafe.Policy[R]) tap.ServerInHandle {
-	return NewServerInHandleWithExecutor(failsafe.NewExecutor(policies...))
+	return NewServerInHandleWithExecutor(failsafe.With(policies...))
 }
 
 // NewServerInHandleWithExecutor returns a tap.ServerInHandle that wraps the handler with a failsafe.Executor. This can
@@ -44,7 +44,7 @@ func NewServerInHandleWithExecutor[R any](executor failsafe.Executor[R]) tap.Ser
 // a CircuitBreaker. For load limiting that does not require inspecting requests, prefer NewServerInHandle.
 // R is the response type.
 func NewUnaryServerInterceptor[R any](policies ...failsafe.Policy[R]) grpc.UnaryServerInterceptor {
-	return NewUnaryServerInterceptorWithExecutor(failsafe.NewExecutor(policies...))
+	return NewUnaryServerInterceptorWithExecutor(failsafe.With(policies...))
 }
 
 // NewUnaryServerInterceptorWithExecutor returns a grpc.UnaryServerInterceptor that wraps the handler with a failsafe.Executor. This can

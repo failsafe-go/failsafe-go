@@ -12,10 +12,10 @@ import (
 
 func TestGetAsync(t *testing.T) {
 	rp := retrypolicy.NewWithDefaults[bool]()
-	result := failsafe.GetAsync(func() (bool, error) {
+	result := failsafe.With(rp).GetAsync(func() (bool, error) {
 		time.Sleep(100 * time.Millisecond)
 		return true, nil
-	}, rp)
+	})
 
 	assert.False(t, result.IsDone())
 	<-result.Done()

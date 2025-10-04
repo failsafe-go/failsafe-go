@@ -31,7 +31,7 @@ func TestCache_Get(t *testing.T) {
 	}{
 		{
 			name: "with global key",
-			executor: failsafe.NewExecutor[string](
+			executor: failsafe.With(
 				policytesting.WithCacheStats(cachepolicy.NewBuilder[string](failsafeCache).
 					WithKey("foo"), stats).
 					Build(),
@@ -44,7 +44,7 @@ func TestCache_Get(t *testing.T) {
 		},
 		{
 			name: "with context key",
-			executor: failsafe.NewExecutor[string](
+			executor: failsafe.With(
 				policytesting.WithCacheStats(cachepolicy.NewBuilder[string](failsafeCache), stats).Build()).
 				WithContext(context.WithValue(context.Background(), cachepolicy.CacheKey, "foo2")),
 			expectedExecutions: 0,
@@ -55,7 +55,7 @@ func TestCache_Get(t *testing.T) {
 		},
 		{
 			name: "with no key",
-			executor: failsafe.NewExecutor[string](
+			executor: failsafe.With(
 				policytesting.WithCacheStats(cachepolicy.NewBuilder[string](failsafeCache), stats).Build(),
 			),
 			expectedExecutions: 1,
@@ -137,7 +137,7 @@ func TestCache(t *testing.T) {
 
 				// When / Then
 				testutil.Test[string](t).
-					WithExecutor(failsafe.NewExecutor[string](tc.cpb.Build())).
+					WithExecutor(failsafe.With(tc.cpb.Build())).
 					Before(before).
 					Get(testutil.GetFn(tc.result, nil)).
 					AssertSuccess(1, 1, tc.result, func() {

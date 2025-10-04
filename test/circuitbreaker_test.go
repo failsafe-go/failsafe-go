@@ -38,18 +38,18 @@ func TestCircuitBreaker(t *testing.T) {
 
 		for i := 0; i < 3; i++ {
 			go func() {
-				failsafe.Run(func() error {
+				failsafe.With(cb).Run(func() error {
 					waiter.Resume()
 					time.Sleep(1 * time.Minute)
 					return nil
-				}, cb)
+				})
 			}()
 		}
 
 		// Assert that the breaker does not allow any more executions at the moment
 		waiter.AwaitWithTimeout(3, 10*time.Second)
 		for i := 0; i < 5; i++ {
-			assert.ErrorIs(t, circuitbreaker.ErrOpen, failsafe.NewExecutor[any](cb).Run(testutil.NoopFn))
+			assert.ErrorIs(t, circuitbreaker.ErrOpen, failsafe.With(cb).Run(testutil.NoopFn))
 		}
 	})
 
@@ -99,8 +99,8 @@ func TestCircuitBreaker(t *testing.T) {
 			Build()
 
 		// When
-		failsafe.Get(testutil.GetFalseFn, cb)
-		failsafe.Get(testutil.GetFalseFn, cb)
+		failsafe.With(cb).Get(testutil.GetFalseFn)
+		failsafe.With(cb).Get(testutil.GetFalseFn)
 
 		// Then
 		testutil.Test[bool](t).
@@ -143,7 +143,7 @@ func TestCircuitBreaker(t *testing.T) {
 			WithDelay(0).
 			HandleResult(false).
 			Build()
-		executor := failsafe.NewExecutor[bool](cb)
+		executor := failsafe.With(cb)
 
 		// When / Then
 		executor.Get(testutil.GetFalseFn)
@@ -177,7 +177,7 @@ func TestCircuitBreaker(t *testing.T) {
 			WithDelay(0).
 			HandleResult(false).
 			Build()
-		executor := failsafe.NewExecutor[bool](cb)
+		executor := failsafe.With(cb)
 
 		// When / Then
 		executor.Get(testutil.GetFalseFn)
@@ -239,7 +239,7 @@ func TestCircuitBreaker(t *testing.T) {
 				Build()
 
 			// When / Then
-			_, _ = failsafe.NewExecutor[any](cb).
+			_, _ = failsafe.With(cb).
 				WithContext(ctx).
 				GetWithExecution(testutil.GetFn[any](nil, testutil.ErrInvalidArgument))
 			assert.True(t, called)

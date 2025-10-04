@@ -27,7 +27,7 @@ func TestServerSuccess(t *testing.T) {
 	// Given
 	mockedResponse := "pong"
 	server := testutil.MockGrpcResponses(mockedResponse)
-	executor := failsafe.NewExecutor[any](NewRetryPolicyBuilder[any]().Build())
+	executor := failsafe.With(NewRetryPolicyBuilder[any]().Build())
 
 	// When / Then
 	testServerSuccess(t, nil, server, executor,
@@ -38,7 +38,7 @@ func TestServerFallback(t *testing.T) {
 	// Given
 	server := testutil.MockGrpcError(errors.New("err"))
 	fb := fallback.NewWithResult(&pbfixtures.PingResponse{Msg: "pong"})
-	executor := failsafe.NewExecutor[*pbfixtures.PingResponse](fb)
+	executor := failsafe.With(fb)
 
 	// When / Then
 	testServerSuccess(t, nil, server, executor,
@@ -51,7 +51,7 @@ func TestServerCache(t *testing.T) {
 	cache, failsafeCache := policytesting.NewCache[any]()
 	cache["foo"] = &pbfixtures.PingResponse{Msg: "bar"}
 	cp := cachepolicy.NewBuilder[any](failsafeCache).WithKey("foo").Build()
-	executor := failsafe.NewExecutor[any](cp)
+	executor := failsafe.With(cp)
 
 	// When / Then
 	testServerSuccess(t, nil, server, executor,
@@ -68,7 +68,7 @@ func TestServerPriorityLimiter(t *testing.T) {
 		BuildPrioritized(adaptivelimiter.NewPrioritizer())
 	limiter.AcquirePermit(context.Background())    // fill limiter
 	go limiter.AcquirePermit(context.Background()) // fill queue
-	executor := failsafe.NewExecutor[any](limiter).WithContext(priority.Medium.AddTo(context.Background()))
+	executor := failsafe.With(limiter).WithContext(priority.Medium.AddTo(context.Background()))
 
 	// When / Then
 	testServerFailure(t, nil, server, executor,
@@ -104,7 +104,7 @@ func TestServerCancelWithContext(t *testing.T) {
 			// Given
 			server := testutil.MockDelayedGrpcResponse("pong", time.Second)
 			rp := retrypolicy.NewBuilder[any]().AbortOnErrors(context.Canceled).Build()
-			executor := failsafe.NewExecutor[any](rp)
+			executor := failsafe.With(rp)
 			if tc.executorCtx != nil {
 				executor = executor.WithContext(tc.executorCtx)
 			}

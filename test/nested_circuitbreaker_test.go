@@ -17,12 +17,12 @@ func TestCircuitBreker_Nested(t *testing.T) {
 		innerCb := circuitbreaker.NewBuilder[any]().HandleErrors(testutil.ErrInvalidArgument).Build()
 		outerCb := circuitbreaker.NewBuilder[any]().HandleErrors(testutil.ErrInvalidState).Build()
 
-		failsafe.RunWithExecution(testutil.RunFn(testutil.ErrInvalidArgument), innerCb, outerCb)
+		failsafe.With(innerCb, outerCb).RunWithExecution(testutil.RunFn(testutil.ErrInvalidArgument))
 		assert.True(t, innerCb.IsOpen())
 		assert.True(t, outerCb.IsClosed())
 
 		innerCb.Close()
-		failsafe.RunWithExecution(testutil.RunFn(testutil.ErrInvalidArgument), innerCb, outerCb)
+		failsafe.With(innerCb, outerCb).RunWithExecution(testutil.RunFn(testutil.ErrInvalidArgument))
 		assert.True(t, innerCb.IsOpen())
 		assert.True(t, outerCb.IsClosed())
 	})

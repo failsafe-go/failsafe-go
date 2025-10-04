@@ -100,8 +100,8 @@ func BenchmarkBulkheadConstruction(b *testing.B) {
 func BenchmarkBulkheadExecution(b *testing.B) {
 	bh := bulkhead.New[any](10)
 	for i := 0; i < b.N; i++ {
-		_ = failsafe.Run(func() error {
+		_ = failsafe.With(bh).Run(func() error {
 			return nil
-		}, bh)
+		})
 	}
 }

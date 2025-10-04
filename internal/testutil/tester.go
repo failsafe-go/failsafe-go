@@ -129,13 +129,13 @@ func (t *Tester[R]) exec(async bool) (R, error, AssertFunc[R]) {
 		if !async {
 			err = executor.RunWithExecution(t.run)
 		} else {
-			err = executor.RunWithExecutionAsync(t.run).Error()
+			err = executor.RunAsyncWithExecution(t.run).Error()
 		}
 	} else {
 		if !async {
 			result, err = executor.GetWithExecution(t.get)
 		} else {
-			result, err = executor.GetWithExecutionAsync(t.get).Get()
+			result, err = executor.GetAsyncWithExecution(t.get).Get()
 		}
 	}
 	if t.AfterFn != nil {

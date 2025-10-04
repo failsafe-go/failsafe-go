@@ -53,7 +53,7 @@ func TestLoadLimiting(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Given
 			server := testutil.MockGrpcResponses("foo")
-			executor := failsafe.NewExecutor[any](tc.policy)
+			executor := failsafe.With(tc.policy)
 
 			// When / Then
 			testClientFailure(t, nil, server, executor,
@@ -97,7 +97,7 @@ func TestCircuitBreakerWithResult(t *testing.T) {
 			}).Build()
 
 			// When / Then
-			executor := failsafe.NewExecutor[*pbfixtures.PingResponse](cb)
+			executor := failsafe.With(cb)
 			tc.assertFn(t, executor)
 			assert.True(t, cb.IsOpen())
 		})
@@ -131,7 +131,7 @@ func TestCancelWithTimeout(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Given
-			executor := failsafe.NewExecutor[any](timeout.New[any](100 * time.Millisecond))
+			executor := failsafe.With(timeout.New[any](100 * time.Millisecond))
 
 			// When / Then
 			start := time.Now()

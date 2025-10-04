@@ -19,7 +19,7 @@ func TestPanicInRetryPolicyDelayFunction(t *testing.T) {
 	}).Build()
 
 	assert.Panics(t, func() {
-		failsafe.RunWithExecution(testutil.RunFn(errors.New("test")), rp)
+		failsafe.With(rp).RunWithExecution(testutil.RunFn(errors.New("test")))
 	})
 }
 
@@ -33,7 +33,7 @@ func TestShouldDelayRetryPolicy(t *testing.T) {
 		}).
 		Build()
 
-	executor := failsafe.NewExecutor[bool](retryPolicy)
+	executor := failsafe.With(retryPolicy)
 	executor.GetWithExecution(testutil.GetFn[bool](true, nil))
 	executor.GetWithExecution(testutil.GetFn[bool](false, nil))
 	assert.Equal(t, 2, delays)
@@ -45,7 +45,7 @@ func TestPanicInCircuitBreakerDelayFunction(t *testing.T) {
 	}).Build()
 
 	assert.Panics(t, func() {
-		failsafe.RunWithExecution(testutil.RunFn(errors.New("test")), breaker)
+		failsafe.With(breaker).RunWithExecution(testutil.RunFn(errors.New("test")))
 	})
 }
 
@@ -61,7 +61,7 @@ func TestShouldDelayCircuitBreaker(t *testing.T) {
 		}).
 		Build()
 
-	executor := failsafe.NewExecutor[int](breaker)
+	executor := failsafe.With(breaker)
 	executor.GetWithExecution(testutil.GetFn[int](0, nil))
 	executor.GetWithExecution(testutil.GetFn[int](1, nil))
 	assert.Equal(t, 1, delays)

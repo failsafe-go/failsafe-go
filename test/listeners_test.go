@@ -34,7 +34,7 @@ func TestListenersOnSuccess(t *testing.T) {
 	registerCbListeners(stats, cbBuilder)
 	registerFbListeners(stats, fbBuilder)
 	registerCpListeners(stats, cpBuilder)
-	executor := failsafe.NewExecutor[bool](fbBuilder.Build(), cpBuilder.Build(), rpBuilder.Build(), cbBuilder.Build())
+	executor := failsafe.With(fbBuilder.Build(), cpBuilder.Build(), rpBuilder.Build(), cbBuilder.Build())
 	registerExecutorListeners(stats, executor)
 
 	// When
@@ -77,7 +77,7 @@ func TestListenersForUnhandledFailure(t *testing.T) {
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
-	executor := failsafe.NewExecutor[bool](rpBuilder.Build(), cbBuilder.Build())
+	executor := failsafe.With(rpBuilder.Build(), cbBuilder.Build())
 	registerExecutorListeners(stats, executor)
 
 	// When
@@ -112,7 +112,7 @@ func TestListenersForRetriesExceeded(t *testing.T) {
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
-	executor := failsafe.NewExecutor[bool](rpBuilder.Build(), cbBuilder.Build())
+	executor := failsafe.With(rpBuilder.Build(), cbBuilder.Build())
 	registerExecutorListeners(stats, executor)
 
 	// When
@@ -146,7 +146,7 @@ func TestListenersForAbort(t *testing.T) {
 	stats := &listenerStats{}
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
-	executor := failsafe.NewExecutor[bool](rpBuilder.Build(), cbBuilder.Build())
+	executor := failsafe.With(rpBuilder.Build(), cbBuilder.Build())
 	registerExecutorListeners(stats, executor)
 
 	// When
@@ -175,7 +175,7 @@ func TestListenersForAbort(t *testing.T) {
 func TestListenersForFailingRetryPolicy(t *testing.T) {
 	// Given - Fail 10 times
 	stub, _ := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 10)
-	// NewExecutor failing RetryPolicy
+	// With failing RetryPolicy
 	rpBuilder := retrypolicy.NewBuilder[bool]()
 	// And successful CircuitBreaker and Fallback
 	cbBuilder := circuitbreaker.NewBuilder[bool]().HandleErrors(testutil.ErrInvalidArgument).WithDelay(0)
@@ -184,7 +184,7 @@ func TestListenersForFailingRetryPolicy(t *testing.T) {
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
 	registerFbListeners(stats, fbBuilder)
-	executor := failsafe.NewExecutor[bool](fbBuilder.Build(), rpBuilder.Build(), cbBuilder.Build())
+	executor := failsafe.With(fbBuilder.Build(), rpBuilder.Build(), cbBuilder.Build())
 	registerExecutorListeners(stats, executor)
 
 	// When
@@ -209,7 +209,7 @@ func TestListenersForFailingRetryPolicy(t *testing.T) {
 func TestListenersForFailingCircuitBreaker(t *testing.T) {
 	// Given - Fail 10 times
 	stub, _ := testutil.ErrorNTimesThenReturn[bool](testutil.ErrInvalidState, 10)
-	// NewExecutor successful RetryPolicy
+	// With successful RetryPolicy
 	rpBuilder := retrypolicy.NewBuilder[bool]().HandleErrors(testutil.ErrInvalidArgument)
 	// And failing CircuitBreaker
 	cbBuilder := circuitbreaker.NewBuilder[bool]().WithDelay(0)
@@ -219,7 +219,7 @@ func TestListenersForFailingCircuitBreaker(t *testing.T) {
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
 	registerFbListeners(stats, fbBuilder)
-	executor := failsafe.NewExecutor[bool](fbBuilder.Build(), rpBuilder.Build(), cbBuilder.Build())
+	executor := failsafe.With(fbBuilder.Build(), rpBuilder.Build(), cbBuilder.Build())
 	registerExecutorListeners(stats, executor)
 
 	// When
@@ -253,7 +253,7 @@ func TestListenersForFailingFallback(t *testing.T) {
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
 	registerFbListeners(stats, fbBuilder)
-	executor := failsafe.NewExecutor[bool](fbBuilder.Build(), rpBuilder.Build(), cbBuilder.Build())
+	executor := failsafe.With(fbBuilder.Build(), rpBuilder.Build(), cbBuilder.Build())
 	registerExecutorListeners(stats, executor)
 
 	// When
@@ -282,10 +282,10 @@ func TestGetElapsedTime(t *testing.T) {
 			assert.True(t, e.ElapsedAttemptTime().Milliseconds() >= 90)
 		}).
 		Build()
-	failsafe.Get(func() (any, error) {
+	failsafe.With(rp).Get(func() (any, error) {
 		time.Sleep(100 * time.Millisecond)
 		return false, nil
-	}, rp)
+	})
 }
 
 func TestRetryPolicyOnScheduledRetry(t *testing.T) {
@@ -315,7 +315,7 @@ func TestRetryPolicyOnScheduledRetry(t *testing.T) {
 		}).
 		Build()
 
-	failsafe.NewExecutor[any](rp).Get(func() (any, error) {
+	failsafe.With(rp).Get(func() (any, error) {
 		executions++
 		return nil, nil
 	})
@@ -326,7 +326,7 @@ func TestListenersForRateLimiter(t *testing.T) {
 	rlBuilder := ratelimiter.NewSmoothBuilderWithMaxRate[any](100 * time.Millisecond)
 	stats := &listenerStats{}
 	registerRlListeners(stats, rlBuilder)
-	executor := failsafe.NewExecutor[any](rlBuilder.Build())
+	executor := failsafe.With(rlBuilder.Build())
 	registerExecutorListeners(stats, executor)
 
 	// When
@@ -351,7 +351,7 @@ func TestListenersForBulkhead(t *testing.T) {
 	stats := &listenerStats{}
 	registerBhListeners(stats, bhBuilder)
 	bh := bhBuilder.Build()
-	executor := failsafe.NewExecutor[any](bh)
+	executor := failsafe.With(bh)
 	registerExecutorListeners(stats, executor)
 	assert.NoError(t, bh.AcquirePermit(context.Background()))
 	assert.NoError(t, bh.AcquirePermit(context.Background()))
@@ -375,7 +375,7 @@ func TestListenersForCache(t *testing.T) {
 	cpBuilder := cachepolicy.NewBuilder(fsCache).WithKey("foo")
 	stats := &listenerStats{}
 	registerCpListeners(stats, cpBuilder)
-	executor := failsafe.NewExecutor[any](cpBuilder.Build())
+	executor := failsafe.With(cpBuilder.Build())
 	registerExecutorListeners(stats, executor)
 
 	// When
@@ -398,7 +398,7 @@ func TestListenersForHedgePolicy(t *testing.T) {
 	hpBuilder := hedgepolicy.NewBuilderWithDelay[bool](10 * time.Millisecond).WithMaxHedges(2)
 	stats := &listenerStats{}
 	registerHpListeners(stats, hpBuilder)
-	executor := failsafe.NewExecutor[bool](hpBuilder.Build())
+	executor := failsafe.With(hpBuilder.Build())
 	registerExecutorListeners(stats, executor)
 
 	// When
@@ -429,7 +429,7 @@ func TestListenersOnPanic(t *testing.T) {
 	registerRpListeners(stats, rpBuilder)
 	registerCbListeners(stats, cbBuilder)
 	registerFbListeners(stats, fbBuilder)
-	executor := failsafe.NewExecutor[bool](fbBuilder.Build(), rpBuilder.Build(), cbBuilder.Build())
+	executor := failsafe.With(fbBuilder.Build(), rpBuilder.Build(), cbBuilder.Build())
 	registerExecutorListeners(stats, executor)
 
 	// When

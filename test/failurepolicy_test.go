@@ -17,9 +17,9 @@ func TestHandleErrors(t *testing.T) {
 		HandleErrors(io.EOF).
 		Build()
 
-	result, err := failsafe.Get(func() (bool, error) {
+	result, err := failsafe.With(fb).Get(func() (bool, error) {
 		return false, io.EOF
-	}, fb)
+	})
 	assert.True(t, result)
 	assert.Nil(t, err)
 }
@@ -29,9 +29,9 @@ func TestHandleErrorsAs(t *testing.T) {
 		HandleErrorTypes(testutil.CompositeError{}).
 		Build()
 
-	result, err := failsafe.Get(func() (bool, error) {
+	result, err := failsafe.With(fb).Get(func() (bool, error) {
 		return false, testutil.CompositeError{Cause: errors.New("test")}
-	}, fb)
+	})
 	assert.True(t, result)
 	assert.Nil(t, err)
 }

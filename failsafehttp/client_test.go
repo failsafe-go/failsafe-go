@@ -208,7 +208,7 @@ func TestClientCancelWithContext(t *testing.T) {
 			server := testutil.MockDelayedResponse(200, "bad", time.Second)
 			t.Cleanup(server.Close)
 			rp := retrypolicy.NewBuilder[*http.Response]().AbortOnErrors(context.Canceled).Build()
-			executor := failsafe.NewExecutor[*http.Response](rp)
+			executor := failsafe.With(rp)
 			if tc.executorCtx != nil {
 				executor = executor.WithContext(tc.executorCtx)
 			}

@@ -14,26 +14,26 @@ import (
 
 func TestRunWithSuccess(t *testing.T) {
 	rp := retrypolicy.NewWithDefaults[any]()
-	err := failsafe.Run(func() error {
+	err := failsafe.With(rp).Run(func() error {
 		return nil
-	}, rp)
+	})
 	assert.Nil(t, err)
 }
 
 func TestGetWithSuccess(t *testing.T) {
 	rp := retrypolicy.NewWithDefaults[string]()
-	result, err := failsafe.Get(func() (string, error) {
+	result, err := failsafe.With(rp).Get(func() (string, error) {
 		return "test", nil
-	}, rp)
+	})
 	assert.Equal(t, "test", result)
 	assert.Nil(t, err)
 }
 
 func TestGetWithFailure(t *testing.T) {
 	rp := retrypolicy.NewWithDefaults[string]()
-	result, err := failsafe.Get(func() (string, error) {
+	result, err := failsafe.With(rp).Get(func() (string, error) {
 		return "", testutil.ErrInvalidArgument
-	}, rp)
+	})
 
 	assert.Empty(t, result)
 	assert.ErrorIs(t, err, testutil.ErrInvalidArgument)
@@ -43,10 +43,10 @@ func TestGetWithExecution(t *testing.T) {
 	rp := retrypolicy.NewWithDefaults[string]()
 	fb := fallback.NewWithResult("fallback")
 	var lasteExec failsafe.Execution[string]
-	result, err := failsafe.GetWithExecution(func(exec failsafe.Execution[string]) (string, error) {
+	result, err := failsafe.With(fb, rp).GetWithExecution(func(exec failsafe.Execution[string]) (string, error) {
 		lasteExec = exec
 		return "", testutil.ErrInvalidArgument
-	}, fb, rp)
+	})
 
 	assert.Equal(t, "fallback", result)
 	assert.Nil(t, err)
@@ -61,7 +61,7 @@ func TestWithContext(t *testing.T) {
 	t.Run("should create new executor", func(t *testing.T) {
 		ctx1 := context.Background()
 		ctx2 := context.Background()
-		executor1 := failsafe.NewExecutor[any](retrypolicy.NewWithDefaults[any]()).WithContext(ctx1)
+		executor1 := failsafe.With(retrypolicy.NewWithDefaults[any]()).WithContext(ctx1)
 		executor2 := executor1.WithContext(ctx2)
 		assert.NotSame(t, executor1, executor2)
 	})
@@ -70,7 +70,7 @@ func TestWithContext(t *testing.T) {
 		ctx := context.WithValue(context.Background(), "foo", "bar")
 		var eventCtx context.Context
 		var executionCtx context.Context
-		failsafe.NewExecutor[any](retrypolicy.NewWithDefaults[any]()).
+		failsafe.With(retrypolicy.NewWithDefaults[any]()).
 			WithContext(ctx).
 			OnDone(func(e failsafe.ExecutionDoneEvent[any]) {
 				eventCtx = e.Context()
@@ -85,7 +85,7 @@ func TestWithContext(t *testing.T) {
 }
 
 func TestExecutionWithNoPolicies(t *testing.T) {
-	result, err := failsafe.Get(func() (string, error) {
+	result, err := failsafe.With[string]().Get(func() (string, error) {
 		return "test", testutil.ErrInvalidArgument
 	})
 

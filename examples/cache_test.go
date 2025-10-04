@@ -16,12 +16,12 @@ func TestCache(t *testing.T) {
 	cachePolicy := cachepolicy.NewBuilder[net.Conn](cache).WithKey("connection").Build()
 
 	// Get initial connection
-	connection1, err := failsafe.Get[net.Conn](Connect, cachePolicy)
+	connection1, err := failsafe.With(cachePolicy).Get(Connect)
 	assert.NoError(t, err)
 	assert.NotNil(t, connection1.RemoteAddr())
 
 	// Get cached connection
-	connection2, err := failsafe.Get[net.Conn](Connect, cachePolicy)
+	connection2, err := failsafe.With(cachePolicy).Get(Connect)
 	assert.NoError(t, err)
 	assert.Same(t, connection1, connection2)
 }

@@ -52,7 +52,7 @@ func GetFn[R any](result R, err error) func(failsafe.Execution[R]) (R, error) {
 }
 
 // ErrorNTimesThenReturn returns a stub function that returns the err errorTimes and then returns the results.
-// Can be used with failsafe.GetWithExecution.
+// Can be used with Executor.GetWithExecution.
 func ErrorNTimesThenReturn[R any](err error, errorTimes int, results ...R) (fn func(failsafe.Execution[R]) (R, error), resetFn func()) {
 	errorCounter := 0
 	resultIndex := 0
@@ -73,7 +73,7 @@ func ErrorNTimesThenReturn[R any](err error, errorTimes int, results ...R) (fn f
 }
 
 // ErrorNTimesThenPanic returns a stub function that returns the err errorTimes and then panics with the panicValue.
-// Can be used with failsafe.GetWithExecution.
+// Can be used with Executor.GetWithExecution.
 func ErrorNTimesThenPanic[R any](err error, errorTimes int, panicValue any) func(failsafe.Execution[R]) (R, error) {
 	errorCounter := 0
 	return func(exec failsafe.Execution[R]) (R, error) {
@@ -86,7 +86,7 @@ func ErrorNTimesThenPanic[R any](err error, errorTimes int, panicValue any) func
 }
 
 // ErrorNTimesThenError returns a stub function that returns the err errorTimes and then returns the finalError.
-// Can be used with failsafe.GetWithExecution.
+// Can be used with Executor.GetWithExecution.
 func ErrorNTimesThenError[R any](err error, errorTimes int, finalError error) func(failsafe.Execution[R]) (R, error) {
 	errorCounter := 0
 	return func(exec failsafe.Execution[R]) (R, error) {

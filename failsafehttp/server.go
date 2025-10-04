@@ -17,7 +17,7 @@ import (
 // NewHandler returns a new http.Handler that will perform failsafe request handling via the policies and
 // innerHandler. The policies are composed around responses and will handle responses in reverse order.
 func NewHandler(innerHandler http.Handler, policies ...failsafe.Policy[*http.Response]) http.Handler {
-	return NewHandlerWithExecutor(innerHandler, failsafe.NewExecutor(policies...))
+	return NewHandlerWithExecutor(innerHandler, failsafe.With(policies...))
 }
 
 // NewHandlerWithExecutor returns a new http.Handler that will perform failsafe request handling via the executor and
