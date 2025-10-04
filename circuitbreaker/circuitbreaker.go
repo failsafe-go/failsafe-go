@@ -400,6 +400,8 @@ func (cb *circuitBreaker[R]) recordFailure(exec failsafe.Execution[R]) {
 }
 
 func (cb *circuitBreaker[R]) Reset() {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 	cb.close()
 	cb.state.Reset()
 }
