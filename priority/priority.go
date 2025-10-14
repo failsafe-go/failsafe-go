@@ -120,6 +120,7 @@ type windowedLevelTracker struct {
 	filled      bool
 }
 
+// NewLevelTracker creates a LevelTracker that stores the last windowSize recorded levels.
 func NewLevelTracker(windowSize int) LevelTracker {
 	return &windowedLevelTracker{
 		window:      make([]int, windowSize),
@@ -158,24 +159,22 @@ func (lt *windowedLevelTracker) GetLevel(quantile float64) int {
 		currentSize = lt.head
 	}
 
-	if currentSize == 0 {
-		return 0
-	}
+	if currentSize > 0 {
+		// Determine how many recorded levels we need to find to match the quantile
+		targetLevels := int(math.Ceil(float64(currentSize) * quantile))
+		if targetLevels < 1 {
+			targetLevels = 1
+		}
 
-	// Determine how many recorded levels we need to find to match the quantile
-	targetLevels := int(math.Ceil(float64(currentSize) * quantile))
-	if targetLevels < 1 {
-		targetLevels = 1
-	}
-
-	countedLevels := 0
-	for level := 0; level < totalLevels; level++ {
-		countedLevels += lt.levelCounts[level]
-		if countedLevels >= targetLevels {
-			return level
+		// Count the levels until we hit the desired quantile
+		countedLevels := 0
+		for level := 0; level < totalLevels; level++ {
+			countedLevels += lt.levelCounts[level]
+			if countedLevels >= targetLevels {
+				return level
+			}
 		}
 	}
 
-	// Should not be reachable
 	return 0
 }

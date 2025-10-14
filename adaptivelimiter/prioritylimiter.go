@@ -98,11 +98,17 @@ func (l *priorityLimiter[R]) AcquirePermitWithMaxWait(ctx context.Context, maxWa
 		return nil, ErrExceeded
 	}
 
+	// Record levels when overloaded
+	if l.adaptiveLimiter.semaphore.IsFull() {
+		l.prioritizer.LevelTracker.RecordLevel(level)
+	}
+
+	// Acquire, blocking if necessary
 	permit, err := l.adaptiveLimiter.AcquirePermitWithMaxWait(ctx, maxWaitTime)
 	if err != nil {
 		return nil, err
 	}
-	l.prioritizer.LevelTracker.RecordLevel(level)
+
 	return l.enhancedPermit(ctx, permit), nil
 }
 
@@ -115,11 +121,17 @@ func (l *priorityLimiter[R]) AcquirePermitWithLevel(ctx context.Context, level i
 		return nil, ErrExceeded
 	}
 
+	// Record levels when overloaded
+	if l.adaptiveLimiter.semaphore.IsFull() {
+		l.prioritizer.LevelTracker.RecordLevel(level)
+	}
+
+	// Acquire, blocking if necessary
 	permit, err := l.adaptiveLimiter.AcquirePermit(ctx)
 	if err != nil {
 		return nil, err
 	}
-	l.prioritizer.LevelTracker.RecordLevel(level)
+
 	return l.enhancedPermit(ctx, permit), nil
 }
 
