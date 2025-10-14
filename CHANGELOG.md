@@ -1,5 +1,11 @@
 ## Upcoming Release
 
+## 0.9.1
+
+### Improvements
+
+- Changed the level tracker, which is used for execution prioritization, to use a windowed data structure rather than a TDigest, for tracking level distributions. This is more performant and accurate in most cases.
+
 ## 0.9.0
 
 ### API Changes
