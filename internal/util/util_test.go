@@ -114,19 +114,81 @@ func TestErrorAs(t *testing.T) {
 }
 
 func TestMergeContexts(t *testing.T) {
-	// Given
-	ctx1 := ContextWithCancel(50 * time.Millisecond)()
-	ctx2 := ContextWithCancel(time.Second)()
+	t.Run("cancels when ctx1 cancels first", func(t *testing.T) {
+		ctx1 := ContextWithCancel(50 * time.Millisecond)()
+		ctx2 := ContextWithCancel(time.Second)()
 
-	// When
-	mergedCtx, _ := MergeContexts(ctx1, ctx2)
+		mergedCtx, _ := MergeContexts(ctx1, ctx2)
 
-	// Then
-	select {
-	case <-mergedCtx.Done():
-		assert.ErrorIs(t, ctx1.Err(), context.Canceled)
-		assert.Nil(t, ctx2.Err())
-	}
+		select {
+		case <-mergedCtx.Done():
+			assert.ErrorIs(t, ctx1.Err(), context.Canceled)
+			assert.Nil(t, ctx2.Err())
+		}
+	})
+
+	t.Run("cancels when ctx2 is canceled", func(t *testing.T) {
+		ctx1, cancel1 := context.WithCancel(context.Background())
+		defer cancel1()
+		ctx2, cancel2 := context.WithCancel(context.Background())
+
+		merged, _ := MergeContexts(ctx1, ctx2)
+		cancel2()
+
+		select {
+		case <-merged.Done():
+			assert.ErrorIs(t, merged.Err(), context.Canceled)
+		case <-time.After(100 * time.Millisecond):
+			t.Fatal("merged context should be canceled when ctx2 is canceled")
+		}
+	})
+
+	t.Run("preserves values from both contexts", func(t *testing.T) {
+		type key1 int
+		type key2 int
+		const k1 key1 = 1
+		const k2 key2 = 2
+
+		ctx1 := context.WithValue(context.Background(), k1, "value1")
+		ctx2 := context.WithValue(context.Background(), k2, "value2")
+
+		merged, cancel := MergeContexts(ctx1, ctx2)
+		defer cancel(nil)
+
+		assert.Equal(t, "value1", merged.Value(k1))
+		assert.Equal(t, "value2", merged.Value(k2))
+	})
+
+	t.Run("ctx1 values take precedence over ctx2", func(t *testing.T) {
+		type key int
+		const k key = 1
+
+		ctx1 := context.WithValue(context.Background(), k, "from-ctx1")
+		ctx2 := context.WithValue(context.Background(), k, "from-ctx2")
+
+		merged, cancel := MergeContexts(ctx1, ctx2)
+		defer cancel(nil)
+
+		assert.Equal(t, "from-ctx1", merged.Value(k))
+	})
+
+	t.Run("returns earliest deadline when both have deadlines", func(t *testing.T) {
+		now := time.Now()
+		earlier := now.Add(100 * time.Millisecond)
+		later := now.Add(200 * time.Millisecond)
+
+		ctx1, cancel1 := context.WithDeadline(context.Background(), later)
+		defer cancel1()
+		ctx2, cancel2 := context.WithDeadline(context.Background(), earlier)
+		defer cancel2()
+
+		merged, cancel := MergeContexts(ctx1, ctx2)
+		defer cancel(nil)
+
+		deadline, ok := merged.Deadline()
+		assert.True(t, ok)
+		assert.Equal(t, earlier, deadline)
+	})
 }
 
 func TestAppliesToAny(t *testing.T) {

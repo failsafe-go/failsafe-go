@@ -32,7 +32,7 @@ func NewUnaryClientInterceptorWithExecutor[R any](executor failsafe.Executor[R])
 		// Merge the request context with the Executor so it's available for policies
 		mergedCtx, cancel := util.MergeContexts(ctx, executor.Context())
 		defer cancel(nil)
-		if mergedCtx != ctx {
+		if mergedCtx != executor.Context() {
 			executor = executor.WithContext(mergedCtx)
 		}
 

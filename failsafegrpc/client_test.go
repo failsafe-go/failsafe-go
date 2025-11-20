@@ -138,7 +138,7 @@ func TestClientCancelWithContext(t *testing.T) {
 	}{
 		{
 			"with request context",
-			status.Error(codes.Canceled, "context canceled"),
+			context.Canceled,
 			fastCtxFn,
 			nil,
 		},
