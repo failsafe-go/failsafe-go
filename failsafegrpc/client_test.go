@@ -132,31 +132,26 @@ func TestClientCancelWithContext(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		expectedErr  error
 		requestCtxFn func() context.Context
 		executorCtx  context.Context
 	}{
 		{
 			"with request context",
-			context.Canceled,
 			fastCtxFn,
 			nil,
 		},
 		{
 			"with executor context",
-			context.Canceled,
 			nil,
 			fastCtxFn(),
 		},
 		{
 			"with canceling request context and slow executor context",
-			context.Canceled,
 			fastCtxFn,
 			slowCtxFn(),
 		},
 		{
 			"with canceling executor context and slow request context",
-			context.Canceled,
 			slowCtxFn,
 			fastCtxFn(),
 		},
@@ -166,7 +161,7 @@ func TestClientCancelWithContext(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Given
 			server := testutil.MockDelayedGrpcResponse("pong", time.Second)
-			rp := retrypolicy.NewBuilder[any]().AbortOnErrors(tc.expectedErr).Build()
+			rp := retrypolicy.NewBuilder[any]().AbortOnErrors(context.Canceled).Build()
 			executor := failsafe.With(rp)
 			if tc.executorCtx != nil {
 				executor = executor.WithContext(tc.executorCtx)
@@ -175,7 +170,7 @@ func TestClientCancelWithContext(t *testing.T) {
 			// When / Then
 			start := time.Now()
 			testClientFailure(t, tc.requestCtxFn, server, executor,
-				1, 1, tc.expectedErr)
+				1, 1, context.Canceled)
 			assert.True(t, start.Add(time.Second).After(time.Now()), "cancellation should immediately exit execution")
 		})
 	}
