@@ -6,6 +6,8 @@ import (
 	"strconv"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/adaptivelimiter"
+	"github.com/failsafe-go/failsafe-go/adaptivethrottler"
 	"github.com/failsafe-go/failsafe-go/bulkhead"
 	"github.com/failsafe-go/failsafe-go/circuitbreaker"
 	"github.com/failsafe-go/failsafe-go/internal/util"
@@ -33,7 +35,11 @@ func NewHandlerWithExecutor(innerHandler http.Handler, executor failsafe.Executo
 
 		if err != nil {
 			var code int
-			if errors.Is(err, bulkhead.ErrFull) || errors.Is(err, circuitbreaker.ErrOpen) || errors.Is(err, ratelimiter.ErrExceeded) {
+			if errors.Is(err, bulkhead.ErrFull) ||
+				errors.Is(err, circuitbreaker.ErrOpen) ||
+				errors.Is(err, ratelimiter.ErrExceeded) ||
+				errors.Is(err, adaptivelimiter.ErrExceeded) ||
+				errors.Is(err, adaptivethrottler.ErrExceeded) {
 				code = http.StatusTooManyRequests
 			} else if errors.Is(err, timeout.ErrExceeded) {
 				code = http.StatusServiceUnavailable
