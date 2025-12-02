@@ -238,6 +238,64 @@ func TestClientCancelWithTimeout(t *testing.T) {
 	assert.True(t, start.Add(time.Second).After(time.Now()), "timeout should immediately exit execution")
 }
 
+// Tests that the cancellation of a merged context does not prevent a response body from being successfully read.
+func TestContextCancellation(t *testing.T) {
+	// Asserts that an outer context created by a failsafe RoundTripper is not canceled until after the body is read
+	t.Run("with outer context", func(t *testing.T) {
+		// Create a server that returns a large response to increase the chance of a race condition
+		largeBody := strings.Repeat("x", 100000)
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(largeBody))
+		}))
+		defer server.Close()
+
+		timeoutPolicy := timeout.NewBuilder[*http.Response](10 * time.Minute).Build()
+		executor := failsafe.With(timeoutPolicy).WithContext(context.WithValue(context.Background(), "foo", "bar"))
+		rt := NewRoundTripperWithExecutor(http.DefaultTransport, executor)
+
+		// Make the request
+		reqCtx, reqCancel := context.WithCancel(context.Background())
+		defer reqCancel()
+		req, err := http.NewRequestWithContext(reqCtx, "GET", server.URL, nil)
+		assert.NoError(t, err)
+
+		resp, err := rt.RoundTrip(req)
+		assert.NoError(t, err)
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		assert.NoError(t, err)
+		assert.Equal(t, largeBody, string(body))
+	})
+
+	// Asserts that an inner context created by a failsafe RoundTripper is not canceled until after the body is read
+	t.Run("with inner context", func(t *testing.T) {
+		// Timeout with a very long duration, so it should never actually trigger.
+		timeoutPolicy := timeout.NewBuilder[*http.Response](10 * time.Minute).
+			OnTimeoutExceeded(func(e failsafe.ExecutionDoneEvent[*http.Response]) {
+				t.Log("timed out by policy")
+			}).
+			Build()
+
+		executor := failsafe.With(timeoutPolicy).WithContext(context.WithValue(context.Background(), "foo", "bar"))
+		rt := NewRoundTripperWithExecutor(http.DefaultTransport, executor)
+
+		req, err := http.NewRequestWithContext(context.Background(), "GET", "http://google.com", nil)
+		assert.NoError(t, err)
+		client := &http.Client{Transport: rt}
+
+		resp, err := client.Do(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		defer resp.Body.Close()
+
+		b, err := io.ReadAll(resp.Body)
+		assert.NoError(t, err)
+		assert.Greater(t, len(b), 0)
+	})
+}
+
 func TestBodyReader(t *testing.T) {
 	tests := []struct {
 		name         string

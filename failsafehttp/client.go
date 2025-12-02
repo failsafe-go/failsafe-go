@@ -2,6 +2,7 @@ package failsafehttp
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -102,26 +103,41 @@ func (r *Request) Do() (*http.Response, error) {
 	return doRequest(r.request, r.executor, r.client.Do)
 }
 
-func doRequest(request *http.Request, executor failsafe.Executor[*http.Response], reqFn func(r *http.Request) (*http.Response, error)) (*http.Response, error) {
+func doRequest(request *http.Request, executor failsafe.Executor[*http.Response], reqFn func(r *http.Request) (*http.Response, error)) (resp *http.Response, e error) {
 	bodyFunc, err := bodyReader(request.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	// Merge the request context with the Executor so it's available for policies
-	ctx, cancel := util.MergeContexts(request.Context(), executor.Context())
-	defer cancel(nil)
-	if ctx != executor.Context() {
-		executor = executor.WithContext(ctx)
+	cancelOnNoResponse := func(r *http.Response, cancel context.CancelCauseFunc) {
+		if r != nil {
+			if _, ok := r.Body.(*bodyWithCancel); ok {
+				return // bodyWithCancel will handle context cancellation
+			}
+		}
+		cancel(nil)
 	}
 
-	return executor.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (*http.Response, error) {
+	// Merge the request context with the Executor so it's available for policies
+	ctxOuter, cancelOuter := util.MergeContexts(request.Context(), executor.Context())
+	defer func() {
+		// Calls cancelOuter if a bodyWithCancel is not returned
+		cancelOnNoResponse(resp, cancelOuter)
+	}()
+	if ctxOuter != executor.Context() {
+		executor = executor.WithContext(ctxOuter)
+	}
+
+	return executor.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (r *http.Response, e error) {
 		// Merge the latest execution context into the request for each attempt
 		ctxInner, cancelInner := util.MergeContexts(request.Context(), exec.Context())
-		defer cancelInner(nil)
+		defer func() {
+			// Calls cancelInner if a bodyWithCancel is not returned
+			cancelOnNoResponse(r, cancelInner)
+		}()
 		req := request
-		if ctxInner != request.Context() {
-			req = request.WithContext(ctxInner)
+		if ctxInner != req.Context() {
+			req = req.WithContext(ctxInner)
 		}
 
 		// Get new body for each attempt
@@ -137,8 +153,34 @@ func doRequest(request *http.Request, executor failsafe.Executor[*http.Response]
 			}
 		}
 
-		return reqFn(req)
+		r, e = reqFn(req)
+		if e != nil {
+			return
+		}
+
+		// Wrap the response body to cancel both contexts when the body is closed
+		r.Body = &bodyWithCancel{
+			ReadCloser:  r.Body,
+			cancelOuter: cancelOuter,
+			cancelInner: cancelInner,
+		}
+		return
 	})
+}
+
+// bodyWithCancel wraps a response body and calls the cancel functions when the body is closed.
+type bodyWithCancel struct {
+	io.ReadCloser
+	cancelOuter func(error)
+	cancelInner func(error)
+}
+
+func (b *bodyWithCancel) Close() error {
+	defer func() {
+		b.cancelOuter(nil)
+		b.cancelInner(nil)
+	}()
+	return b.ReadCloser.Close()
 }
 
 // bodyReader returns a function that can repeatedly read the untypedBody of an http.Request.
