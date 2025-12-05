@@ -4,7 +4,7 @@
 
 ### Bug Fixes
 
-- Fixed #123 - `failsafegrpc` client should not cancel merged contexts until response Body is closed.
+- Fixed #123 - `failsafehttp` client should not cancel merged contexts until response Body is closed.
 
 ## 0.9.2
 
