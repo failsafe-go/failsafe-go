@@ -84,8 +84,13 @@ type Metrics interface {
 	// Limit returns the concurrent execution limit, as calculated by the adaptive limiter.
 	Limit() int
 
-	// Inflight returns the current number of inflight executions.
+	// Inflight returns the current number of inflight executions. The limit is adjusted using the max inflight requests for
+	// a sampling period, which may be higher than the amount at a given point in time.
 	Inflight() int
+
+	// MaxInflight returns the max number of inflight executions during the most recent sampling period. This is used to
+	// adjust the limit at the end of the sampling period, and should reflect how the current limit was set.
+	MaxInflight() int
 
 	// Queued returns the current number of queued executions when the limiter is full.
 	Queued() int
@@ -398,6 +403,7 @@ type adaptiveLimiter[R any] struct {
 	// Guarded by mu
 	limit                 float64       // The current concurrency limit
 	recentRTT             tdigestSample // Recent execution times
+	lastMaxInflight       int           // The max inflight requests for the last sampling period
 	medianFilter          util.MedianFilter
 	smoothedRecentRTT     util.Ewma
 	baselineRTT           util.Ewma              // Tracks baseline execution time
@@ -455,6 +461,12 @@ func (l *adaptiveLimiter[R]) Inflight() int {
 	return l.semaphore.Used()
 }
 
+func (l *adaptiveLimiter[R]) MaxInflight() int {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.lastMaxInflight
+}
+
 func (l *adaptiveLimiter[R]) Queued() int {
 	return l.semaphore.Waiters()
 }
@@ -485,6 +497,7 @@ func (l *adaptiveLimiter[R]) record(now time.Time, rtt time.Duration, inflight i
 		quantile := l.recentRTT.Quantile(l.recentQuantile)
 		filteredRTT := l.medianFilter.Add(quantile)
 		smoothedRTT := l.smoothedRecentRTT.Add(filteredRTT)
+		l.lastMaxInflight = l.recentRTT.MaxInflight
 		l.updateLimit(smoothedRTT, l.recentRTT.MaxInflight)
 		minRTT := l.recentRTT.MinRTT
 		l.recentRTT.Reset()

@@ -30,6 +30,7 @@ func TestAdaptiveLimiter_Defaults(t *testing.T) {
 		assert.Equal(t, 0.0, limiter.recentRTT.Count())
 		assert.Equal(t, 0.0, limiter.baselineRTT.Value())
 		assert.Equal(t, 0, limiter.Inflight())
+		assert.Equal(t, 0, limiter.MaxInflight())
 		assert.Equal(t, 0, limiter.Queued())
 	})
 }

@@ -1,5 +1,11 @@
 ## Upcoming Release
 
+## 0.9.4
+
+### Improvements
+
+- Added `AdaptiveLimiter.MaxInflight` metric, to indicate the max executions that were inflight during the last sampling period.
+
 ## 0.9.3
 
 ### Bug Fixes
