@@ -281,7 +281,13 @@ func TestContextCancellation(t *testing.T) {
 		executor := failsafe.With(timeoutPolicy).WithContext(context.WithValue(context.Background(), "foo", "bar"))
 		rt := NewRoundTripperWithExecutor(http.DefaultTransport, executor)
 
-		req, err := http.NewRequestWithContext(context.Background(), "GET", "http://google.com", nil)
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("test"))
+		}))
+		defer server.Close()
+
+		req, err := http.NewRequestWithContext(context.Background(), "GET", server.URL, nil)
 		assert.NoError(t, err)
 		client := &http.Client{Transport: rt}
 
