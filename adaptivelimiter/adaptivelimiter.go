@@ -531,15 +531,16 @@ func (l *adaptiveLimiter[R]) updateLimit(recentRTT float64, inflight int) {
 
 	change, reason := computeChange(queueSize, alpha, beta, overloaded, throughputCorr, throughputCV, rttCorr)
 
-	newLimit := l.limit
+	oldLimit := l.limit
+	newLimit := oldLimit
 	var direction string
 	switch change {
 	case decrease:
 		direction = "decrease"
-		newLimit = l.limit - float64(decreaseFunc(int(l.limit)))
+		newLimit = oldLimit - float64(decreaseFunc(int(oldLimit)))
 	case increase:
 		direction = "increase"
-		newLimit = l.limit + float64(increaseFunc(int(l.limit)))
+		newLimit = oldLimit + float64(increaseFunc(int(oldLimit)))
 	default:
 		direction = "hold"
 	}
@@ -547,10 +548,10 @@ func (l *adaptiveLimiter[R]) updateLimit(recentRTT float64, inflight int) {
 	// Clamp the limit based on max limit factor
 	maxLimit := float64(inflight) * l.maxLimitFactor
 	if newLimit > maxLimit {
-		if l.limit > maxLimit {
+		if oldLimit > maxLimit {
 			direction = "decrease"
-			newLimit = l.limit - float64(decreaseFunc(int(l.limit))) // Decrease gradually to avoid noise if inflights fluctuate
-		} else if l.limit < maxLimit {
+			newLimit = oldLimit - float64(decreaseFunc(int(oldLimit))) // Decrease gradually to avoid noise if inflights fluctuate
+		} else if oldLimit < maxLimit {
 			direction = "increase"
 			newLimit = maxLimit
 		} else {
@@ -562,13 +563,13 @@ func (l *adaptiveLimiter[R]) updateLimit(recentRTT float64, inflight int) {
 
 	// Clamp the limit based on absolute min and max
 	if newLimit > l.maxLimit {
-		if l.limit == l.maxLimit {
+		if oldLimit == l.maxLimit {
 			direction = "hold"
 			reason = "max"
 		}
 		newLimit = l.maxLimit
 	} else if newLimit < l.minLimit {
-		if l.limit == l.minLimit {
+		if oldLimit == l.minLimit {
 			direction = "hold"
 			reason = "min"
 		}
@@ -577,11 +578,13 @@ func (l *adaptiveLimiter[R]) updateLimit(recentRTT float64, inflight int) {
 
 	l.logLimit(direction, reason, newLimit, gradient, queueSize, inflight, recentRTT, baselineRTT, rttCorr, throughput, throughputCorr, throughputCV)
 
-	if uint(l.limit) != uint(newLimit) && l.onLimitChanged != nil {
+	if uint(oldLimit) != uint(newLimit) && l.onLimitChanged != nil {
+		l.mu.Unlock()
 		l.onLimitChanged(LimitChangedEvent{
-			OldLimit: uint(l.limit),
+			OldLimit: uint(oldLimit),
 			NewLimit: uint(newLimit),
 		})
+		l.mu.Lock()
 	}
 
 	l.semaphore.SetSize(int(newLimit))
