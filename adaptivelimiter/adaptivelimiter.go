@@ -544,14 +544,23 @@ func (l *adaptiveLimiter[R]) updateLimit(recentRTT float64, inflight int) {
 		direction = "hold"
 	}
 
-	// Decrease the limit if needed, based on the max limit factor
-	if newLimit > float64(inflight)*l.maxLimitFactor {
-		direction = "decrease"
+	// Clamp the limit based on max limit factor
+	maxLimit := float64(inflight) * l.maxLimitFactor
+	if newLimit > maxLimit {
+		if l.limit > maxLimit {
+			direction = "decrease"
+			newLimit = l.limit - float64(decreaseFunc(int(l.limit))) // Decrease gradually to avoid noise if inflights fluctuate
+		} else if l.limit < maxLimit {
+			direction = "increase"
+			newLimit = maxLimit
+		} else {
+			direction = "hold"
+			newLimit = maxLimit
+		}
 		reason = "max"
-		newLimit = l.limit - float64(decreaseFunc(int(l.limit)))
 	}
 
-	// Clamp the limit
+	// Clamp the limit based on absolute min and max
 	if newLimit > l.maxLimit {
 		if l.limit == l.maxLimit {
 			direction = "hold"
