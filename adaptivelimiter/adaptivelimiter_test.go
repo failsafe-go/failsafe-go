@@ -280,6 +280,39 @@ func TestRecordingPermit_Record(t *testing.T) {
 	})
 }
 
+func TestAdaptiveLimiter_computeMaxLimit(t *testing.T) {
+	t.Run("with linear scaling", func(t *testing.T) {
+		limiter := NewBuilder[any]().
+			WithMaxLimitFactor(5.0).
+			WithMaxLimitFactorDecay(0.0).
+			Build().(*adaptiveLimiter[any])
+
+		assert.Equal(t, float64(500), limiter.computeMaxLimit(100))  // 100 * 5 = 500
+		assert.Equal(t, float64(1000), limiter.computeMaxLimit(200)) // 200 * 5 = 1000
+	})
+
+	t.Run("with logarithmic scaling", func(t *testing.T) {
+		limiter := NewBuilder[any]().
+			WithMaxLimitFactor(5.0).
+			WithMaxLimitFactorDecay(1.0).
+			Build().(*adaptiveLimiter[any])
+
+		assert.Equal(t, float64(40), limiter.computeMaxLimit(10))        // 10 * 4x = 40
+		assert.Equal(t, float64(300), limiter.computeMaxLimit(100))      // 100 * 3x = 300
+		assert.InDelta(t, float64(540), limiter.computeMaxLimit(200), 1) // 200 * 2.7x ≈ 540
+		assert.Equal(t, float64(2000), limiter.computeMaxLimit(1000))    // 1000 * 2x = 2000
+	})
+
+	t.Run("should enforce floor of 1.2", func(t *testing.T) {
+		limiter := NewBuilder[any]().
+			WithMaxLimitFactor(5.0).
+			WithMaxLimitFactorDecay(2.0).
+			Build().(*adaptiveLimiter[any])
+
+		assert.Equal(t, float64(12000), limiter.computeMaxLimit(10000)) // 10000 * 1.2 (floor) = 12000
+	})
+}
+
 type mockUsageTracker struct {
 	userID string
 	usage  int64
