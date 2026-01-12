@@ -142,7 +142,7 @@ type Builder[R any] interface {
 	//  - 1000 inflight causes a 2x factor (max limit of 2000)
 	//
 	// Higher maxLimitFactorDecay values make the limit scale more conservatively at higher loads.
-	// The factor will never drop below 1.2 regardless of the decay rate.
+	// When a decay is configured, the effective max limit factor will never drop below 1.2.
 	// Panics if maxLimitFactorDecay < 0.
 	WithMaxLimitFactorDecay(maxLimitFactorDecay float64) Builder[R]
 
