@@ -665,7 +665,7 @@ func (l *adaptiveLimiter[R]) computeMaxLimit(inflight int) float64 {
 	effectiveFactor := l.maxLimitFactor
 	if l.maxLimitFactorDecay > 0 && inflight > 0 {
 		// Apply logarithmic decay, where the factor decreases by the decay amount for each order of magnitude increase in inflights
-		effectiveFactor = math.Max(minLimitFactor, l.maxLimitFactor-(l.maxLimitFactorDecay*math.Log10(float64(inflight))))
+		effectiveFactor = max(minLimitFactor, l.maxLimitFactor-(l.maxLimitFactorDecay*math.Log10(float64(inflight))))
 	}
 	return float64(inflight) * effectiveFactor
 }
