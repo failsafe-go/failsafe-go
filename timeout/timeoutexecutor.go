@@ -47,6 +47,7 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 		// Store result and ctxCancel timeout context if needed
 		if result.CompareAndSwap(nil, innerFn(execInternal)) {
 			timer.Stop()
+			execInternal.Cancel(nil)
 		}
 		return e.PostExecute(execInternal, result.Load())
 	}

@@ -84,11 +84,15 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 				return cancelResult
 			}
 
-			// Return result and cancel any outstanding attempts
+			// Return result and cancel all attempts to cleanup their context references
 			if result != nil {
 				for i, execution := range executions {
-					if i != result.index && execution != nil {
-						execution.Cancel(nil)
+					if execution != nil {
+						if i == result.index {
+							execution.Cancel(nil)
+						} else {
+							execution.Cancel(result.result)
+						}
 					}
 				}
 				return result.result

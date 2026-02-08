@@ -10,6 +10,7 @@ import (
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/internal/util"
+	"github.com/failsafe-go/failsafe-go/policy"
 	"github.com/failsafe-go/failsafe-go/priority"
 )
 
@@ -159,10 +160,15 @@ func doRequest(request *http.Request, executor failsafe.Executor[*http.Response]
 		}
 
 		// Wrap the response body to cancel both contexts when the body is closed
+		var cancelFn func()
+		if execInternal, ok := exec.(policy.ExecutionInternal[*http.Response]); ok {
+			cancelFn = execInternal.DeferCancel()
+		}
 		r.Body = &bodyWithCancel{
 			ReadCloser:  r.Body,
 			cancelOuter: cancelOuter,
 			cancelInner: cancelInner,
+			cancelFn:    cancelFn,
 		}
 		return
 	})
@@ -173,12 +179,16 @@ type bodyWithCancel struct {
 	io.ReadCloser
 	cancelOuter func(error)
 	cancelInner func(error)
+	cancelFn    func()
 }
 
 func (b *bodyWithCancel) Close() error {
 	defer func() {
 		b.cancelOuter(nil)
 		b.cancelInner(nil)
+		if b.cancelFn != nil {
+			b.cancelFn()
+		}
 	}()
 	return b.ReadCloser.Close()
 }
