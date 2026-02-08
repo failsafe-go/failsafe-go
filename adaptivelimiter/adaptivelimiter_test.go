@@ -281,10 +281,21 @@ func TestRecordingPermit_Record(t *testing.T) {
 }
 
 func TestAdaptiveLimiter_computeMaxLimit(t *testing.T) {
+	t.Run("with func", func(t *testing.T) {
+		limiter := NewBuilder[any]().
+			WithMaxLimitFunc(func(inflight int) float64 {
+				return float64(inflight) * 3.0
+			}).
+			Build().(*adaptiveLimiter[any])
+
+		assert.Equal(t, float64(300), limiter.computeMaxLimit(100)) // 100 * 3 = 300
+		assert.Equal(t, float64(600), limiter.computeMaxLimit(200)) // 200 * 3 = 600
+	})
+
 	t.Run("with linear scaling", func(t *testing.T) {
 		limiter := NewBuilder[any]().
 			WithMaxLimitFactor(5.0).
-			WithMaxLimitFactorDecay(0.0).
+			WithMaxLimitFactorDecay(0.0, 1.2).
 			Build().(*adaptiveLimiter[any])
 
 		assert.Equal(t, float64(500), limiter.computeMaxLimit(100))  // 100 * 5 = 500
@@ -294,7 +305,7 @@ func TestAdaptiveLimiter_computeMaxLimit(t *testing.T) {
 	t.Run("with logarithmic scaling", func(t *testing.T) {
 		limiter := NewBuilder[any]().
 			WithMaxLimitFactor(5.0).
-			WithMaxLimitFactorDecay(1.0).
+			WithMaxLimitFactorDecay(1.0, 1.2).
 			Build().(*adaptiveLimiter[any])
 
 		assert.Equal(t, float64(40), limiter.computeMaxLimit(10))        // 10 * 4x = 40
@@ -303,10 +314,10 @@ func TestAdaptiveLimiter_computeMaxLimit(t *testing.T) {
 		assert.Equal(t, float64(2000), limiter.computeMaxLimit(1000))    // 1000 * 2x = 2000
 	})
 
-	t.Run("should enforce floor of 1.2", func(t *testing.T) {
+	t.Run("should enforce minLimitFactor", func(t *testing.T) {
 		limiter := NewBuilder[any]().
 			WithMaxLimitFactor(5.0).
-			WithMaxLimitFactorDecay(2.0).
+			WithMaxLimitFactorDecay(2.0, 1.2).
 			Build().(*adaptiveLimiter[any])
 
 		assert.Equal(t, float64(12000), limiter.computeMaxLimit(10000)) // 10000 * 1.2 (floor) = 12000

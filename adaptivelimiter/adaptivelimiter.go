@@ -33,7 +33,6 @@ var (
 const (
 	warmupSamples   = 10
 	smoothedSamples = 5
-	minLimitFactor  = 1.2
 )
 
 // AdaptiveLimiter is an adaptive concurrency limiter that adjusts its limit up or down based on execution time trends:
@@ -142,9 +141,13 @@ type Builder[R any] interface {
 	//  - 1000 inflight causes a 2x factor (max limit of 2000)
 	//
 	// Higher maxLimitFactorDecay values make the limit scale more conservatively at higher loads.
-	// When a decay is configured, the effective max limit factor will never drop below 1.2.
-	// Panics if maxLimitFactorDecay < 0.
-	WithMaxLimitFactorDecay(maxLimitFactorDecay float64) Builder[R]
+	// When a decay is configured, the effective max limit factor will never drop below the minLimitFactor.
+	// Panics if maxLimitFactorDecay < 0 or minLimitFactor < 1.
+	WithMaxLimitFactorDecay(maxLimitFactorDecay, minLimitFactor float64) Builder[R]
+
+	// WithMaxLimitFunc allows a max limit to be specified given the current inflight executions. When configured, a
+	// maxLimitFunc replaces any configured max limit factor and decay.
+	WithMaxLimitFunc(maxLimitFunc func(inflight int) float64) Builder[R]
 
 	// WithRecentWindow configures how recent execution times are collected and summarized. These help the limiter determine
 	// when execution times are trending up or down, relative to the baseline, which helps detect overload. The minDuration
@@ -227,8 +230,10 @@ type config[R any] struct {
 	// Limit config
 	minLimit, maxLimit  float64
 	initialLimit        uint
+	maxLimitFunc        func(inflight int) float64
 	maxLimitFactor      float64
 	maxLimitFactorDecay float64
+	minLimitFactor      float64
 
 	// Windowing config
 	recentWindowMinDuration time.Duration
@@ -293,9 +298,16 @@ func (c *config[R]) WithMaxLimitFactor(maxLimitFactor float64) Builder[R] {
 	return c
 }
 
-func (c *config[R]) WithMaxLimitFactorDecay(maxLimitFactorDecay float64) Builder[R] {
+func (c *config[R]) WithMaxLimitFactorDecay(maxLimitFactorDecay, minLimitFactor float64) Builder[R] {
 	util.Assert(maxLimitFactorDecay >= 0, "maxLimitFactorDecay must be >= 0")
+	util.Assert(minLimitFactor >= 1, "minLimitFactor must be >= 1")
 	c.maxLimitFactorDecay = maxLimitFactorDecay
+	c.minLimitFactor = minLimitFactor
+	return c
+}
+
+func (c *config[R]) WithMaxLimitFunc(maxLimitFunc func(inflight int) float64) Builder[R] {
+	c.maxLimitFunc = maxLimitFunc
 	return c
 }
 
@@ -662,12 +674,18 @@ func (l *adaptiveLimiter[R]) logLimit(direction, reason string, limit float64, g
 }
 
 func (l *adaptiveLimiter[R]) computeMaxLimit(inflight int) float64 {
+	if l.maxLimitFunc != nil {
+		return l.maxLimitFunc(inflight)
+	}
+
 	effectiveFactor := l.maxLimitFactor
 	if l.maxLimitFactorDecay > 0 && inflight > 0 {
 		// Apply logarithmic decay, where the factor decreases by the decay amount for each order of magnitude increase in inflights
-		effectiveFactor = max(minLimitFactor, l.maxLimitFactor-(l.maxLimitFactorDecay*math.Log10(float64(inflight))))
+		effectiveFactor = l.maxLimitFactor - (l.maxLimitFactorDecay * math.Log10(float64(inflight)))
+		effectiveFactor = max(effectiveFactor, l.minLimitFactor)
 	}
 	return float64(inflight) * effectiveFactor
+
 }
 
 func (l *adaptiveLimiter[R]) ToExecutor(_ R) any {
