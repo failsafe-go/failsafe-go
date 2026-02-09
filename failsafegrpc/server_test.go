@@ -68,6 +68,7 @@ func TestServerPriorityLimiter(t *testing.T) {
 		BuildPrioritized(adaptivelimiter.NewPrioritizer())
 	limiter.AcquirePermit(context.Background())    // fill limiter
 	go limiter.AcquirePermit(context.Background()) // fill queue
+	assert.Eventually(t, func() bool { return limiter.Queued() == 1 }, time.Second, time.Millisecond)
 	executor := failsafe.With(limiter).WithContext(priority.Medium.AddTo(context.Background()))
 
 	// When / Then
