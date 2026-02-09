@@ -85,6 +85,54 @@ func TestHedgePolicy(t *testing.T) {
 			})
 	})
 
+	// Asserts that no hedging occurs during the warmup period for quantile-based delay.
+	t.Run("should not hedge with quantile during warmup", func(t *testing.T) {
+		// Given - a quantile-based hedge policy
+		stats := &policytesting.Stats{}
+		hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelayQuantile[int](0.95, 30, 20), stats).Build()
+
+		// When - run 20 executions (the warmup period), each should not trigger hedging
+		for i := 0; i < 20; i++ {
+			_, err := failsafe.With[int](hp).GetWithExecution(func(exec failsafe.Execution[int]) (int, error) {
+				time.Sleep(5 * time.Millisecond)
+				return 1, nil
+			})
+			assert.Nil(t, err)
+		}
+
+		// Then - no hedges should have occurred
+		assert.Equal(t, 0, stats.Hedges())
+	})
+
+	// Asserts that quantile-based delay triggers hedging for slow executions after warmup.
+	t.Run("should hedge with quantile", func(t *testing.T) {
+		// Given - a quantile-based hedge policy
+		stats := &policytesting.Stats{}
+		hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelayQuantile[int](0.95, 30, 20), stats).Build()
+
+		// Warmup - feed 25 fast executions to establish a baseline
+		for i := 0; i < 25; i++ {
+			_, err := failsafe.With[int](hp).GetWithExecution(func(exec failsafe.Execution[int]) (int, error) {
+				time.Sleep(5 * time.Millisecond)
+				return 1, nil
+			})
+			assert.Nil(t, err)
+		}
+		hedgesBeforeSlow := stats.Hedges()
+
+		// When - execute a slow request that exceeds the quantile delay
+		_, err := failsafe.With[int](hp).GetWithExecution(func(exec failsafe.Execution[int]) (int, error) {
+			if exec.IsHedge() {
+				return 2, nil
+			}
+			// Slow execution - should trigger hedging
+			time.Sleep(200 * time.Millisecond)
+			return 1, nil
+		})
+		assert.Nil(t, err)
+		assert.Equal(t, hedgesBeforeSlow+1, stats.Hedges(), "should have hedged the slow execution")
+	})
+
 	// Asserts that a specific cancellable hedge result is returned.
 	t.Run("should cancel on result", func(t *testing.T) {
 		// Given

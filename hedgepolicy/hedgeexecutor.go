@@ -53,12 +53,21 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 
 			// Perform execution
 			go func(hedgeExec policy.ExecutionInternal[R], execIdx int) {
+				startTime := time.Now()
 				result := innerFn(hedgeExec)
 				if execIdx > 0 && e.budget != nil {
 					e.budget.ReleaseHedgePermit()
 				}
 				isFinalResult := int(resultCount.Add(1)) == e.maxHedges+1
 				isCancellable := e.IsAbortable(result.Result, result.Error)
+
+				// Record successful execution duration for quantile-based delay
+				if isCancellable && e.quantile != nil {
+					e.mu.Lock()
+					e.quantile.Add(float64(time.Since(startTime)))
+					e.mu.Unlock()
+				}
+
 				if (isFinalResult || isCancellable) && resultSent.CompareAndSwap(false, true) {
 					resultChan <- &execResult{result, execIdx}
 				}
@@ -66,17 +75,16 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 
 			// Wait for result or hedge delay
 			var result *execResult
-			if execIdx < e.maxHedges {
-				timer := time.NewTimer(e.delayFunc(exec))
+			delay := e.delayFunc(exec)
+			if execIdx < e.maxHedges && delay >= 0 {
+				timer := time.NewTimer(delay)
 				select {
 				case <-timer.C:
 				case result = <-resultChan:
 					timer.Stop()
 				}
 			} else {
-				select {
-				case result = <-resultChan:
-				}
+				result = <-resultChan
 			}
 
 			// Return if parent execution is canceled

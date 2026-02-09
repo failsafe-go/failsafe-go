@@ -171,7 +171,7 @@ type Builder[R any] interface {
 	// WithRecentQuantile configures the recentQuantile of recent execution times to consider when adjusting the concurrency limit.
 	//
 	// Defaults to 0.9 which uses p90 samples.
-	// Panics if recentQuantile is negative.
+	// Panics if recentQuantile is not > 0 and < 1.
 	WithRecentQuantile(quantile float64) Builder[R]
 
 	// WithBaselineWindow configures how the baseline execution times are maintained and updated. The baseline represents
@@ -337,7 +337,7 @@ func (c *config[R]) WithRecentWindow(minDuration time.Duration, maxDuration time
 }
 
 func (c *config[R]) WithRecentQuantile(quantile float64) Builder[R] {
-	util.Assert(quantile >= 0, "recentQuantile must be >= 0")
+	util.Assert(quantile > 0 && quantile < 1, "recentQuantile must be between 0 and 1 exclusive")
 	c.recentQuantile = quantile
 	return c
 }

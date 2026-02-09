@@ -1,11 +1,13 @@
 package hedgepolicy
 
 import (
+	"sync"
 	"time"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/budget"
 	"github.com/failsafe-go/failsafe-go/internal"
+	"github.com/failsafe-go/failsafe-go/internal/util"
 	"github.com/failsafe-go/failsafe-go/policy"
 )
 
@@ -61,10 +63,15 @@ type Builder[R any] interface {
 type config[R any] struct {
 	policy.BaseAbortablePolicy[R]
 
-	delayFunc failsafe.DelayFunc[R]
-	maxHedges int
-	budget    internal.Budget
-	onHedge   func(failsafe.ExecutionEvent[R])
+	delayFunc          failsafe.DelayFunc[R]
+	maxHedges          int
+	budget             internal.Budget
+	onHedge            func(failsafe.ExecutionEvent[R])
+	mu                 *sync.RWMutex
+	quantile           *util.MovingQuantile // Guarded by mu
+	quantileValue      float64              // quantile percentile (0-1), used to defer MovingQuantile creation to Build
+	quantileAge        uint                 // age for the quantile's EMA decay
+	executionThreshold uint                 // min executions before hedging begins
 }
 
 var _ Builder[any] = &config[any]{}
@@ -101,17 +108,51 @@ func NewBuilderWithDelay[R any](delay time.Duration) Builder[R] {
 	})
 }
 
-// NewBuilderWithDelayFunc returns a new Builder for execution result type R and the delayFunc, which by default
-// will allow a single hedged execution to be performed, after the delayFunc result is elapsed, if the original execution
-// is not done yet. Additional hedged executions will be performed, after additional delays, up to the max configured hedges.
+// NewBuilderWithDelayFunc returns a new Builder for execution result type R and the delayFunc, which by default will
+// allow a single hedged execution to be performed, after the delayFunc result is elapsed, if the original execution is
+// not done yet. Additional hedged executions will be performed, after additional delays, up to the max configured
+// hedges.
 //
-// If the execution is configured with a Context, a child context will be created for the execution and canceled when the
-// HedgePolicy is exceeded.
+// If the execution is configured with a Context, a child context will be created for the execution and canceled when
+// the HedgePolicy is exceeded.
 func NewBuilderWithDelayFunc[R any](delayFunc failsafe.DelayFunc[R]) Builder[R] {
 	return &config[R]{
 		BaseAbortablePolicy: policy.BaseAbortablePolicy[R]{},
 		delayFunc:           delayFunc,
 		maxHedges:           1,
+	}
+}
+
+// NewWithDelayQuantile returns a new HedgePolicy for execution result type R that automatically determines the hedge
+// delay based on recent execution durations, hedging when an execution exceeds the given quantile of observed
+// durations. For example, a quantile of 0.95 will hedge executions that take longer than the p95 of recent successful
+// execution times. The quantileAge controls how many executions the policy effectively "remembers" - smaller ages adapt
+// faster to recent changes, while larger ages provide more stability. The executionThreshold is the minimum number of
+// executions that must be recorded before hedging begins.
+//
+// Panics if quantile is not > 0 and < 1, or if quantileAge or executionThreshold are 0.
+func NewWithDelayQuantile[R any](quantile float64, quantileAge uint, executionThreshold uint) HedgePolicy[R] {
+	return NewBuilderWithDelayQuantile[R](quantile, quantileAge, executionThreshold).Build()
+}
+
+// NewBuilderWithDelayQuantile returns a new Builder for execution result type R that automatically determines the hedge
+// delay based on recent execution durations, hedging when an execution exceeds the given quantile of observed
+// durations. For example, a quantile of 0.95 will hedge executions that take longer than the p95 of recent successful
+// execution times. The quantileAge controls how many executions the policy effectively "remembers" - smaller ages adapt
+// faster to recent changes, while larger ages provide more stability. The executionThreshold is the minimum number of
+// executions that must be recorded before hedging begins.
+//
+// Panics if quantile is not > 0 and < 1, or if quantileAge or executionThreshold are 0.
+func NewBuilderWithDelayQuantile[R any](quantile float64, quantileAge uint, executionThreshold uint) Builder[R] {
+	util.Assert(quantile > 0 && quantile < 1, "quantile must be between 0 and 1 exclusive")
+	util.Assert(quantileAge > 0, "quantileAge must be > 0")
+	util.Assert(executionThreshold > 0, "executionThreshold must be > 0")
+	return &config[R]{
+		BaseAbortablePolicy: policy.BaseAbortablePolicy[R]{},
+		maxHedges:           1,
+		quantileValue:       quantile,
+		quantileAge:         quantileAge,
+		executionThreshold:  executionThreshold,
 	}
 }
 
@@ -158,6 +199,24 @@ func (c *config[R]) Build() HedgePolicy[R] {
 			return true
 		})
 	}
+
+	// Initialize quantile-based delay
+	if cCopy.quantileValue != 0 {
+		mu := &sync.RWMutex{}
+		mq := util.NewMovingQuantile(cCopy.quantileValue, 0.01, cCopy.quantileAge)
+		cCopy.mu = mu
+		cCopy.quantile = &mq
+		executionThreshold := cCopy.executionThreshold
+		cCopy.delayFunc = func(exec failsafe.ExecutionAttempt[R]) time.Duration {
+			mu.RLock()
+			defer mu.RUnlock()
+			if mq.Count() < int(executionThreshold) {
+				return -1
+			}
+			return time.Duration(mq.Value())
+		}
+	}
+
 	return &hedgePolicy[R]{
 		config: cCopy, // TODO copy base fields
 	}
