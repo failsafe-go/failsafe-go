@@ -3,6 +3,7 @@ package util
 import (
 	"math"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -71,23 +72,23 @@ func TestRollingSum(t *testing.T) {
 			assert.Equal(t, tc.expectedSize, w.size)
 		})
 	}
-}
 
-func TestRollingSumSliding(t *testing.T) {
-	w := NewRollingSum(3)
+	t.Run("should slide", func(t *testing.T) {
+		w := NewRollingSum(3)
 
-	w.Add(10.0)
-	w.Add(20.0)
-	w.Add(30.0)
-	cv, _, _ := w.CalculateCV()
-	assert.InDelta(t, 0.4082, cv, 0.0001)
-	w.Add(40.0)
-	cv, _, _ = w.CalculateCV()
-	assert.InDelta(t, 0.2722, cv, 0.0001)
-	w.Add(0.0)
-	cv, _, _ = w.CalculateCV()
-	assert.InDelta(t, 0.2722, cv, 0.0001)
-	assert.Equal(t, 3, w.size)
+		w.Add(10.0)
+		w.Add(20.0)
+		w.Add(30.0)
+		cv, _, _ := w.CalculateCV()
+		assert.InDelta(t, 0.4082, cv, 0.0001)
+		w.Add(40.0)
+		cv, _, _ = w.CalculateCV()
+		assert.InDelta(t, 0.2722, cv, 0.0001)
+		w.Add(0.0)
+		cv, _, _ = w.CalculateCV()
+		assert.InDelta(t, 0.2722, cv, 0.0001)
+		assert.Equal(t, 3, w.size)
+	})
 }
 
 func TestCorrelationWindow(t *testing.T) {
@@ -156,18 +157,57 @@ func TestCorrelationWindow(t *testing.T) {
 			require.Equal(t, 0.0, w.corrSumXY)
 		})
 	}
+
+	t.Run("should slide", func(t *testing.T) {
+		w := NewCorrelationWindow(3, 0)
+
+		corr, _, _ := w.Add(1.0, 10.0)
+		assert.InDelta(t, 0.0, corr, 0.0001)
+		corr, _, _ = w.Add(2.0, 20.0)
+		assert.InDelta(t, 1.0, corr, 0.0001)
+		corr, _, _ = w.Add(3.0, 30.0)
+		assert.InDelta(t, 1.0, corr, 0.0001)
+		corr, _, _ = w.Add(4.0, 40.0)
+		assert.InDelta(t, 1.0, corr, 0.0001)
+		assert.Equal(t, 3, w.xSamples.size)
+	})
 }
 
-func TestCorrelationWindowSliding(t *testing.T) {
-	w := NewCorrelationWindow(3, 0)
+func TestMaxWindow(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	corr, _, _ := w.Add(1.0, 10.0)
-	assert.InDelta(t, 0.0, corr, 0.0001)
-	corr, _, _ = w.Add(2.0, 20.0)
-	assert.InDelta(t, 1.0, corr, 0.0001)
-	corr, _, _ = w.Add(3.0, 30.0)
-	assert.InDelta(t, 1.0, corr, 0.0001)
-	corr, _, _ = w.Add(4.0, 40.0)
-	assert.InDelta(t, 1.0, corr, 0.0001)
-	assert.Equal(t, 3, w.xSamples.size)
+	t.Run("should slide", func(t *testing.T) {
+		w := NewMaxWindow(5 * time.Minute)
+
+		assert.Equal(t, 1030, w.Add(1030, now))
+		assert.Equal(t, 1030, w.Add(691, now.Add(30*time.Second)))
+		assert.Equal(t, 1030, w.Add(849, now.Add(60*time.Second)))
+		assert.Equal(t, 1030, w.Add(836, now.Add(90*time.Second)))
+		assert.Equal(t, 1030, w.Add(1028, now.Add(120*time.Second)))
+		assert.Equal(t, 1030, w.Add(700, now.Add(150*time.Second)))
+
+		assert.Equal(t, 1028, w.Add(650, now.Add(5*time.Minute+1*time.Second))) // Peak from t=0 expires at t=5m
+		assert.Equal(t, 700, w.Add(400, now.Add(7*time.Minute+1*time.Second)))  // Peak from t=2m expires at t=7m
+		assert.Equal(t, 400, w.Add(300, now.Add(10*time.Minute+1*time.Second))) // Peak from t=5m expires at t=10m
+		assert.Equal(t, 300, w.Add(100, now.Add(12*time.Minute+1*time.Second))) // Peak from t=7m expires at t=12m
+	})
+
+	t.Run("should slide and reset", func(t *testing.T) {
+		w := NewMaxWindow(5 * time.Minute)
+
+		assert.Equal(t, 700, w.Add(700, now))
+		assert.Equal(t, 1000, w.Add(1000, now.Add(1*time.Minute))) // Higher value becomes new max
+		assert.Equal(t, 1000, w.Add(600, now.Add(2*time.Minute)))  // Lower value doesn't change max
+		assert.Equal(t, 1000, w.Add(500, now.Add(3*time.Minute)))  // Much lower value still doesn't change max
+		assert.Equal(t, 800, w.Add(800, now.Add(7*time.Minute)))   // After peak expires, next highest becomes max
+		w.Reset()
+		assert.Equal(t, 42, w.Add(42, now.Add(10*time.Minute)))
+	})
+
+	t.Run("should expire all entries after long delay", func(t *testing.T) {
+		w := NewMaxWindow(1 * time.Minute)
+		w.Add(1000, now)
+
+		assert.Equal(t, 50, w.Add(50, now.Add(10*time.Minute)))
+	})
 }

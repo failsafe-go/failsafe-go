@@ -154,6 +154,67 @@ func TestAdaptiveLimiter_record(t *testing.T) {
 	})
 }
 
+func TestAdaptiveLimiter_MaxLimitStabilizationWindow(t *testing.T) {
+	createStabilizedLimiter := func(window time.Duration) (*adaptiveLimiter[any], time.Time) {
+		limiter := NewBuilder[any]().
+			WithMaxLimitFactor(1.5).
+			WithMaxLimitStabilizationWindow(window).
+			Build().(*adaptiveLimiter[any])
+		now := time.UnixMilli(0)
+		limiter.nextUpdateTime = now
+		limiter.WithRecentWindow(time.Second, time.Second, 1)
+		for i := 0; i < warmupSamples; i++ {
+			limiter.baselineRTT.Add(float64(time.Second))
+		}
+		return limiter, now
+	}
+
+	recordFn := func(limiter *adaptiveLimiter[any], startTime time.Time, rtt time.Duration, inflight int) time.Time {
+		now := startTime.Add(2 * time.Second)
+		assert.NoError(t, limiter.semaphore.Acquire(context.Background()))
+		limiter.record(now, rtt, inflight, false)
+		return now
+	}
+
+	t.Run("should prevent max limit decrease on inflight dip", func(t *testing.T) {
+		limiter, now := createStabilizedLimiter(5 * time.Minute)
+
+		now = recordFn(limiter, now, time.Second, 20)
+		assert.Equal(t, 21, limiter.Limit())
+		assert.Equal(t, 20, limiter.maxInflightWindow.Value())
+
+		// Record a lower value
+		now = recordFn(limiter, now, time.Second, 5)
+		assert.Equal(t, 22, limiter.Limit()) // Limit increases
+		assert.Equal(t, 20, limiter.maxInflightWindow.Value())
+	})
+
+	t.Run("should decrease on inflight dip without stabilization", func(t *testing.T) {
+		limiter, now := createStabilizedLimiter(0) // No stabilization
+
+		now = recordFn(limiter, now, time.Second, 20)
+		assert.Equal(t, 21, limiter.Limit())
+		assert.Equal(t, 0, limiter.maxInflightWindow.Value())
+
+		// Record a lower value
+		now = recordFn(limiter, now, time.Second, 5)
+		assert.Equal(t, 20, limiter.Limit()) // Limit increases
+	})
+
+	t.Run("should decrease after stabilization window expires", func(t *testing.T) {
+		limiter, now := createStabilizedLimiter(10 * time.Second)
+
+		now = recordFn(limiter, now, time.Second, 20)
+		assert.Equal(t, 21, limiter.Limit())
+		assert.Equal(t, 20, limiter.maxInflightWindow.Value())
+
+		now = now.Add(10 * time.Second)
+		now = recordFn(limiter, now, time.Second, 5)
+		assert.Equal(t, 20, limiter.Limit()) // Limit decreases
+		assert.Equal(t, 5, limiter.maxInflightWindow.Value())
+	})
+}
+
 func TestAdaptiveLimiter_BuilderValidation(t *testing.T) {
 	t.Run("should panic on invalid WithRecentWindow", func(t *testing.T) {
 		assert.Panicsf(t, func() {
@@ -192,6 +253,12 @@ func TestAdaptiveLimiter_BuilderValidation(t *testing.T) {
 		assert.Panicsf(t, func() {
 			NewBuilder[any]().WithMaxLimitFactor(.5)
 		}, "expected panic with invalid max limit factor")
+	})
+
+	t.Run("should panic on negative WithMaxLimitStabilizationWindow", func(t *testing.T) {
+		assert.Panicsf(t, func() {
+			NewBuilder[any]().WithMaxLimitStabilizationWindow(-time.Second)
+		}, "expected panic with negative stabilization window")
 	})
 
 	t.Run("should panic on invalid WithQueueing", func(t *testing.T) {
