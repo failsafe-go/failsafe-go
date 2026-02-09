@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestEWMA_AddAndValue(t *testing.T) {
+func TestMovingAverage_AddAndValue(t *testing.T) {
 	tests := []struct {
 		name          string
 		windowSize    uint
@@ -40,7 +40,7 @@ func TestEWMA_AddAndValue(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ma := NewEwma(tc.windowSize, tc.warmupSamples)
+			ma := NewMovingAverage(tc.windowSize, tc.warmupSamples)
 			for _, v := range tc.values {
 				ma.Add(v)
 			}
@@ -49,8 +49,8 @@ func TestEWMA_AddAndValue(t *testing.T) {
 	}
 }
 
-func TestEWMA_Reset(t *testing.T) {
-	ma := NewEwma(10, 0)
+func TestMovingAverage_Reset(t *testing.T) {
+	ma := NewMovingAverage(10, 0)
 
 	assert.Equal(t, 0.0, ma.Value())
 	ma.Add(10)

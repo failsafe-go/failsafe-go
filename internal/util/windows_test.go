@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRollingSum(t *testing.T) {
+func TestMovingSum(t *testing.T) {
 	tests := []struct {
 		name              string
 		values            []float64
@@ -57,7 +57,7 @@ func TestRollingSum(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			w := NewRollingSum(tc.capacity)
+			w := NewMovingSum(tc.capacity)
 			var cv float64
 			for _, v := range tc.values {
 				w.Add(v)
@@ -74,7 +74,7 @@ func TestRollingSum(t *testing.T) {
 	}
 
 	t.Run("should slide", func(t *testing.T) {
-		w := NewRollingSum(3)
+		w := NewMovingSum(3)
 
 		w.Add(10.0)
 		w.Add(20.0)

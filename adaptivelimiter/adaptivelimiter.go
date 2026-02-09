@@ -387,9 +387,9 @@ func (c *config[R]) Build() AdaptiveLimiter[R] {
 		semaphore:             util.NewDynamicSemaphore(int(c.initialLimit)),
 		limit:                 float64(c.initialLimit),
 		recentRTT:             tdigestSample{TDigest: tdigest.NewWithCompression(100)},
-		medianFilter:          util.NewMedianFilter(smoothedSamples),
-		smoothedRecentRTT:     util.NewEwma(smoothedSamples, warmupSamples),
-		baselineRTT:           util.NewEwma(c.baselineWindowAge, warmupSamples),
+		medianFilter:          util.NewMovingMedian(smoothedSamples),
+		smoothedRecentRTT:     util.NewMovingAverage(smoothedSamples, warmupSamples),
+		baselineRTT:           util.NewMovingAverage(c.baselineWindowAge, warmupSamples),
 		nextUpdateTime:        time.Now(),
 		rttCorrelation:        util.NewCorrelationWindow(c.correlationWindowSize, warmupSamples),
 		throughputCorrelation: util.NewCorrelationWindow(c.correlationWindowSize, warmupSamples),
@@ -465,9 +465,9 @@ type adaptiveLimiter[R any] struct {
 	maxInflightWindow     util.MaxWindow // Tracks the max inflight over a stabilization window
 	recentRTT             tdigestSample  // Recent execution times
 	lastMaxInflight       int            // The max inflight requests for the last sampling period
-	medianFilter          util.MedianFilter
-	smoothedRecentRTT     util.Ewma
-	baselineRTT           util.Ewma              // Tracks baseline execution time
+	medianFilter          util.MovingMedian
+	smoothedRecentRTT     util.MovingAverage
+	baselineRTT           util.MovingAverage              // Tracks baseline execution time
 	nextUpdateTime        time.Time              // Tracks when the limit can next be updated
 	throughputCorrelation util.CorrelationWindow // Tracks the correlation between concurrency and throughput
 	rttCorrelation        util.CorrelationWindow // Tracks the correlation between concurrency and round trip times (RTT)
