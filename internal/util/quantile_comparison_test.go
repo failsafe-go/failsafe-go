@@ -3,6 +3,7 @@ package util
 import (
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/influxdata/tdigest"
 )
@@ -26,17 +27,20 @@ func BenchmarkComparison_TDigest(b *testing.B) {
 
 // BenchmarkComparison_QuantileWindow benchmarks QuantileWindow performance
 func BenchmarkComparison_QuantileWindow(b *testing.B) {
-	qw := NewQuantileWindow(0.9, 1000)
+	qw := NewQuantileWindow(0.9, 1000*time.Second)
 	rand.Seed(42)
+	baseTime := time.Now()
 
-	// Pre-fill
+	// Pre-fill (1 sample per second)
 	for i := 0; i < 1000; i++ {
-		qw.Add(rand.Float64() * 1000)
+		timestamp := baseTime.Add(time.Duration(i) * time.Second)
+		qw.AddWithTime(rand.Float64()*1000, timestamp)
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		qw.Add(rand.Float64() * 1000)
+		timestamp := baseTime.Add(time.Duration(1000+i) * time.Second)
+		qw.AddWithTime(rand.Float64()*1000, timestamp)
 		_ = qw.Value()
 	}
 }
@@ -75,17 +79,20 @@ func BenchmarkComparison_StableWorkload_TDigest(b *testing.B) {
 }
 
 func BenchmarkComparison_StableWorkload_QuantileWindow(b *testing.B) {
-	qw := NewQuantileWindow(0.9, 1000)
+	qw := NewQuantileWindow(0.9, 1000*time.Second)
 	rand.Seed(42)
+	baseTime := time.Now()
 
-	// Pre-fill with stable values around 100ms
+	// Pre-fill with stable values around 100ms (1 sample per second)
 	for i := 0; i < 1000; i++ {
-		qw.Add(100 + rand.Float64()*10)
+		timestamp := baseTime.Add(time.Duration(i) * time.Second)
+		qw.AddWithTime(100+rand.Float64()*10, timestamp)
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		qw.Add(100 + rand.Float64()*10)
+		timestamp := baseTime.Add(time.Duration(1000+i) * time.Second)
+		qw.AddWithTime(100+rand.Float64()*10, timestamp)
 		_ = qw.Value()
 	}
 }
@@ -118,7 +125,7 @@ func TestComparison_Accuracy(t *testing.T) {
 	}
 
 	// Test each approach
-	qw := NewQuantileWindow(0.9, windowSize)
+	qw := NewQuantileWindow(0.9, time.Duration(windowSize)*time.Second)
 	mq := NewMovingQuantile(0.9, 0.01, 100)
 	td := tdigest.NewWithCompression(100)
 
@@ -146,40 +153,49 @@ func TestComparison_Accuracy(t *testing.T) {
 
 // BenchmarkComparison_WindowSizes tests performance with different window sizes
 func BenchmarkComparison_WindowSize100_QuantileWindow(b *testing.B) {
-	qw := NewQuantileWindow(0.9, 100)
+	qw := NewQuantileWindow(0.9, 100*time.Second)
 	rand.Seed(42)
+	baseTime := time.Now()
 	for i := 0; i < 100; i++ {
-		qw.Add(rand.Float64() * 1000)
+		timestamp := baseTime.Add(time.Duration(i) * time.Second)
+		qw.AddWithTime(rand.Float64()*1000, timestamp)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		qw.Add(rand.Float64() * 1000)
+		timestamp := baseTime.Add(time.Duration(100+i) * time.Second)
+		qw.AddWithTime(rand.Float64()*1000, timestamp)
 		_ = qw.Value()
 	}
 }
 
 func BenchmarkComparison_WindowSize1000_QuantileWindow(b *testing.B) {
-	qw := NewQuantileWindow(0.9, 1000)
+	qw := NewQuantileWindow(0.9, 1000*time.Second)
 	rand.Seed(42)
+	baseTime := time.Now()
 	for i := 0; i < 1000; i++ {
-		qw.Add(rand.Float64() * 1000)
+		timestamp := baseTime.Add(time.Duration(i) * time.Second)
+		qw.AddWithTime(rand.Float64()*1000, timestamp)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		qw.Add(rand.Float64() * 1000)
+		timestamp := baseTime.Add(time.Duration(1000+i) * time.Second)
+		qw.AddWithTime(rand.Float64()*1000, timestamp)
 		_ = qw.Value()
 	}
 }
 
 func BenchmarkComparison_WindowSize5000_QuantileWindow(b *testing.B) {
-	qw := NewQuantileWindow(0.9, 5000)
+	qw := NewQuantileWindow(0.9, 5000*time.Second)
 	rand.Seed(42)
+	baseTime := time.Now()
 	for i := 0; i < 5000; i++ {
-		qw.Add(rand.Float64() * 1000)
+		timestamp := baseTime.Add(time.Duration(i) * time.Second)
+		qw.AddWithTime(rand.Float64()*1000, timestamp)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		qw.Add(rand.Float64() * 1000)
+		timestamp := baseTime.Add(time.Duration(5000+i) * time.Second)
+		qw.AddWithTime(rand.Float64()*1000, timestamp)
 		_ = qw.Value()
 	}
 }

@@ -1,14 +1,16 @@
 package util
 
-// QuantileWindow maintains an exact quantile over a sliding window of samples using a dual-linked list structure.
+import "time"
+
+// QuantileWindow maintains an exact quantile over a time-based sliding window of samples using a dual-linked list structure.
 // It provides O(1) quantile queries and O(k) insertion where k is the distance from the current quantile
 // (typically very small in stable systems).
 //
 // This type is not concurrency safe.
 type QuantileWindow struct {
-	quantile float64
-	maxSize  int
-	size     int
+	quantile    float64
+	maxDuration time.Duration
+	size        int
 
 	// Time-ordered doubly-linked list (for sliding window)
 	timeHead *quantileNode
@@ -18,47 +20,78 @@ type QuantileWindow struct {
 	valueHead *quantileNode
 
 	// Anchor pointer to target quantile node
-	quantileNode *quantileNode
+	quantileNode     *quantileNode
+	quantilePosition int // Current 0-indexed position of quantileNode in sorted order
 }
 
 type quantileNode struct {
-	value float64
+	value     float64 // 8 bytes
+	timestamp int64   // 8 bytes (Unix nanoseconds - saves 16 bytes vs time.Time!)
 
 	// Time ordering (insertion order)
-	timeNext *quantileNode
-	timePrev *quantileNode
+	timeNext *quantileNode // 8 bytes
+	timePrev *quantileNode // 8 bytes
 
 	// Value ordering (sorted by value)
-	valueNext *quantileNode
-	valuePrev *quantileNode
+	valueNext *quantileNode // 8 bytes
+	valuePrev *quantileNode // 8 bytes
 }
+// Total: 48 bytes per node (vs 64 bytes with time.Time = 25% reduction!)
 
-// NewQuantileWindow creates a new QuantileWindow for the given quantile (0-1) and maximum window size.
-// For example, quantile=0.9 tracks the p90 value.
-func NewQuantileWindow(quantile float64, maxSize int) *QuantileWindow {
+// NewQuantileWindow creates a new QuantileWindow for the given quantile (0-1) and maximum time duration.
+// For example, quantile=0.9 with maxDuration=1*time.Minute tracks the p90 value over the last minute.
+// Samples older than maxDuration are automatically expired.
+func NewQuantileWindow(quantile float64, maxDuration time.Duration) *QuantileWindow {
 	return &QuantileWindow{
-		quantile: quantile,
-		maxSize:  maxSize,
+		quantile:    quantile,
+		maxDuration: maxDuration,
 	}
 }
 
 // Add adds a sample to the window and returns the updated quantile value.
-// If the window is full, the oldest sample is automatically removed.
+// Samples older than maxDuration are automatically expired before adding the new sample.
 func (w *QuantileWindow) Add(value float64) float64 {
-	node := &quantileNode{value: value}
+	return w.AddWithTime(value, time.Now())
+}
+
+// AddWithTime adds a sample with an explicit timestamp. This is useful for testing or when
+// samples are collected at a specific time. Samples older than maxDuration from the given
+// timestamp are automatically expired.
+func (w *QuantileWindow) AddWithTime(value float64, timestamp time.Time) float64 {
+	timestampNanos := timestamp.UnixNano()
+
+	// Remove expired entries (older than maxDuration)
+	// Reuse the first removed node if available (zero-allocation steady state!)
+	cutoffNanos := timestamp.Add(-w.maxDuration).UnixNano()
+	var nodeToReuse *quantileNode
+	if w.timeHead != nil && w.timeHead.timestamp < cutoffNanos {
+		nodeToReuse = w.removeOldestAndReturn()
+	}
+	// Continue removing any additional expired entries
+	for w.timeHead != nil && w.timeHead.timestamp < cutoffNanos {
+		w.removeOldest()
+	}
+
+	// Reuse node if we removed one, otherwise allocate new
+	var node *quantileNode
+	if nodeToReuse != nil {
+		node = nodeToReuse
+	} else {
+		node = &quantileNode{}
+	}
+
+	// Set values (pointers already cleared in removeOldestAndReturn)
+	node.value = value
+	node.timestamp = timestampNanos
 
 	// Insert at tail of time-ordered list (newest)
 	w.insertTimeOrdered(node)
 
 	// Insert into value-ordered list (starting from quantile anchor for efficiency)
+	// This also updates quantilePosition if needed
 	w.insertValueOrdered(node)
 
-	// Remove oldest if we exceeded capacity
-	if w.size > w.maxSize {
-		w.removeOldest()
-	}
-
-	// Update quantile anchor
+	// Update quantile anchor to target position
 	w.updateQuantileAnchor()
 
 	return w.Value()
@@ -83,6 +116,7 @@ func (w *QuantileWindow) Reset() {
 	w.timeTail = nil
 	w.valueHead = nil
 	w.quantileNode = nil
+	w.quantilePosition = 0
 	w.size = 0
 }
 
@@ -101,12 +135,16 @@ func (w *QuantileWindow) insertTimeOrdered(node *quantileNode) {
 
 // insertValueOrdered inserts a node into the value-ordered list, starting search from the quantile anchor.
 // This gives O(k) performance where k is the distance from the quantile (typically small).
+// Also updates quantilePosition if the new node is inserted before the quantile.
 func (w *QuantileWindow) insertValueOrdered(node *quantileNode) {
 	// Empty list
 	if w.valueHead == nil {
 		w.valueHead = node
 		return
 	}
+
+	// Track if we insert before the current quantile node
+	insertedBeforeQuantile := false
 
 	// Start search from quantile anchor if available, otherwise from head
 	var start *quantileNode
@@ -134,6 +172,11 @@ func (w *QuantileWindow) insertValueOrdered(node *quantileNode) {
 		}
 		curr.valuePrev = node
 
+		// If we have a quantile node and the new node is before it, increment position
+		if w.quantileNode != nil && node.value < w.quantileNode.value {
+			insertedBeforeQuantile = true
+		}
+
 	} else {
 		// Search forward toward larger values
 		curr := start
@@ -148,16 +191,39 @@ func (w *QuantileWindow) insertValueOrdered(node *quantileNode) {
 			curr.valueNext.valuePrev = node
 		}
 		curr.valueNext = node
+
+		// If we have a quantile node and the new node is before it, increment position
+		if w.quantileNode != nil && node.value < w.quantileNode.value {
+			insertedBeforeQuantile = true
+		}
+	}
+
+	// Update quantile position if we inserted before it
+	if insertedBeforeQuantile {
+		w.quantilePosition++
 	}
 }
 
 // removeOldest removes the head of the time-ordered list (oldest sample)
+// Also updates quantilePosition if the removed node was before the quantile.
 func (w *QuantileWindow) removeOldest() {
+	w.removeOldestAndReturn()
+}
+
+// removeOldestAndReturn removes the oldest node and returns it for reuse.
+// Returns nil if there are no nodes to remove.
+func (w *QuantileWindow) removeOldestAndReturn() *quantileNode {
 	if w.timeHead == nil {
-		return
+		return nil
 	}
 
 	oldNode := w.timeHead
+
+	// Track if we're removing a node before the quantile
+	removedBeforeQuantile := false
+	if w.quantileNode != nil && oldNode != w.quantileNode && oldNode.value < w.quantileNode.value {
+		removedBeforeQuantile = true
+	}
 
 	// Remove from time-ordered list (O(1))
 	w.timeHead = oldNode.timeNext
@@ -177,19 +243,34 @@ func (w *QuantileWindow) removeOldest() {
 		oldNode.valueNext.valuePrev = oldNode.valuePrev
 	}
 
+	// Update quantile position if we removed a node before it
+	if removedBeforeQuantile {
+		w.quantilePosition--
+	}
+
 	// Mark quantile anchor as stale if we removed it
 	if w.quantileNode == oldNode {
 		w.quantileNode = nil
+		w.quantilePosition = 0
 	}
 
 	w.size--
+
+	// Clear pointers before returning for reuse
+	oldNode.timeNext = nil
+	oldNode.timePrev = nil
+	oldNode.valueNext = nil
+	oldNode.valuePrev = nil
+
+	return oldNode
 }
 
 // updateQuantileAnchor updates the quantile anchor to point to the node at the target quantile position.
-// This uses the existing anchor as a starting point for efficient O(k) updates in stable systems.
+// Uses the tracked quantilePosition for O(k) updates where k is typically very small.
 func (w *QuantileWindow) updateQuantileAnchor() {
 	if w.size == 0 {
 		w.quantileNode = nil
+		w.quantilePosition = 0
 		return
 	}
 
@@ -199,33 +280,26 @@ func (w *QuantileWindow) updateQuantileAnchor() {
 	// If no anchor yet, traverse from head
 	if w.quantileNode == nil {
 		w.quantileNode = w.valueHead
-		for i := 0; i < targetPos && w.quantileNode != nil; i++ {
+		w.quantilePosition = 0
+		for w.quantilePosition < targetPos && w.quantileNode != nil && w.quantileNode.valueNext != nil {
 			w.quantileNode = w.quantileNode.valueNext
+			w.quantilePosition++
 		}
 		return
 	}
 
-	// Determine current position of anchor by counting from head
-	// In a more optimized version, we'd track this incrementally
-	currentPos := 0
-	curr := w.valueHead
-	for curr != nil && curr != w.quantileNode {
-		currentPos++
-		curr = curr.valueNext
-	}
-
-	// Move anchor forward or backward as needed
-	if currentPos < targetPos {
+	// Move anchor forward or backward as needed using tracked position
+	if w.quantilePosition < targetPos {
 		// Move forward
-		for currentPos < targetPos && w.quantileNode.valueNext != nil {
+		for w.quantilePosition < targetPos && w.quantileNode.valueNext != nil {
 			w.quantileNode = w.quantileNode.valueNext
-			currentPos++
+			w.quantilePosition++
 		}
-	} else if currentPos > targetPos {
+	} else if w.quantilePosition > targetPos {
 		// Move backward
-		for currentPos > targetPos && w.quantileNode.valuePrev != nil {
+		for w.quantilePosition > targetPos && w.quantileNode.valuePrev != nil {
 			w.quantileNode = w.quantileNode.valuePrev
-			currentPos--
+			w.quantilePosition--
 		}
 	}
 }

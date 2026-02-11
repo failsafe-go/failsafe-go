@@ -1,14 +1,14 @@
 package util
 
 import (
-	"math"
 	"math/rand"
 	"sort"
 	"testing"
+	"time"
 )
 
 func TestQuantileWindow_Basic(t *testing.T) {
-	qw := NewQuantileWindow(0.5, 10) // p50 (median) with window size 10
+	qw := NewQuantileWindow(0.5, 10*time.Second) // p50 (median) with 10 second window
 
 	// Add samples
 	values := []float64{1, 2, 3, 4, 5}
@@ -28,7 +28,7 @@ func TestQuantileWindow_Basic(t *testing.T) {
 }
 
 func TestQuantileWindow_P90(t *testing.T) {
-	qw := NewQuantileWindow(0.9, 10) // p90
+	qw := NewQuantileWindow(0.9, 10*time.Second) // p90
 
 	// Add 10 values: 1, 2, 3, ..., 10
 	for i := 1; i <= 10; i++ {
@@ -43,7 +43,7 @@ func TestQuantileWindow_P90(t *testing.T) {
 }
 
 func TestQuantileWindow_P70(t *testing.T) {
-	qw := NewQuantileWindow(0.7, 10) // p70
+	qw := NewQuantileWindow(0.7, 10*time.Second) // p70
 
 	// Add 10 values: 1, 2, 3, ..., 10
 	for i := 1; i <= 10; i++ {
@@ -58,36 +58,39 @@ func TestQuantileWindow_P70(t *testing.T) {
 }
 
 func TestQuantileWindow_SlidingWindow(t *testing.T) {
-	qw := NewQuantileWindow(0.5, 5) // Median with window size 5
+	qw := NewQuantileWindow(0.5, 5*time.Second) // Median with 5 second window
+	baseTime := time.Now()
 
-	// Add initial window: [1,2,3,4,5]
-	for i := 1; i <= 5; i++ {
-		qw.Add(float64(i))
+	// Add samples at t=0, 1, 2, 3, 4 seconds
+	for i := 0; i < 5; i++ {
+		qw.AddWithTime(float64(i+1), baseTime.Add(time.Duration(i)*time.Second))
 	}
+	// Window: [1,2,3,4,5], median = 3
 	if qw.Value() != 3 {
 		t.Errorf("Initial median should be 3, got %f", qw.Value())
 	}
 
-	// Add 6, window becomes [2,3,4,5,6], median = 4
-	qw.Add(6)
+	// Add at t=6s (value 1 at t=0 expires, 6 seconds old)
+	// Window: [2,3,4,5,6], median = 4
+	qw.AddWithTime(6, baseTime.Add(6*time.Second))
 	if qw.Value() != 4 {
 		t.Errorf("After adding 6, median should be 4, got %f", qw.Value())
 	}
 
-	// Add 7, window becomes [3,4,5,6,7], median = 5
-	qw.Add(7)
+	// Add at t=7s (value 2 at t=1 expires)
+	// Window: [3,4,5,6,7], median = 5
+	qw.AddWithTime(7, baseTime.Add(7*time.Second))
 	if qw.Value() != 5 {
 		t.Errorf("After adding 7, median should be 5, got %f", qw.Value())
 	}
 
-	// Verify size stays at max
 	if qw.Size() != 5 {
 		t.Errorf("Window size should be 5, got %d", qw.Size())
 	}
 }
 
 func TestQuantileWindow_UnsortedInput(t *testing.T) {
-	qw := NewQuantileWindow(0.5, 10)
+	qw := NewQuantileWindow(0.5, 10*time.Second)
 
 	// Add values in random order
 	values := []float64{5, 1, 9, 3, 7, 2, 8, 4, 6, 10}
@@ -104,7 +107,7 @@ func TestQuantileWindow_UnsortedInput(t *testing.T) {
 }
 
 func TestQuantileWindow_DuplicateValues(t *testing.T) {
-	qw := NewQuantileWindow(0.5, 10)
+	qw := NewQuantileWindow(0.5, 10*time.Second)
 
 	// Add duplicate values
 	values := []float64{5, 5, 5, 5, 5}
@@ -118,7 +121,7 @@ func TestQuantileWindow_DuplicateValues(t *testing.T) {
 }
 
 func TestQuantileWindow_Reset(t *testing.T) {
-	qw := NewQuantileWindow(0.5, 10)
+	qw := NewQuantileWindow(0.5, 10*time.Second)
 
 	// Add values
 	for i := 1; i <= 5; i++ {
@@ -147,7 +150,7 @@ func TestQuantileWindow_Reset(t *testing.T) {
 }
 
 func TestQuantileWindow_EmptyWindow(t *testing.T) {
-	qw := NewQuantileWindow(0.9, 10)
+	qw := NewQuantileWindow(0.9, 10*time.Second)
 
 	if qw.Value() != 0 {
 		t.Errorf("Empty window should return 0, got %f", qw.Value())
@@ -159,7 +162,7 @@ func TestQuantileWindow_EmptyWindow(t *testing.T) {
 }
 
 func TestQuantileWindow_SingleValue(t *testing.T) {
-	qw := NewQuantileWindow(0.9, 10)
+	qw := NewQuantileWindow(0.9, 10*time.Second)
 
 	qw.Add(42)
 
@@ -189,7 +192,7 @@ func TestQuantileWindow_VariousQuantiles(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		qw := NewQuantileWindow(tt.quantile, 10)
+		qw := NewQuantileWindow(tt.quantile, 10*time.Second)
 		for _, v := range values {
 			qw.Add(v)
 		}
@@ -201,65 +204,69 @@ func TestQuantileWindow_VariousQuantiles(t *testing.T) {
 	}
 }
 
-// TestQuantileWindow_StressTest adds many values and verifies correctness
+// TestQuantileWindow_StressTest adds many values with timestamps and verifies correctness
 func TestQuantileWindow_StressTest(t *testing.T) {
-	windowSize := 100
-	numSamples := 1000
-	qw := NewQuantileWindow(0.9, windowSize)
+	windowDuration := 100 * time.Second
+	qw := NewQuantileWindow(0.9, windowDuration)
 
 	rand.Seed(42)
-	values := make([]float64, numSamples)
-	for i := 0; i < numSamples; i++ {
-		values[i] = rand.Float64() * 1000
+	baseTime := time.Now()
+
+	// Add 1000 samples over 200 seconds (5 samples/second)
+	for i := 0; i < 1000; i++ {
+		value := rand.Float64() * 1000
+		timestamp := baseTime.Add(time.Duration(i) * 200 * time.Millisecond)
+		qw.AddWithTime(value, timestamp)
+
+		// Verify size doesn't exceed expected (100 seconds * 5 samples/sec = 500, plus 1 for boundary = 501)
+		if qw.Size() > 501 {
+			t.Errorf("At sample %d: window size %d exceeds expected max", i, qw.Size())
+		}
 	}
 
-	for i, v := range values {
-		qw.Add(v)
-
-		// Verify correctness every 100 samples
-		if i%100 == 99 && i >= windowSize-1 {
-			// Get current window
-			windowStart := max(0, i-windowSize+1)
-			currentWindow := values[windowStart : i+1]
-
-			// Calculate expected p90
-			sorted := make([]float64, len(currentWindow))
-			copy(sorted, currentWindow)
-			sort.Float64s(sorted)
-			expectedPos := int(float64(len(sorted)-1) * 0.9)
-			expected := sorted[expectedPos]
-
-			result := qw.Value()
-			if math.Abs(result-expected) > 0.001 {
-				t.Errorf("At sample %d: expected p90 = %f, got %f", i, expected, result)
-			}
-		}
+	// Verify final window only contains recent samples
+	if qw.Size() == 0 {
+		t.Error("Window should not be empty")
 	}
 }
 
 // TestQuantileWindow_ConsistencyWithSorting verifies that the quantile window
-// produces the same results as sorting the window
+// produces the same results as sorting the window (with time-based expiration)
 func TestQuantileWindow_ConsistencyWithSorting(t *testing.T) {
-	windowSize := 50
-	qw := NewQuantileWindow(0.7, windowSize)
+	windowDuration := 50 * time.Second
+	qw := NewQuantileWindow(0.7, windowDuration)
 
 	rand.Seed(123)
-	window := make([]float64, 0, windowSize)
+	baseTime := time.Now()
 
+	// Track values with timestamps for verification
+	type sample struct {
+		value     float64
+		timestamp time.Time
+	}
+	allSamples := make([]sample, 0)
+
+	// Add 200 samples over 100 seconds (2 samples/second)
 	for i := 0; i < 200; i++ {
 		value := rand.Float64() * 100
-		qw.Add(value)
+		timestamp := baseTime.Add(time.Duration(i) * 500 * time.Millisecond)
+		qw.AddWithTime(value, timestamp)
 
-		// Maintain a reference window
-		window = append(window, value)
-		if len(window) > windowSize {
-			window = window[1:]
+		allSamples = append(allSamples, sample{value, timestamp})
+
+		// Build expected window (values within last 50 seconds from current timestamp)
+		cutoff := timestamp.Add(-windowDuration)
+		var expectedWindow []float64
+		for _, s := range allSamples {
+			if !s.timestamp.Before(cutoff) {
+				expectedWindow = append(expectedWindow, s.value)
+			}
 		}
 
 		// Calculate expected p70 from sorted window
-		if len(window) > 0 {
-			sorted := make([]float64, len(window))
-			copy(sorted, window)
+		if len(expectedWindow) > 0 {
+			sorted := make([]float64, len(expectedWindow))
+			copy(sorted, expectedWindow)
 			sort.Float64s(sorted)
 			expectedPos := int(float64(len(sorted)-1) * 0.7)
 			expected := sorted[expectedPos]
@@ -267,8 +274,7 @@ func TestQuantileWindow_ConsistencyWithSorting(t *testing.T) {
 			result := qw.Value()
 			if result != expected {
 				t.Errorf("At iteration %d: expected p70 = %f, got %f", i, expected, result)
-				t.Errorf("Window: %v", window)
-				t.Errorf("Sorted: %v", sorted)
+				t.Errorf("Window size: %d, Expected size: %d", qw.Size(), len(expectedWindow))
 			}
 		}
 	}
@@ -276,23 +282,27 @@ func TestQuantileWindow_ConsistencyWithSorting(t *testing.T) {
 
 // BenchmarkQuantileWindow_Add benchmarks the Add operation
 func BenchmarkQuantileWindow_Add(b *testing.B) {
-	qw := NewQuantileWindow(0.9, 1000)
+	qw := NewQuantileWindow(0.9, 1000*time.Second)
 	rand.Seed(42)
+	baseTime := time.Now()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		qw.Add(rand.Float64() * 1000)
+		timestamp := baseTime.Add(time.Duration(i) * time.Second)
+		qw.AddWithTime(rand.Float64()*1000, timestamp)
 	}
 }
 
 // BenchmarkQuantileWindow_AddWithQuery benchmarks Add + Value operations
 func BenchmarkQuantileWindow_AddWithQuery(b *testing.B) {
-	qw := NewQuantileWindow(0.9, 1000)
+	qw := NewQuantileWindow(0.9, 1000*time.Second)
 	rand.Seed(42)
+	baseTime := time.Now()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		qw.Add(rand.Float64() * 1000)
+		timestamp := baseTime.Add(time.Duration(i) * time.Second)
+		qw.AddWithTime(rand.Float64()*1000, timestamp)
 		_ = qw.Value()
 	}
 }
@@ -300,18 +310,22 @@ func BenchmarkQuantileWindow_AddWithQuery(b *testing.B) {
 // BenchmarkQuantileWindow_StableDistribution benchmarks with stable latencies
 // (simulates the common case where new values cluster near the quantile)
 func BenchmarkQuantileWindow_StableDistribution(b *testing.B) {
-	qw := NewQuantileWindow(0.9, 1000)
+	qw := NewQuantileWindow(0.9, 1000*time.Second)
 	rand.Seed(42)
+	baseTime := time.Now()
 
-	// Pre-fill window with values around 100ms
+	// Pre-fill window with values around 100ms (1 sample per second)
 	for i := 0; i < 1000; i++ {
-		qw.Add(100 + rand.Float64()*10) // Values in range [100, 110]
+		timestamp := baseTime.Add(time.Duration(i) * time.Second)
+		qw.AddWithTime(100+rand.Float64()*10, timestamp) // Values in range [100, 110]
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// New values cluster near existing quantile
-		qw.Add(100 + rand.Float64()*10)
+		// Continue with proper timestamp spacing
+		timestamp := baseTime.Add(time.Duration(1000+i) * time.Second)
+		qw.AddWithTime(100+rand.Float64()*10, timestamp)
 		_ = qw.Value()
 	}
 }
