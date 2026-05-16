@@ -113,7 +113,7 @@ type budget struct {
 }
 
 func (b *budget) TryAcquireRetryPermit() bool {
-	if b.RetryRate() > b.maxRate {
+	if b.RetryRate() > b.maxRate && b.retries.Load() >= int32(b.minConcurrency) {
 		return false
 	}
 
@@ -123,7 +123,7 @@ func (b *budget) TryAcquireRetryPermit() bool {
 }
 
 func (b *budget) TryAcquireHedgePermit() bool {
-	if b.HedgeRate() > b.maxRate {
+	if b.HedgeRate() > b.maxRate && b.hedges.Load() >= int32(b.minConcurrency) {
 		return false
 	}
 

@@ -120,4 +120,34 @@ func TestBudget(t *testing.T) {
 				assert.Equal(t, 1, stats.BudgetExceededs())
 			})
 	})
+
+	// This test verifies that minConcurrency allows retries to proceed even when the retry rate exceeds maxRate.
+	t.Run("when min concurrency allows retries to proceed", func(t *testing.T) {
+		// Given a budget that should allow 3 concurrent retries.
+		bb := budget.NewBuilder().
+			WithMaxRate(.001).
+			WithMinConcurrency(3).
+			Build().(internal.Budget)
+
+		// When we attempt to acquire 3 retry permits, then attempt a 4th which should be rejected.
+		assert.True(t, bb.TryAcquireRetryPermit())
+		assert.True(t, bb.TryAcquireRetryPermit())
+		assert.True(t, bb.TryAcquireRetryPermit())
+		assert.False(t, bb.TryAcquireRetryPermit())
+	})
+
+	// This test verifies that minConcurrency allows hedges to proceed even when the hedge rate exceeds maxRate.
+	t.Run("when min concurrency allows hedges to proceed", func(t *testing.T) {
+		// Given a budget that should allow 3 concurrent hedges.
+		bb := budget.NewBuilder().
+			WithMaxRate(.001).
+			WithMinConcurrency(3).
+			Build().(internal.Budget)
+
+		// When we attempt to acquire 3 hedge permits, then attempt a 4th which should be rejected.
+		assert.True(t, bb.TryAcquireHedgePermit())
+		assert.True(t, bb.TryAcquireHedgePermit())
+		assert.True(t, bb.TryAcquireHedgePermit())
+		assert.False(t, bb.TryAcquireHedgePermit())
+	})
 }
