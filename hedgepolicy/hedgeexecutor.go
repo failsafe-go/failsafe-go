@@ -33,6 +33,11 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 		resultSent := atomic.Bool{}
 		resultChan := make(chan *execResult, 1) // Only one result is sent
 
+		if e.budget != nil {
+			e.budget.RecordExecution()
+			defer e.budget.ReleaseExecution()
+		}
+
 		for execIdx := 0; ; execIdx++ {
 			// Prepare execution
 			if execIdx == 0 {
@@ -41,7 +46,7 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 				executions[execIdx] = parentExecution.CopyForHedge().(policy.ExecutionInternal[R])
 
 				// Check the hedge budget, if any
-				if e.budget != nil && !e.budget.TryAcquireHedgePermit() {
+				if e.budget != nil && !e.budget.TryAcquirePermit() {
 					e.budget.OnBudgetExceeded(budget.HedgeExecution, exec)
 					return internal.FailureResult[R](budget.ErrExceeded)
 				}
@@ -56,7 +61,7 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 				startTime := time.Now()
 				result := innerFn(hedgeExec)
 				if execIdx > 0 && e.budget != nil {
-					e.budget.ReleaseHedgePermit()
+					e.budget.ReleasePermit()
 				}
 				isFinalResult := int(resultCount.Add(1)) == e.maxHedges+1
 				isCancellable := e.IsAbortable(result.Result, result.Error)

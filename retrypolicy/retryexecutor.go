@@ -30,12 +30,17 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 		execInternal := exec.(policy.ExecutionInternal[R])
 		isRetry := false
 
+		if e.budget != nil {
+			e.budget.RecordExecution()
+			defer e.budget.ReleaseExecution()
+		}
+
 		for {
 			// Perform the execution
 			result := innerFn(exec)
 
 			if isRetry && e.budget != nil {
-				e.budget.ReleaseRetryPermit()
+				e.budget.ReleasePermit()
 			}
 
 			// Check for cancellation during execution
@@ -77,7 +82,7 @@ func (e *executor[R]) Apply(innerFn func(failsafe.Execution[R]) *common.PolicyRe
 			}
 
 			// Check the retry budget, if any
-			if e.budget != nil && !e.budget.TryAcquireRetryPermit() {
+			if e.budget != nil && !e.budget.TryAcquirePermit() {
 				e.budget.OnBudgetExceeded(budget.RetryExecution, exec)
 				return internal.FailureResult[R](budget.ErrExceeded)
 			}

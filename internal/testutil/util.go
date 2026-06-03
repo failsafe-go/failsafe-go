@@ -119,10 +119,18 @@ func GetPrioritizerRejectionThreshold(prioritizer any) *atomic.Int32 {
 }
 
 func GetBudgetExecutions(budget any) *atomic.Int32 {
+	return getBudgetField(budget, "executions")
+}
+
+func GetInflight(budget any) *atomic.Int32 {
+	return getBudgetField(budget, "inflight")
+}
+
+func getBudgetField(budget any, name string) *atomic.Int32 {
 	val := reflect.ValueOf(budget).Elem()
-	field := val.FieldByName("executions")
+	field := val.FieldByName(name)
 	if !field.IsValid() {
-		panic("Failed to reflect Budget executions")
+		panic("Failed to reflect Budget field: " + name)
 	}
 	ptr := unsafe.Pointer(field.UnsafeAddr())
 	return (*atomic.Int32)(ptr)

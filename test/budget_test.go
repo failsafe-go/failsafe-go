@@ -21,32 +21,42 @@ func TestBudget(t *testing.T) {
 			WithMaxRate(.5).
 			WithMinConcurrency(1).
 			Build().(internal.Budget)
-		testutil.GetBudgetExecutions(b).Add(1)
+		assert.Equal(t, 0.0, b.Rate())
 
-		assert.True(t, b.TryAcquireRetryPermit())
-		assert.True(t, b.TryAcquireRetryPermit())
-		assert.False(t, b.TryAcquireRetryPermit())
+		testutil.GetBudgetExecutions(b).Add(2)
+		testutil.GetInflight(b).Add(1)
 
-		b.ReleaseRetryPermit()
-		assert.True(t, b.TryAcquireRetryPermit())
-		assert.False(t, b.TryAcquireRetryPermit())
+		assert.True(t, b.TryAcquirePermit())
+		assert.False(t, b.TryAcquirePermit())
 
-		b.ReleaseRetryPermit()
-		b.ReleaseRetryPermit()
-		assert.True(t, b.TryAcquireRetryPermit())
-		assert.True(t, b.TryAcquireRetryPermit())
-		assert.False(t, b.TryAcquireRetryPermit())
+		b.ReleasePermit()
+		assert.True(t, b.TryAcquirePermit())
+		assert.False(t, b.TryAcquirePermit())
 	})
 
-	// This test sets 1 execution and 1 retry inflight, then causes an execution to fail, which triggers a successful retry.
+	// This test injects a state where rate > maxRate but inflight < minConcurrency, so the floor allows a permit.
+	t.Run("when minConcurrency floor allows permit despite rate exceeded", func(t *testing.T) {
+		b := budget.NewBuilder().
+			WithMaxRate(.5).
+			WithMinConcurrency(2).
+			Build().(internal.Budget)
+		testutil.GetBudgetExecutions(b).Add(1)
+		testutil.GetInflight(b).Add(1)
+
+		assert.True(t, b.TryAcquirePermit())
+		assert.False(t, b.TryAcquirePermit())
+	})
+
+	// This test simulates 1 other primary + 1 other retry inflight, then runs an execution that
+	// fails and triggers a successful retry.
 	t.Run("when retries not exceeded", func(t *testing.T) {
 		// Given
 		stats := &policytesting.Stats{}
 		bb := budget.NewBuilder().WithMaxRate(.5).WithMinConcurrency(1)
 		b := policytesting.WithBudgetStatsAndLogs(bb, stats, true).Build().(internal.Budget)
 		rp := retrypolicy.NewBuilder[bool]().WithBudget(b).Build()
-		testutil.GetBudgetExecutions(b).Add(1)
-		assert.True(t, b.TryAcquireRetryPermit()) // budget is almost full
+		b.RecordExecution()
+		b.TryAcquirePermit()
 
 		// When / Then
 		stub, reset := testutil.ErrorNTimesThenReturn(testutil.ErrInvalidState, 1, true)
@@ -57,16 +67,17 @@ func TestBudget(t *testing.T) {
 			AssertSuccess(2, 2, true)
 	})
 
-	// This test sets 1 execution and 2 retries inflight, then causes another retry to be attempted which is rejected.
+	// This test injects 2 budgeted slots with no associated primaries to simulate a burst of
+	// concurrent retries from other requests. The executor's own primary permit then tips the
+	// combined rate over the limit, causing the retry to be rejected.
 	t.Run("when retries exceeded", func(t *testing.T) {
 		// Given
 		stats := &policytesting.Stats{}
 		bb := budget.NewBuilder().WithMaxRate(.5).WithMinConcurrency(1)
 		b := policytesting.WithBudgetStatsAndLogs(bb, stats, true).Build().(internal.Budget)
 		rp := retrypolicy.NewBuilder[any]().WithBudget(b).Build()
-		testutil.GetBudgetExecutions(b).Add(1)
-		assert.True(t, b.TryAcquireRetryPermit())
-		assert.True(t, b.TryAcquireRetryPermit()) // budget should be full
+		testutil.GetBudgetExecutions(b).Add(2)
+		testutil.GetInflight(b).Add(2)
 
 		// When / Then
 		testutil.Test[any](t).
@@ -78,7 +89,8 @@ func TestBudget(t *testing.T) {
 			})
 	})
 
-	// This test sets 1 execution and 1 hedge inflight, then causes an execution to hang, which triggers a successful hedge.
+	// This test simulates 1 other primary + 1 other hedge inflight, then runs an execution that
+	// hangs and triggers a successful hedge.
 	t.Run("when hedges not exceeded", func(t *testing.T) {
 		// Given
 		stats := &policytesting.Stats{}
@@ -86,8 +98,8 @@ func TestBudget(t *testing.T) {
 		b := policytesting.WithBudgetStatsAndLogs(bb, stats, true).Build().(internal.Budget)
 		hpb := hedgepolicy.NewBuilderWithDelay[bool](10 * time.Millisecond).WithBudget(b)
 		hp := policytesting.WithHedgeStatsAndLogs(hpb, stats).Build()
-		testutil.GetBudgetExecutions(b).Add(1)
-		assert.True(t, b.TryAcquireHedgePermit()) // budget is almost full
+		b.RecordExecution()
+		b.TryAcquirePermit()
 
 		// When / Then
 		testutil.Test[bool](t).
@@ -99,7 +111,9 @@ func TestBudget(t *testing.T) {
 			})
 	})
 
-	// This test sets 1 execution and 2 hedges inflight, then causes another hedge to be attempted, which is rejected.
+	// This test injects 2 budgeted slots with no associated primaries to simulate a burst of
+	// concurrent hedges from other requests. The executor's own primary permit then tips the
+	// combined rate over the limit, causing the hedge to be rejected.
 	t.Run("when hedges exceeded", func(t *testing.T) {
 		// Given
 		stats := &policytesting.Stats{}
@@ -107,9 +121,8 @@ func TestBudget(t *testing.T) {
 		b := policytesting.WithBudgetStatsAndLogs(bb, stats, true).Build().(internal.Budget)
 		hpb := hedgepolicy.NewBuilderWithDelay[bool](10 * time.Millisecond).WithBudget(b)
 		hp := policytesting.WithHedgeStatsAndLogs(hpb, stats).Build()
-		testutil.GetBudgetExecutions(b).Add(1)
-		assert.True(t, b.TryAcquireHedgePermit())
-		assert.True(t, b.TryAcquireHedgePermit()) // budget should be full
+		testutil.GetBudgetExecutions(b).Add(2)
+		testutil.GetInflight(b).Add(2)
 
 		// When / Then
 		testutil.Test[bool](t).
