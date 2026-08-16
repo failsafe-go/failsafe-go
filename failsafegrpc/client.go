@@ -32,11 +32,14 @@ func NewUnaryClientInterceptorWithExecutor[R any](executor failsafe.Executor[R])
 		// Merge the request context with the Executor so it's available for policies
 		mergedCtx, cancel := util.MergeContexts(ctx, executor.Context())
 		defer cancel(nil)
+
+		// Take a copy of the executor so that request scoped contexts are not shared
+		callExecutor := executor
 		if mergedCtx != executor.Context() {
-			executor = executor.WithContext(mergedCtx)
+			callExecutor = executor.WithContext(mergedCtx)
 		}
 
-		_, err := executor.GetWithExecution(func(exec failsafe.Execution[R]) (R, error) {
+		_, err := callExecutor.GetWithExecution(func(exec failsafe.Execution[R]) (R, error) {
 			// Merge the latest execution context for each attempt
 			innerCtx, innerCancel := util.MergeContexts(mergedCtx, exec.Context())
 			defer innerCancel(nil)

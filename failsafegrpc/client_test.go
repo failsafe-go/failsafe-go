@@ -176,6 +176,33 @@ func TestClientCancelWithContext(t *testing.T) {
 	}
 }
 
+// Asserts that an Executor that's shared by an interceptor is not updated with request scoped contexts, which would
+// cause each call to merge with the previous call's context, after that context has been canceled.
+func TestClientWithRequestScopedContexts(t *testing.T) {
+	// Given
+	server := testutil.MockGrpcResponses("pong")
+	grpcServer, dialer := testutil.GrpcServer(server)
+	executor := failsafe.With(retrypolicy.NewBuilder[*pbfixtures.PingResponse]().AbortOnErrors(context.Canceled).Build())
+	grpcClient := testutil.GrpcClient(dialer, grpc.WithUnaryInterceptor(NewUnaryClientInterceptorWithExecutor(executor)))
+	t.Cleanup(func() {
+		grpcServer.Stop()
+		grpcClient.Close()
+	})
+	client := pbfixtures.NewPingServiceClient(grpcClient)
+
+	// When performing sequential calls, each with a distinct request scoped context
+	type customKey int
+	for i := 1; i <= 3; i++ {
+		ctx := context.WithValue(context.Background(), customKey(i), "foo")
+		response, err := client.Ping(ctx, &pbfixtures.PingRequest{Msg: "ping"})
+
+		// Then
+		if assert.NoError(t, err, "call %d should not be canceled by a previous call's context", i) {
+			assert.Equal(t, "pong", response.Msg)
+		}
+	}
+}
+
 func testClientSuccess[R any](t *testing.T, requestCtxFn func() context.Context, server pbfixtures.PingServiceServer, executor failsafe.Executor[R], expectedAttempts int, expectedExecutions int, expectedResult any, then ...func()) {
 	testClient(t, requestCtxFn, server, executor, expectedAttempts, expectedExecutions, expectedResult, nil, true, then...)
 }
