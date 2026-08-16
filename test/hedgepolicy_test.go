@@ -85,6 +85,31 @@ func TestHedgePolicy(t *testing.T) {
 			})
 	})
 
+	// Asserts that when a negative delay stops hedging, the result of the initial execution is returned, even though it
+	// does not match a cancellation condition.
+	t.Run("should return result with negative delay when no result is cancellable", func(t *testing.T) {
+		// Given - a delay that stops hedging
+		hp := hedgepolicy.NewBuilderWithDelayFunc[int](func(exec failsafe.ExecutionAttempt[int]) time.Duration {
+			return -1
+		}).
+			CancelOnResult(1).
+			WithMaxHedges(2).
+			Build()
+
+		// When an execution returns a result that does not match the cancellation condition
+		result := failsafe.With[int](hp).GetAsync(func() (int, error) {
+			return 2, nil
+		})
+
+		// Then
+		select {
+		case <-result.Done():
+			assert.Equal(t, 2, result.Result())
+		case <-time.After(1 * time.Second):
+			assert.Fail(t, "execution did not complete")
+		}
+	})
+
 	// Asserts that no hedging occurs during the warmup period for quantile-based delay.
 	t.Run("should not hedge with quantile during warmup", func(t *testing.T) {
 		// Given - a quantile-based hedge policy

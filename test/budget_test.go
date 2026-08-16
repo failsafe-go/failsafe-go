@@ -113,7 +113,8 @@ func TestBudget(t *testing.T) {
 
 	// This test injects 2 budgeted slots with no associated primaries to simulate a burst of
 	// concurrent hedges from other requests. The executor's own primary permit then tips the
-	// combined rate over the limit, causing the hedge to be rejected.
+	// combined rate over the limit, causing the hedge to be rejected. The initial execution,
+	// which is not budgeted, should still produce a result.
 	t.Run("when hedges exceeded", func(t *testing.T) {
 		// Given
 		stats := &policytesting.Stats{}
@@ -129,8 +130,9 @@ func TestBudget(t *testing.T) {
 			With(hp).
 			Reset(stats).
 			Get(testutil.SlowNTimesThenReturn(t, 1, 100*time.Millisecond, true, false)).
-			AssertFailure(2, 0, budget.ErrExceeded, func() {
+			AssertSuccess(1, 1, true, func() {
 				assert.Equal(t, 1, stats.BudgetExceededs())
+				assert.Equal(t, 0, stats.Hedges())
 			})
 	})
 }

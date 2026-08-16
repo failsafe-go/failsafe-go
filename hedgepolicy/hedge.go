@@ -50,7 +50,8 @@ type Builder[R any] interface {
 	// by default.
 	WithMaxHedges(maxHedges int) Builder[R]
 
-	// WithBudget configures a hedge budget. When the hedgeBudget is exceeded, hedges will stop with budget.ErrExceeded.
+	// WithBudget configures a hedge budget. When the hedgeBudget is exceeded, no additional hedges are performed, and the
+	// attempts that are already inflight, including the initial attempt, are allowed to produce a result.
 	WithBudget(hedgeBudget budget.Budget) Builder[R]
 
 	// OnHedge registers the listener to be called when a hedge is about to be attempted.
