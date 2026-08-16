@@ -1,5 +1,17 @@
 ## Upcoming Release
 
+## 0.9.7
+
+### Bug Fixes
+
+- Fixed #136 - `failsafegrpc.NewUnaryClientInterceptor` should preserve per request contexts.
+- Fixed #139 - Budgets should correctly threshold against min concurrency.
+- Fixed #141 - An exceeded budget should not cause hedges to fail.
+
+### Improvements
+
+- Added dynamic delay support for hedge policies.
+
 ## 0.9.6
 
 ### Bug Fixes
