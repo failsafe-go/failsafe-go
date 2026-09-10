@@ -30,10 +30,16 @@ func (e *executor[R]) PreExecute(exec policy.ExecutionInternal[R]) *common.Polic
 		}
 		return internal.FailureResult[R](err)
 	}
+	if e.onAcquired != nil {
+		e.onAcquired(failsafe.ExecutionEvent[R]{ExecutionAttempt: exec})
+	}
 	return nil
 }
 
-func (e *executor[R]) PostExecute(_ policy.ExecutionInternal[R], result *common.PolicyResult[R]) *common.PolicyResult[R] {
+func (e *executor[R]) PostExecute(exec policy.ExecutionInternal[R], result *common.PolicyResult[R]) *common.PolicyResult[R] {
+	if e.onReleased != nil {
+		e.onReleased(failsafe.ExecutionEvent[R]{ExecutionAttempt: exec})
+	}
 	e.bulkhead.ReleasePermit()
 	return result
 }
