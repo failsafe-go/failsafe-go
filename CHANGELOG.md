@@ -1,5 +1,9 @@
 ## Upcoming Release
 
+### Bug Fixes
+
+- Fixed #144 - Stop merged-context cancellation watchers when the merged context is explicitly canceled.
+
 ## 0.9.7
 
 ### Bug Fixes
