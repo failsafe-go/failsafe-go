@@ -64,6 +64,37 @@ func TestBulkHead(t *testing.T) {
 			})
 	})
 
+	// Asserts that OnAcquired and OnReleased are called around an execution while the permit is held.
+	t.Run("with permit listeners", func(t *testing.T) {
+		// Given
+		var events []string
+		bh := bulkhead.NewBuilder[any](1).
+			OnAcquired(func(e failsafe.ExecutionEvent[any]) {
+				events = append(events, "acquired")
+			}).
+			OnReleased(func(e failsafe.ExecutionEvent[any]) {
+				events = append(events, "released")
+			}).
+			Build()
+
+		// When / Then
+		testutil.Test[any](t).
+			With(bh).
+			Before(func() {
+				events = nil
+			}).
+			Run(func(execution failsafe.Execution[any]) error {
+				assert.False(t, bh.TryAcquirePermit()) // permit should be held
+				events = append(events, "execution")
+				return testutil.ErrInvalidState
+			}).
+			AssertSuccessError(1, 1, testutil.ErrInvalidState, func() {
+				assert.Equal(t, []string{"acquired", "execution", "released"}, events)
+				assert.True(t, bh.TryAcquirePermit()) // permit should be released
+				bh.ReleasePermit()
+			})
+	})
+
 	// Asserts that an exceeded maxWaitTime causes ErrFull.
 	t.Run("with maxWaitTime exceeded", func(t *testing.T) {
 		// Given

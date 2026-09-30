@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -270,7 +271,12 @@ func TestRateLimit_Cancellation(t *testing.T) {
 func TestBulkhead_Cancellation(t *testing.T) {
 	t.Run("with context during Bulkhead delay", func(t *testing.T) {
 		// Given
-		bh := bulkhead.NewBuilder[any](2).WithMaxWaitTime(200 * time.Millisecond).Build()
+		var acquired, released atomic.Int32
+		bh := bulkhead.NewBuilder[any](2).
+			WithMaxWaitTime(200 * time.Millisecond).
+			OnAcquired(func(e failsafe.ExecutionEvent[any]) { acquired.Add(1) }).
+			OnReleased(func(e failsafe.ExecutionEvent[any]) { released.Add(1) }).
+			Build()
 		ctxFn := testutil.ContextWithCancel(100 * time.Millisecond)
 		bh.TryAcquirePermit()
 		bh.TryAcquirePermit() // bulkhead should be full
@@ -280,7 +286,10 @@ func TestBulkhead_Cancellation(t *testing.T) {
 			With(bh).
 			Context(ctxFn).
 			Get(testutil.GetFn[any](nil, nil)).
-			AssertFailure(1, 0, context.Canceled)
+			AssertFailure(1, 0, context.Canceled, func() {
+				assert.Zero(t, acquired.Load())
+				assert.Zero(t, released.Load())
+			})
 	})
 
 	t.Run("with Timeout during Bulkhead delay", func(t *testing.T) {

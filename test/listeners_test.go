@@ -346,28 +346,55 @@ func TestListenersForRateLimiter(t *testing.T) {
 }
 
 func TestListenersForBulkhead(t *testing.T) {
-	// Given
-	bhBuilder := bulkhead.NewBuilder[any](2)
-	stats := &listenerStats{}
-	registerBhListeners(stats, bhBuilder)
-	bh := bhBuilder.Build()
-	executor := failsafe.With(bh)
-	registerExecutorListeners(stats, executor)
-	assert.NoError(t, bh.AcquirePermit(context.Background()))
-	assert.NoError(t, bh.AcquirePermit(context.Background()))
+	t.Run("when not full", func(t *testing.T) {
+		// Given
+		bhBuilder := bulkhead.NewBuilder[any](2)
+		stats := &listenerStats{}
+		registerBhListeners(stats, bhBuilder)
+		executor := failsafe.With(bhBuilder.Build())
+		registerExecutorListeners(stats, executor)
 
-	// When
-	assert.Error(t, bulkhead.ErrFull, executor.RunWithExecution(testutil.RunFn(nil)))
-	assert.Error(t, bulkhead.ErrFull, executor.RunWithExecution(testutil.RunFn(nil)))
-	bh.ReleasePermit()
-	bh.ReleasePermit()
+		// When
+		assert.NoError(t, executor.RunWithExecution(testutil.RunFn(nil)))
+		assert.ErrorIs(t, executor.RunWithExecution(testutil.RunFn(testutil.ErrInvalidState)), testutil.ErrInvalidState)
 
-	// Then
-	assert.Equal(t, 2, stats.bhFull)
+		// Then
+		assert.Equal(t, 0, stats.bhFull)
+		assert.Equal(t, 2, stats.bhAcquired)
+		assert.Equal(t, 2, stats.bhReleased)
 
-	assert.Equal(t, 2, stats.done)
-	assert.Equal(t, 0, stats.success)
-	assert.Equal(t, 2, stats.failure)
+		// Bulkheads don't handle failures, so the error does not cause the execution to fail
+		assert.Equal(t, 2, stats.done)
+		assert.Equal(t, 2, stats.success)
+		assert.Equal(t, 0, stats.failure)
+	})
+
+	t.Run("when full", func(t *testing.T) {
+		// Given
+		bhBuilder := bulkhead.NewBuilder[any](2)
+		stats := &listenerStats{}
+		registerBhListeners(stats, bhBuilder)
+		bh := bhBuilder.Build()
+		executor := failsafe.With(bh)
+		registerExecutorListeners(stats, executor)
+		assert.NoError(t, bh.AcquirePermit(context.Background()))
+		assert.NoError(t, bh.AcquirePermit(context.Background()))
+
+		// When
+		assert.ErrorIs(t, executor.RunWithExecution(testutil.RunFn(nil)), bulkhead.ErrFull)
+		assert.ErrorIs(t, executor.RunWithExecution(testutil.RunFn(nil)), bulkhead.ErrFull)
+		bh.ReleasePermit()
+		bh.ReleasePermit()
+
+		// Then
+		assert.Equal(t, 2, stats.bhFull)
+		assert.Equal(t, 0, stats.bhAcquired)
+		assert.Equal(t, 0, stats.bhReleased)
+
+		assert.Equal(t, 2, stats.done)
+		assert.Equal(t, 0, stats.success)
+		assert.Equal(t, 2, stats.failure)
+	})
 }
 
 func TestListenersForCache(t *testing.T) {
@@ -486,8 +513,10 @@ type listenerStats struct {
 	// RateLimiter
 	rlExceeded int
 
-	// Buulkhead
-	bhFull int
+	// Bulkhead
+	bhFull     int
+	bhAcquired int
+	bhReleased int
 
 	// Hedge
 	hpHedge int
@@ -560,6 +589,10 @@ func registerRlListeners[R any](stats *listenerStats, rlBuilder ratelimiter.Buil
 func registerBhListeners[R any](stats *listenerStats, bhBuilder bulkhead.Builder[R]) {
 	bhBuilder.OnFull(func(event failsafe.ExecutionEvent[R]) {
 		stats.bhFull++
+	}).OnAcquired(func(event failsafe.ExecutionEvent[R]) {
+		stats.bhAcquired++
+	}).OnReleased(func(event failsafe.ExecutionEvent[R]) {
+		stats.bhReleased++
 	})
 }
 
