@@ -39,10 +39,17 @@ jobs:
         with:
           go-version: "${{ matrix.go-version }}"
 
+      # Examples are excluded since they're slow and run in real time
       - name: Run tests
-        run: go test ./... -v -race -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic
+        if: ${{ !(matrix.go-version == 'stable' && matrix.platform == 'ubuntu-latest') }}
+        run: go test -v -race $(go list ./... | grep -v /examples)
+
+      - name: Run tests with coverage
+        if: ${{ matrix.go-version == 'stable' && matrix.platform == 'ubuntu-latest' }}
+        run: go test -v -race -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic $(go list ./... | grep -v /examples)
 
       - name: Upload coverage reports to Codecov
+        if: ${{ matrix.go-version == 'stable' && matrix.platform == 'ubuntu-latest' }}
         uses: codecov/codecov-action@v5.5.2
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
