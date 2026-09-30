@@ -198,7 +198,7 @@ func acquire(stats stats, permits int) (waitTime int) {
 
 func acquireNTimes(stats stats, permits int, numberOfCalls int) (waitTime int) {
 	waitTime = 0
-	for i := 0; i < numberOfCalls; i++ {
+	for range numberOfCalls {
 		waitTime = int(stats.acquirePermits(permits, -1).Milliseconds())
 	}
 	return waitTime

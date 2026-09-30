@@ -111,7 +111,7 @@ func TestQueueingLimiter(t *testing.T) {
 	// This test fills the queue, adds another execution which waits, then eventually empties the queue.
 	t.Run("should acquire permit after wait with queueing", func(t *testing.T) {
 		limiter := adaptivelimiter.NewBuilder[string]().
-			WithLimits(2, 2, 2). // limit of 2
+			WithLimits(2, 2, 2).    // limit of 2
 			WithQueueing(1.5, 1.5). // queue of 1.5 * 2 = 3
 			Build()
 		before := func() {
@@ -340,12 +340,12 @@ func shouldAcquire(t *testing.T, limiter blockingLimiter) adaptivelimiter.Permit
 // Useful for filling an adaptivelimiter's semaphore.
 func shouldAcquireAndDropAfterWait(t *testing.T, limiter blockingLimiter, permitCount int, sleepTime time.Duration) {
 	var permits = make([]adaptivelimiter.Permit, permitCount)
-	for i := 0; i < permitCount; i++ {
+	for i := range permitCount {
 		permits[i] = shouldAcquire(t, limiter)
 	}
 	go func() {
 		time.Sleep(sleepTime)
-		for i := 0; i < permitCount; i++ {
+		for i := range permitCount {
 			permits[i].Drop()
 		}
 	}()
@@ -353,7 +353,7 @@ func shouldAcquireAndDropAfterWait(t *testing.T, limiter blockingLimiter, permit
 
 // Useful for queueing executions, since this needs to be done async.
 func shouldAcquireAndDropAsync(t *testing.T, limiter blockingLimiter, permitCount int) {
-	for i := 0; i < permitCount; i++ {
+	for range permitCount {
 		go func() {
 			permit, err := limiter.AcquirePermitWithMaxWait(context.Background(), time.Second)
 			require.NoError(t, err)

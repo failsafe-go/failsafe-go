@@ -22,7 +22,7 @@ func TestGetSuccessAndFailureStats(t *testing.T) {
 		Build()
 
 	// When
-	for i := 0; i < 7; i++ {
+	for i := range 7 {
 		if i%2 == 0 {
 			breaker.RecordSuccess()
 		} else {
@@ -37,7 +37,7 @@ func TestGetSuccessAndFailureStats(t *testing.T) {
 	assert.Equal(t, .57, breaker.Metrics().SuccessRate())
 
 	// When
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		if i%4 == 0 {
 			breaker.RecordFailure()
 		} else {
@@ -53,7 +53,7 @@ func TestGetSuccessAndFailureStats(t *testing.T) {
 
 	// When
 	breaker.HalfOpen()
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		if i%3 == 0 {
 			breaker.RecordFailure()
 		} else {

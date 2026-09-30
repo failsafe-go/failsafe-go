@@ -381,7 +381,7 @@ func BenchmarkUsageTracker_Calibrate(b *testing.B) {
 		b.Run(fmt.Sprintf("users_%d", userCount), func(b *testing.B) {
 			tracker := NewUsageTracker(time.Minute, userCount*2)
 
-			for i := 0; i < userCount; i++ {
+			for i := range userCount {
 				userID := fmt.Sprintf("user_%d", i)
 				usageRange := maxUsage - minUsage
 				randomUsage := minUsage + rng.Int63n(usageRange)

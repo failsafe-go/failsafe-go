@@ -117,7 +117,7 @@ func TestHedgePolicy(t *testing.T) {
 		hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelayQuantile[int](0.95, 30, 20), stats).Build()
 
 		// When - run 20 executions (the warmup period), each should not trigger hedging
-		for i := 0; i < 20; i++ {
+		for range 20 {
 			_, err := failsafe.With[int](hp).GetWithExecution(func(exec failsafe.Execution[int]) (int, error) {
 				time.Sleep(5 * time.Millisecond)
 				return 1, nil
@@ -136,7 +136,7 @@ func TestHedgePolicy(t *testing.T) {
 		hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelayQuantile[int](0.95, 30, 20), stats).Build()
 
 		// Warmup - feed 25 fast executions to establish a baseline
-		for i := 0; i < 25; i++ {
+		for range 25 {
 			_, err := failsafe.With[int](hp).GetWithExecution(func(exec failsafe.Execution[int]) (int, error) {
 				time.Sleep(5 * time.Millisecond)
 				return 1, nil

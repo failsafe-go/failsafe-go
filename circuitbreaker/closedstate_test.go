@@ -78,7 +78,7 @@ func TestClosedStateSuccessWithFailureRatio(t *testing.T) {
 	assert.True(t, breaker.IsClosed())
 
 	// When / Then
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		breaker.RecordSuccess()
 		breaker.RecordFailure()
 		assert.True(t, breaker.IsClosed())
@@ -93,7 +93,7 @@ func TestClosedStateSuccessWithFailureThreshold(t *testing.T) {
 	assert.True(t, breaker.IsClosed())
 
 	// When / Then
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		breaker.RecordSuccess()
 		breaker.RecordFailure()
 		assert.True(t, breaker.IsClosed())

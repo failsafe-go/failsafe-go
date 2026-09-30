@@ -140,7 +140,7 @@ func TestWindowedLevelTracker_BasicQuantiles(t *testing.T) {
 func TestWindowedLevelTracker_UniformDistribution(t *testing.T) {
 	tracker := NewLevelTracker(100)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		tracker.RecordLevel(i)
 	}
 
@@ -170,13 +170,13 @@ func TestWindowedLevelTracker_SlidingWindow(t *testing.T) {
 
 func TestWindowedLevelTracker_RejectionThreshold(t *testing.T) {
 	tracker := NewLevelTracker(100)
-	for i := 0; i < 70; i++ {
+	for i := range 70 {
 		tracker.RecordLevel(i % 51) // levels 0-50
 	}
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		tracker.RecordLevel(51 + (i % 50)) // levels 51-100
 	}
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		tracker.RecordLevel(101 + (i % 50)) // levels 101-150
 	}
 
@@ -210,7 +210,7 @@ func BenchmarkLevelTracker_GetLevel(b *testing.B) {
 	b.Run("TDigest", func(b *testing.B) {
 		tracker := newTDigestLeveLTracker()
 
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			tracker.RecordLevel(rand.Intn(499))
 		}
 
@@ -223,7 +223,7 @@ func BenchmarkLevelTracker_GetLevel(b *testing.B) {
 	b.Run("Windowed", func(b *testing.B) {
 		tracker := NewLevelTracker(1000)
 
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			tracker.RecordLevel(rand.Intn(499))
 		}
 
@@ -238,7 +238,7 @@ func BenchmarkLevelTracker_RecordAndGet(b *testing.B) {
 	b.Run("TDigest", func(b *testing.B) {
 		tracker := newTDigestLeveLTracker()
 
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			tracker.RecordLevel(rand.Intn(499))
 		}
 
@@ -254,7 +254,7 @@ func BenchmarkLevelTracker_RecordAndGet(b *testing.B) {
 	b.Run("Windowed", func(b *testing.B) {
 		tracker := NewLevelTracker(1000)
 
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			tracker.RecordLevel(rand.Intn(499))
 		}
 

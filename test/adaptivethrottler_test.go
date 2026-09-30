@@ -35,7 +35,7 @@ func TestAdaptiveThrottler(t *testing.T) {
 		recordFailures(throttler, 50)
 
 		// Try many attempts to reject
-		for attempt := 0; attempt < 50; attempt++ {
+		for range 50 {
 			result, err := testutil.Test[string](t).
 				With(throttler).
 				Get(testutil.GetFn("success", nil)).
@@ -125,13 +125,13 @@ func TestPriorityThrottler(t *testing.T) {
 }
 
 func recordFailures[R any](throttler adaptivethrottler.AdaptiveThrottler[R], count int) {
-	for i := 0; i < count; i++ {
+	for range count {
 		throttler.RecordFailure()
 	}
 }
 
 func recordPriorityFailures[R any](throttler adaptivethrottler.PriorityThrottler[R], count int) {
-	for i := 0; i < count; i++ {
+	for range count {
 		throttler.RecordFailure()
 	}
 }

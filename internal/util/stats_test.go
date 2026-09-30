@@ -14,7 +14,7 @@ var _ ExecutionStats = &timedStats{}
 
 func TestCountingStatsShouldReturnUninitializedValues(t *testing.T) {
 	stats := NewCountingStats(100).(*countingStats)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		assert.Equal(t, -1, stats.setNext(true))
 	}
 
@@ -147,7 +147,7 @@ func TestTimedStats(t *testing.T) {
 }
 
 func recordExecutions(stats ExecutionStats, count int, successPredicate func(index int) bool) {
-	for i := 0; i < count; i++ {
+	for i := range count {
 		if successPredicate(i) {
 			stats.RecordSuccess()
 		} else {
@@ -157,13 +157,13 @@ func recordExecutions(stats ExecutionStats, count int, successPredicate func(ind
 }
 
 func recordSuccesses(stats ExecutionStats, count int) {
-	for i := 0; i < count; i++ {
+	for range count {
 		stats.RecordSuccess()
 	}
 }
 
 func recordFailures(stats ExecutionStats, count int) {
-	for i := 0; i < count; i++ {
+	for range count {
 		stats.RecordFailure()
 	}
 }

@@ -180,7 +180,7 @@ func Smooth(oldValue, newValue, factor float64) float64 {
 var log10Values []int
 
 func init() {
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		log10Values = append(log10Values, 1)
 	}
 	for i := 100; i < 1000; i++ {

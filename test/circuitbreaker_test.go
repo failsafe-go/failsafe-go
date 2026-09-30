@@ -36,7 +36,7 @@ func TestCircuitBreaker(t *testing.T) {
 		cb.HalfOpen()
 		waiter := testutil.NewWaiter()
 
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			go func() {
 				failsafe.With(cb).Run(func() error {
 					waiter.Resume()
@@ -48,7 +48,7 @@ func TestCircuitBreaker(t *testing.T) {
 
 		// Assert that the breaker does not allow any more executions at the moment
 		waiter.AwaitWithTimeout(3, 10*time.Second)
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			assert.ErrorIs(t, circuitbreaker.ErrOpen, failsafe.With(cb).Run(testutil.NoopFn))
 		}
 	})

@@ -46,7 +46,7 @@ func createQueueingLimiter(t *testing.T, queueCapacity float64, queueSize int) *
 	limiter.TryAcquirePermit()
 
 	// Fill the queue
-	for i := 0; i < queueSize; i++ {
+	for i := range queueSize {
 		acquireAsync(limiter)
 		assertQueued(t, limiter, i+1)
 	}

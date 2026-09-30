@@ -33,7 +33,7 @@ func TestAdaptiveThrottler_AcquirePermit(t *testing.T) {
 		recordFailures(throttler, 50)
 
 		// When / Then
-		for i := 0; i < 50; i++ {
+		for range 50 {
 			err := throttler.AcquirePermit()
 			assert.Equal(t, 1.0, math.Ceil(throttler.RejectionRate()))
 			if errors.Is(err, ErrExceeded) {
@@ -63,7 +63,7 @@ func TestAdaptiveThrottler_AcquirePermit(t *testing.T) {
 		recordFailures(throttler, 1)
 		assert.True(t, throttler.TryAcquirePermit())
 		recordFailures(throttler, 1)
-		for i := 0; i < 50; i++ {
+		for range 50 {
 			if ok := throttler.TryAcquirePermit(); !ok {
 				return
 			}
@@ -165,7 +165,7 @@ func TestComputeRejectionRate(t *testing.T) {
 }
 
 func recordFailures(throttler AdaptiveThrottler[any], failures int) {
-	for i := 0; i < failures; i++ {
+	for range failures {
 		throttler.RecordFailure()
 	}
 }

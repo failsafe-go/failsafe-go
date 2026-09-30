@@ -235,7 +235,7 @@ func (w *BucketedWindow[T]) ExpireBuckets() *T {
 
 	if newHead > w.HeadTime {
 		bucketsToMove := min(w.BucketCount, newHead-w.HeadTime)
-		for i := int64(0); i < bucketsToMove; i++ {
+		for i := range bucketsToMove {
 			bucket := &w.Buckets[(w.HeadTime+i+1)%w.BucketCount]
 			w.RemoveFn(&w.Summary, bucket)
 			w.ResetFn(bucket)

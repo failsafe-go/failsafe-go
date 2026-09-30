@@ -96,7 +96,7 @@ func TestAdaptiveLimiter_record(t *testing.T) {
 		now := time.UnixMilli(0)
 		limiter.nextUpdateTime = now
 		limiter.WithRecentWindow(time.Second, time.Second, 1)
-		for i := 0; i < warmupSamples; i++ {
+		for range warmupSamples {
 			limiter.baselineRTT.Add(float64(time.Second))
 		}
 		return limiter, now
@@ -163,7 +163,7 @@ func TestAdaptiveLimiter_MaxLimitStabilizationWindow(t *testing.T) {
 		now := time.UnixMilli(0)
 		limiter.nextUpdateTime = now
 		limiter.WithRecentWindow(time.Second, time.Second, 1)
-		for i := 0; i < warmupSamples; i++ {
+		for range warmupSamples {
 			limiter.baselineRTT.Add(float64(time.Second))
 		}
 		return limiter, now

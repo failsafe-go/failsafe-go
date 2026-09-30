@@ -168,7 +168,7 @@ func (lt *windowedLevelTracker) GetLevel(quantile float64) int {
 
 		// Count the levels until we hit the desired quantile
 		countedLevels := 0
-		for level := 0; level < totalLevels; level++ {
+		for level := range totalLevels {
 			countedLevels += lt.levelCounts[level]
 			if countedLevels >= targetLevels {
 				return level

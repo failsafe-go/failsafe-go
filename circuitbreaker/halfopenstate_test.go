@@ -33,7 +33,7 @@ func TestHalfOpenFailureWithFailureThreshold(t *testing.T) {
 	breaker.HalfOpen()
 
 	// When
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		assert.False(t, breaker.IsOpen())
 		assert.False(t, breaker.IsClosed())
 		breaker.RecordFailure()
@@ -322,7 +322,7 @@ func TestHalfOpenSuccessWithSuccessThreshold(t *testing.T) {
 	breaker.HalfOpen()
 
 	// When
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		assert.False(t, breaker.IsOpen())
 		assert.False(t, breaker.IsClosed())
 		breaker.RecordSuccess()

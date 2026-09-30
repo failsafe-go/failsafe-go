@@ -53,7 +53,7 @@ func TestRemainingDelay(t *testing.T) {
 // opening equals RemainingDelay since no time has elapsed on the test clock.
 func TestJitteredDelay(t *testing.T) {
 	clock := testutil.NewTestClock(0)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		breaker := NewBuilder[any]().
 			WithDelay(100 * time.Millisecond).
 			WithJitter(20 * time.Millisecond).
@@ -70,7 +70,7 @@ func TestJitteredDelay(t *testing.T) {
 // Asserts that a configured jitter factor keeps the OpenState delay within [delay*(1-factor), delay*(1+factor)].
 func TestJitterFactorDelay(t *testing.T) {
 	clock := testutil.NewTestClock(0)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		breaker := NewBuilder[any]().
 			WithDelay(100 * time.Millisecond).
 			WithJitterFactor(.25).
@@ -87,7 +87,7 @@ func TestJitterFactorDelay(t *testing.T) {
 // Asserts that a configured random delay keeps the OpenState delay within [delayMin, delayMax].
 func TestRandomDelay(t *testing.T) {
 	clock := testutil.NewTestClock(0)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		breaker := NewBuilder[any]().
 			WithRandomDelay(50*time.Millisecond, 150*time.Millisecond).
 			Build().(*circuitBreaker[any])

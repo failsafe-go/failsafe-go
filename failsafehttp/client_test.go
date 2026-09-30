@@ -330,7 +330,7 @@ func TestBodyReader(t *testing.T) {
 			}
 
 			// Assert that the body can be read multiple times
-			for i := 0; i < 2; i++ {
+			for range 2 {
 				body, err := bodyFunc()
 				assert.NoError(t, err)
 				bodyData, err := io.ReadAll(body)

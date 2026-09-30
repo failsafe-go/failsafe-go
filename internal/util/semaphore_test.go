@@ -143,12 +143,12 @@ func TestDynamicSemaphore_SetSize(t *testing.T) {
 
 	t.Run("should block acquires when setting smaller size", func(t *testing.T) {
 		s := NewDynamicSemaphore(3)
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			assert.NoError(t, s.Acquire(context.Background()))
 		}
 
 		s.SetSize(1)
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			s.Release()
 		}
 

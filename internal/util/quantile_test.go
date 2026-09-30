@@ -45,7 +45,7 @@ func TestMovingQuantile_ConvergesUniform(t *testing.T) {
 			rng := rand.New(rand.NewSource(42))
 
 			// Feed uniform [0, 1000) samples
-			for i := 0; i < 10000; i++ {
+			for range 10000 {
 				mq.Add(rng.Float64() * 1000)
 			}
 
@@ -73,7 +73,7 @@ func TestMovingQuantile_ConvergesNormal(t *testing.T) {
 			mq := NewMovingQuantile(tc.quantile, 0.01, 30)
 			rng := rand.New(rand.NewSource(42))
 
-			for i := 0; i < 20000; i++ {
+			for range 20000 {
 				sample := rng.NormFloat64()*tc.stddev + tc.mean
 				mq.Add(sample)
 			}
@@ -87,7 +87,7 @@ func TestMovingQuantile_ConvergesNormal(t *testing.T) {
 func TestMovingQuantile_ConstantValue(t *testing.T) {
 	mq := NewMovingQuantile(0.95, 0.01, 30)
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		mq.Add(42)
 	}
 
@@ -98,7 +98,7 @@ func TestMovingQuantile_ConstantValue(t *testing.T) {
 func TestMovingQuantile_Reset(t *testing.T) {
 	mq := NewMovingQuantile(0.95, 0.01, 30)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		mq.Add(float64(i))
 	}
 
@@ -116,13 +116,13 @@ func TestMovingQuantile_AdaptsToShift(t *testing.T) {
 	rng := rand.New(rand.NewSource(42))
 
 	// Phase 1: values around 100
-	for i := 0; i < 5000; i++ {
+	for range 5000 {
 		mq.Add(rng.Float64()*20 + 90) // [90, 110)
 	}
 	assert.InDelta(t, 100, mq.Value(), 15, "should converge to p50 of first distribution")
 
 	// Phase 2: shift to values around 500
-	for i := 0; i < 10000; i++ {
+	for range 10000 {
 		mq.Add(rng.Float64()*20 + 490) // [490, 510)
 	}
 	assert.InDelta(t, 500, mq.Value(), 15, "should adapt to shifted distribution")
@@ -135,7 +135,7 @@ func TestMovingQuantile_DurationValues(t *testing.T) {
 	rng := rand.New(rand.NewSource(42))
 
 	// Simulate latencies: mostly 10-20ms, with occasional spikes to 100ms
-	for i := 0; i < 10000; i++ {
+	for range 10000 {
 		var latencyMs float64
 		if rng.Float64() >= 0.05 {
 			latencyMs = 10 + rng.Float64()*10 // normal: 10-20ms
