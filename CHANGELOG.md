@@ -1,8 +1,9 @@
-## Upcoming Release
+## 0.9.8
 
 ### Improvements
 
-- Added `OnAcquired` and `OnReleased` listeners to `Bulkhead` for tracking executions that hold a permit.
+- Added #142 - Random and jitter delay support added for circuit breakers.
+- Added #143 - `OnAcquired` and `OnReleased` listeners to `Bulkhead` for tracking executions that hold a permit.
 
 ## 0.9.7
 
