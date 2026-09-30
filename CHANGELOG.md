@@ -5,6 +5,10 @@
 - Added #142 - Random and jitter delay support added for circuit breakers.
 - Added #143 - `OnAcquired` and `OnReleased` listeners to `Bulkhead` for tracking executions that hold a permit.
 
+### Changes
+
+- Upgraded Go dependency to 1.22.
+
 ## 0.9.7
 
 ### Bug Fixes
