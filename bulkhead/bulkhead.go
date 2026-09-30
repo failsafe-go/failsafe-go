@@ -52,6 +52,14 @@ type Builder[R any] interface {
 	// OnFull registers the listener to be called when the bulkhead is full.
 	OnFull(listener func(event failsafe.ExecutionEvent[R])) Builder[R]
 
+	// OnAcquired registers the listener to be called after an execution acquires a bulkhead permit.
+	// The listener is only called for executions through Failsafe, not standalone permit usage.
+	OnAcquired(listener func(event failsafe.ExecutionEvent[R])) Builder[R]
+
+	// OnReleased registers the listener to be called immediately before an execution releases its bulkhead permit.
+	// The listener is only called for executions through Failsafe, not standalone permit usage.
+	OnReleased(listener func(event failsafe.ExecutionEvent[R])) Builder[R]
+
 	// Build returns a new Bulkhead using the builder's configuration.
 	Build() Bulkhead[R]
 }
@@ -60,6 +68,8 @@ type config[R any] struct {
 	maxConcurrency uint
 	maxWaitTime    time.Duration
 	onFull         func(failsafe.ExecutionEvent[R])
+	onAcquired     func(failsafe.ExecutionEvent[R])
+	onReleased     func(failsafe.ExecutionEvent[R])
 }
 
 var _ Builder[any] = &config[any]{}
@@ -83,6 +93,16 @@ func (c *config[R]) WithMaxWaitTime(maxWaitTime time.Duration) Builder[R] {
 
 func (c *config[R]) OnFull(listener func(event failsafe.ExecutionEvent[R])) Builder[R] {
 	c.onFull = listener
+	return c
+}
+
+func (c *config[R]) OnAcquired(listener func(event failsafe.ExecutionEvent[R])) Builder[R] {
+	c.onAcquired = listener
+	return c
+}
+
+func (c *config[R]) OnReleased(listener func(event failsafe.ExecutionEvent[R])) Builder[R] {
+	c.onReleased = listener
 	return c
 }
 

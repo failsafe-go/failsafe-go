@@ -1,5 +1,9 @@
 ## Upcoming Release
 
+### Improvements
+
+- Added `OnAcquired` and `OnReleased` listeners to `Bulkhead` for tracking executions that hold a permit.
+
 ## 0.9.7
 
 ### Bug Fixes
