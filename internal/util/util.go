@@ -3,7 +3,7 @@ package util
 import (
 	"context"
 	"math"
-	"math/rand/v2"
+	"math/rand"
 	"reflect"
 	"time"
 )
