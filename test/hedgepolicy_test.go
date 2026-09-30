@@ -29,7 +29,7 @@ func TestHedgePolicy(t *testing.T) {
 	})
 
 	// Tests a simple execution that hedges after a delay. Should return a result from the initial execution, but not until hedges are started.
-	t.Run("should hedge when delay exceeded", func(t *testing.T) {
+	testutil.SyncRun(t, "should hedge when delay exceeded", func(t *testing.T) {
 		// Given
 		stats := &policytesting.Stats{}
 		hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelay[bool](10*time.Millisecond).WithMaxHedges(2), stats).Build()
@@ -45,7 +45,7 @@ func TestHedgePolicy(t *testing.T) {
 	})
 
 	// Asserts that the expected number of hedges are executed.
-	t.Run("all hedges used", func(t *testing.T) {
+	testutil.SyncRun(t, "all hedges used", func(t *testing.T) {
 		// Given
 		stats := &policytesting.Stats{}
 		hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelay[int](20*time.Millisecond).WithMaxHedges(2), stats).Build()
@@ -111,7 +111,7 @@ func TestHedgePolicy(t *testing.T) {
 	})
 
 	// Asserts that no hedging occurs during the warmup period for quantile-based delay.
-	t.Run("should not hedge with quantile during warmup", func(t *testing.T) {
+	testutil.SyncRun(t, "should not hedge with quantile during warmup", func(t *testing.T) {
 		// Given - a quantile-based hedge policy
 		stats := &policytesting.Stats{}
 		hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelayQuantile[int](0.95, 30, 20), stats).Build()
@@ -130,7 +130,7 @@ func TestHedgePolicy(t *testing.T) {
 	})
 
 	// Asserts that quantile-based delay triggers hedging for slow executions after warmup.
-	t.Run("should hedge with quantile", func(t *testing.T) {
+	testutil.SyncRun(t, "should hedge with quantile", func(t *testing.T) {
 		// Given - a quantile-based hedge policy
 		stats := &policytesting.Stats{}
 		hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelayQuantile[int](0.95, 30, 20), stats).Build()
@@ -169,7 +169,7 @@ func TestHedgePolicy(t *testing.T) {
 			Build()
 
 		// When / Then
-		t.Run("first returned result triggers cancellation", func(t *testing.T) {
+		testutil.SyncRun(t, "first returned result triggers cancellation", func(t *testing.T) {
 			testutil.Test[any](t).
 				With(hp).
 				Reset(stats).
@@ -187,7 +187,7 @@ func TestHedgePolicy(t *testing.T) {
 		})
 
 		// When / Then
-		t.Run("third returned result triggers cancellation", func(t *testing.T) {
+		testutil.SyncRun(t, "third returned result triggers cancellation", func(t *testing.T) {
 			testutil.Test[any](t).
 				With(hp).
 				Reset(stats).

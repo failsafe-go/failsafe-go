@@ -136,7 +136,7 @@ func TestCircuitBreaker(t *testing.T) {
 	})
 
 	// Tests circuit breaker time based failure thresholding state transitions.
-	t.Run("should support time based failure threshold", func(t *testing.T) {
+	testutil.SyncRun(t, "should support time based failure threshold", func(t *testing.T) {
 		// Given
 		cb := circuitbreaker.NewBuilder[bool]().
 			WithFailureThresholdPeriod(2, 200*time.Millisecond).
@@ -170,7 +170,7 @@ func TestCircuitBreaker(t *testing.T) {
 	})
 
 	// Tests circuit breaker time based failure rate thresholding state transitions.
-	t.Run("should support time based failure rate thresholding", func(t *testing.T) {
+	testutil.SyncRun(t, "should support time based failure rate thresholding", func(t *testing.T) {
 		// Given
 		cb := circuitbreaker.NewBuilder[bool]().
 			WithFailureRateThreshold(.5, 3, 200*time.Millisecond).

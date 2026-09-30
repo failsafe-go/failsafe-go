@@ -26,7 +26,7 @@ func TestAdaptiveLimiter(t *testing.T) {
 			AssertSuccess(1, 1, "test")
 	})
 
-	t.Run("should acquire permit after wait", func(t *testing.T) {
+	testutil.SyncRun(t, "should acquire permit after wait", func(t *testing.T) {
 		// Given
 		limiter := adaptivelimiter.NewBuilder[string]().
 			WithLimits(2, 2, 2).
@@ -63,7 +63,7 @@ func TestAdaptiveLimiter(t *testing.T) {
 	})
 
 	// Asserts that an exceeded maxWaitTime causes ErrExceeded.
-	t.Run("when maxWaitTime exceeded", func(t *testing.T) {
+	testutil.SyncRun(t, "when maxWaitTime exceeded", func(t *testing.T) {
 		// Given
 		limiter := adaptivelimiter.NewBuilder[any]().
 			WithLimits(2, 2, 2).
@@ -109,7 +109,7 @@ func TestQueueingLimiter(t *testing.T) {
 	})
 
 	// This test fills the queue, adds another execution which waits, then eventually empties the queue.
-	t.Run("should acquire permit after wait with queueing", func(t *testing.T) {
+	testutil.SyncRun(t, "should acquire permit after wait with queueing", func(t *testing.T) {
 		limiter := adaptivelimiter.NewBuilder[string]().
 			WithLimits(2, 2, 2).    // limit of 2
 			WithQueueing(1.5, 1.5). // queue of 1.5 * 2 = 3
@@ -129,7 +129,7 @@ func TestQueueingLimiter(t *testing.T) {
 	})
 
 	// This test asserts that executions fail when the limit and queue are exceeded.
-	t.Run("when limit and queue exceeded", func(t *testing.T) {
+	testutil.SyncRun(t, "when limit and queue exceeded", func(t *testing.T) {
 		// Given
 		stats := &policytesting.Stats{}
 		lb := adaptivelimiter.NewBuilder[any]().
@@ -158,7 +158,7 @@ func TestQueueingLimiter(t *testing.T) {
 	})
 
 	// This test asserts that executions fail when the limit and queue are exceeded with a maxWaitTime
-	t.Run("when maxWaitTime exceeded", func(t *testing.T) {
+	testutil.SyncRun(t, "when maxWaitTime exceeded", func(t *testing.T) {
 		// Given
 		limiter := adaptivelimiter.NewBuilder[any]().
 			WithLimits(1, 1, 1).
@@ -241,7 +241,7 @@ func TestPriorityLimiter(t *testing.T) {
 	})
 
 	// This test asserts that executions fail when the limit and queue are exceeded.
-	t.Run("when limit and queue exceeded", func(t *testing.T) {
+	testutil.SyncRun(t, "when limit and queue exceeded", func(t *testing.T) {
 		// Given
 		p := adaptivelimiter.NewPrioritizer()
 		stats := &policytesting.Stats{}
@@ -270,7 +270,7 @@ func TestPriorityLimiter(t *testing.T) {
 			})
 	})
 
-	t.Run("with usage tracker", func(t *testing.T) {
+	testutil.SyncRun(t, "with usage tracker", func(t *testing.T) {
 		// Given
 		tracker := priority.NewUsageTracker(time.Minute, 10)
 		p := adaptivelimiter.NewPrioritizerBuilder().

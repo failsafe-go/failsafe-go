@@ -15,7 +15,7 @@ import (
 )
 
 func TestTimeout_Nested(t *testing.T) {
-	t.Run("Timeout -> Timeout", func(t *testing.T) {
+	testutil.SyncRun(t, "Timeout -> Timeout", func(t *testing.T) {
 		innerTimeoutStats := &policytesting.Stats{}
 		outerTimeoutStats := &policytesting.Stats{}
 		innerTimeout := policytesting.WithTimeoutStatsAndLogs(timeout.NewBuilder[any](100*time.Millisecond), innerTimeoutStats).Build()
@@ -34,7 +34,7 @@ func TestTimeout_Nested(t *testing.T) {
 	})
 
 	// Tests a scenario where an inner timeout is exceeded, triggering retries, then eventually the outer timeout is exceeded.
-	t.Run("RetryPolicy -> Timeout", func(t *testing.T) {
+	testutil.SyncRun(t, "RetryPolicy -> Timeout", func(t *testing.T) {
 		innerTimeoutStats := &policytesting.Stats{}
 		retryStats := &policytesting.Stats{}
 		outerTimeoutStats := &policytesting.Stats{}
@@ -56,7 +56,7 @@ func TestTimeout_Nested(t *testing.T) {
 	})
 
 	// Tests a scenario with a fallback, retry policy, and two timeouts, where the outer timeout triggers first.
-	t.Run("Fallback -> RetryPolicy -> Timeout -> Timeout", func(t *testing.T) {
+	testutil.SyncRun(t, "Fallback -> RetryPolicy -> Timeout -> Timeout", func(t *testing.T) {
 		innerTimeoutStats := &policytesting.Stats{}
 		outerTimeoutStats := &policytesting.Stats{}
 		innerTimeout := policytesting.WithTimeoutStatsAndLogs[bool](timeout.NewBuilder[bool](100*time.Millisecond), innerTimeoutStats).Build()
@@ -80,7 +80,7 @@ func TestTimeout_Nested(t *testing.T) {
 	// RetryPolicy -> Timeout -> Timeout
 	//
 	// Tests a scenario where three consecutive timeouts should cause the execution to be canceled for all policies.
-	t.Run("cancel nested timeouts", func(t *testing.T) {
+	testutil.SyncRun(t, "cancel nested timeouts", func(t *testing.T) {
 		retryStats := &policytesting.Stats{}
 		innerTimeoutStats := &policytesting.Stats{}
 		outerTimeoutStats := &policytesting.Stats{}

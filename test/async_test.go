@@ -7,19 +7,22 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/internal/testutil"
 	"github.com/failsafe-go/failsafe-go/retrypolicy"
 )
 
 func TestGetAsync(t *testing.T) {
-	rp := retrypolicy.NewWithDefaults[bool]()
-	result := failsafe.With(rp).GetAsync(func() (bool, error) {
-		time.Sleep(100 * time.Millisecond)
-		return true, nil
-	})
+	testutil.SyncTest(t, func(t *testing.T) {
+		rp := retrypolicy.NewWithDefaults[bool]()
+		result := failsafe.With(rp).GetAsync(func() (bool, error) {
+			time.Sleep(100 * time.Millisecond)
+			return true, nil
+		})
 
-	assert.False(t, result.IsDone())
-	<-result.Done()
-	assert.True(t, result.IsDone())
-	assert.True(t, result.Result())
-	assert.Nil(t, result.Error())
+		assert.False(t, result.IsDone())
+		<-result.Done()
+		assert.True(t, result.IsDone())
+		assert.True(t, result.Result())
+		assert.Nil(t, result.Error())
+	})
 }

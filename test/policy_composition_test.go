@@ -97,7 +97,7 @@ func TestRetryPolicy_Composition(t *testing.T) {
 	})
 
 	// Tests 2 timeouts, then a success, and asserts the execution is cancelled after each timeout.
-	t.Run("with Timeout", func(t *testing.T) {
+	testutil.SyncRun(t, "with Timeout", func(t *testing.T) {
 		// Given
 		rp := retrypolicy.NewBuilder[any]().OnFailure(func(e failsafe.ExecutionEvent[any]) {
 			assert.ErrorIs(t, e.LastError(), timeout.ErrExceeded)
@@ -141,7 +141,7 @@ func TestRetryPolicy_Composition(t *testing.T) {
 		stats := &policytesting.Stats{}
 		rp := policytesting.WithRetryStatsAndLogs(retrypolicy.NewBuilder[any](), stats).Build()
 
-		t.Run("when hedge runs multiple times", func(t *testing.T) {
+		testutil.SyncRun(t, "when hedge runs multiple times", func(t *testing.T) {
 			hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelay[any](10*time.Millisecond), stats).Build()
 
 			testutil.Test[any](t).
@@ -196,7 +196,7 @@ func TestCircuitBreaker_Composition(t *testing.T) {
 			})
 	})
 
-	t.Run("with Timeout", func(t *testing.T) {
+	testutil.SyncRun(t, "with Timeout", func(t *testing.T) {
 		// Given
 		to := timeout.New[any](50 * time.Millisecond)
 		cb := circuitbreaker.NewWithDefaults[any]()
@@ -246,7 +246,7 @@ func TestFallback_Composition(t *testing.T) {
 			AssertSuccess(3, 3, true)
 	})
 
-	t.Run("with HedgePolicy", func(t *testing.T) {
+	testutil.SyncRun(t, "with HedgePolicy", func(t *testing.T) {
 		// Given
 		fb := fallback.NewWithResult(true)
 		hp := hedgepolicy.NewWithDelay[bool](10 * time.Millisecond)
@@ -301,7 +301,7 @@ func TestFallback_Composition(t *testing.T) {
 			AssertSuccess(1, 0, false)
 	})
 
-	t.Run("with Timeout", func(t *testing.T) {
+	testutil.SyncRun(t, "with Timeout", func(t *testing.T) {
 		// Given
 		to := timeout.New[bool](10 * time.Millisecond)
 		fb := fallback.NewWithFunc(func(e failsafe.Execution[bool]) (bool, error) {
@@ -323,7 +323,7 @@ func TestFallback_Composition(t *testing.T) {
 func TestHedgePolicy_Composition(t *testing.T) {
 	// Hedge should be triggered twice since the timeouts are longer than the hedge delay.
 	// Timeout should be triggered 3 times since the results from the hedges are not cancellable.
-	t.Run("with Timeout", func(t *testing.T) {
+	testutil.SyncRun(t, "with Timeout", func(t *testing.T) {
 		// Given
 		stats := &policytesting.Stats{}
 		hp := policytesting.WithHedgeStatsAndLogs(hedgepolicy.NewBuilderWithDelay[any](10*time.Millisecond).

@@ -12,25 +12,29 @@ import (
 var _ RateLimiter[any] = &rateLimiter[any]{}
 
 func TestAcquirePermit(t *testing.T) {
-	limiter := NewSmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
-	setTestStopwatch(limiter)
+	testutil.SyncTest(t, func(t *testing.T) {
+		limiter := NewSmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
+		setTestStopwatch(limiter)
 
-	elapsed := testutil.Timed(func() {
-		assert.Nil(t, limiter.AcquirePermit(nil)) // waits 0
-		assert.Nil(t, limiter.AcquirePermit(nil)) // waits 100
-		assert.Nil(t, limiter.AcquirePermit(nil)) // waits 200
+		elapsed := testutil.Timed(func() {
+			assert.Nil(t, limiter.AcquirePermit(nil)) // waits 0
+			assert.Nil(t, limiter.AcquirePermit(nil)) // waits 100
+			assert.Nil(t, limiter.AcquirePermit(nil)) // waits 200
+		})
+		assert.True(t, elapsed.Milliseconds() >= 300 && elapsed.Milliseconds() <= 400)
 	})
-	assert.True(t, elapsed.Milliseconds() >= 300 && elapsed.Milliseconds() <= 400)
 }
 
 func TestAcquirePermitWithMaxWaitTime(t *testing.T) {
-	limiter := NewSmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
-	setTestStopwatch(limiter)
+	testutil.SyncTest(t, func(t *testing.T) {
+		limiter := NewSmoothBuilderWithMaxRate[any](100 * time.Millisecond).Build()
+		setTestStopwatch(limiter)
 
-	assert.Nil(t, limiter.AcquirePermitWithMaxWait(nil, 100*time.Millisecond))  // waits 0
-	assert.Nil(t, limiter.AcquirePermitWithMaxWait(nil, 1000*time.Millisecond)) // waits 100
-	err := limiter.AcquirePermitWithMaxWait(nil, 100*time.Millisecond)          // waits 200
-	assert.ErrorIs(t, ErrExceeded, err)
+		assert.Nil(t, limiter.AcquirePermitWithMaxWait(nil, 100*time.Millisecond))  // waits 0
+		assert.Nil(t, limiter.AcquirePermitWithMaxWait(nil, 1000*time.Millisecond)) // waits 100
+		err := limiter.AcquirePermitWithMaxWait(nil, 100*time.Millisecond)          // waits 200
+		assert.ErrorIs(t, ErrExceeded, err)
+	})
 }
 
 func TestTryAcquirePermit(t *testing.T) {

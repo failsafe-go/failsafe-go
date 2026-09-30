@@ -13,7 +13,7 @@ import (
 )
 
 func TestBulkHead(t *testing.T) {
-	t.Run("should AcquirePermit after wait", func(t *testing.T) {
+	testutil.SyncRun(t, "should AcquirePermit after wait", func(t *testing.T) {
 		// Given
 		bh := bulkhead.NewBuilder[string](2).WithMaxWaitTime(time.Second).Build()
 		before := func() {
@@ -96,7 +96,7 @@ func TestBulkHead(t *testing.T) {
 	})
 
 	// Asserts that an exceeded maxWaitTime causes ErrFull.
-	t.Run("with maxWaitTime exceeded", func(t *testing.T) {
+	testutil.SyncRun(t, "with maxWaitTime exceeded", func(t *testing.T) {
 		// Given
 		bh := bulkhead.NewBuilder[any](2).WithMaxWaitTime(20 * time.Millisecond).Build()
 		bh.TryAcquirePermit()

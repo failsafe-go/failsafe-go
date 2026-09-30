@@ -91,7 +91,7 @@ func TestBudget(t *testing.T) {
 
 	// This test simulates 1 other primary + 1 other hedge inflight, then runs an execution that
 	// hangs and triggers a successful hedge.
-	t.Run("when hedges not exceeded", func(t *testing.T) {
+	testutil.SyncRun(t, "when hedges not exceeded", func(t *testing.T) {
 		// Given
 		stats := &policytesting.Stats{}
 		bb := budget.NewBuilder().WithMaxRate(.5).WithMinConcurrency(1)
@@ -115,7 +115,7 @@ func TestBudget(t *testing.T) {
 	// concurrent hedges from other requests. The executor's own primary permit then tips the
 	// combined rate over the limit, causing the hedge to be rejected. The initial execution,
 	// which is not budgeted, should still produce a result.
-	t.Run("when hedges exceeded", func(t *testing.T) {
+	testutil.SyncRun(t, "when hedges exceeded", func(t *testing.T) {
 		// Given
 		stats := &policytesting.Stats{}
 		bb := budget.NewBuilder().WithMaxRate(.5).WithMinConcurrency(1)

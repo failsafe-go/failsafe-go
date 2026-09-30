@@ -276,15 +276,17 @@ func TestListenersForFailingFallback(t *testing.T) {
 }
 
 func TestGetElapsedTime(t *testing.T) {
-	rp := retrypolicy.NewBuilder[any]().
-		HandleResult(false).
-		OnRetryScheduled(func(e failsafe.ExecutionScheduledEvent[any]) {
-			assert.True(t, e.ElapsedAttemptTime().Milliseconds() >= 90)
-		}).
-		Build()
-	failsafe.With(rp).Get(func() (any, error) {
-		time.Sleep(100 * time.Millisecond)
-		return false, nil
+	testutil.SyncTest(t, func(t *testing.T) {
+		rp := retrypolicy.NewBuilder[any]().
+			HandleResult(false).
+			OnRetryScheduled(func(e failsafe.ExecutionScheduledEvent[any]) {
+				assert.True(t, e.ElapsedAttemptTime().Milliseconds() >= 90)
+			}).
+			Build()
+		failsafe.With(rp).Get(func() (any, error) {
+			time.Sleep(100 * time.Millisecond)
+			return false, nil
+		})
 	})
 }
 
@@ -322,27 +324,29 @@ func TestRetryPolicyOnScheduledRetry(t *testing.T) {
 }
 
 func TestListenersForRateLimiter(t *testing.T) {
-	// Given - Fail 4 times then succeed
-	rlBuilder := ratelimiter.NewSmoothBuilderWithMaxRate[any](100 * time.Millisecond)
-	stats := &listenerStats{}
-	registerRlListeners(stats, rlBuilder)
-	executor := failsafe.With(rlBuilder.Build())
-	registerExecutorListeners(stats, executor)
+	testutil.SyncTest(t, func(t *testing.T) {
+		// Given - Fail 4 times then succeed
+		rlBuilder := ratelimiter.NewSmoothBuilderWithMaxRate[any](100 * time.Millisecond)
+		stats := &listenerStats{}
+		registerRlListeners(stats, rlBuilder)
+		executor := failsafe.With(rlBuilder.Build())
+		registerExecutorListeners(stats, executor)
 
-	// When
-	executor.RunWithExecution(testutil.RunFn(nil)) // Success
-	executor.RunWithExecution(testutil.RunFn(nil)) // Failure
-	time.Sleep(110 * time.Millisecond)
-	executor.RunWithExecution(testutil.RunFn(nil)) // Success
-	executor.RunWithExecution(testutil.RunFn(nil)) // Failure
-	executor.RunWithExecution(testutil.RunFn(nil)) // Failure
+		// When
+		executor.RunWithExecution(testutil.RunFn(nil)) // Success
+		executor.RunWithExecution(testutil.RunFn(nil)) // Failure
+		time.Sleep(110 * time.Millisecond)
+		executor.RunWithExecution(testutil.RunFn(nil)) // Success
+		executor.RunWithExecution(testutil.RunFn(nil)) // Failure
+		executor.RunWithExecution(testutil.RunFn(nil)) // Failure
 
-	// Then
-	assert.Equal(t, 3, stats.rlExceeded)
+		// Then
+		assert.Equal(t, 3, stats.rlExceeded)
 
-	assert.Equal(t, 5, stats.done)
-	assert.Equal(t, 2, stats.success)
-	assert.Equal(t, 3, stats.failure)
+		assert.Equal(t, 5, stats.done)
+		assert.Equal(t, 2, stats.success)
+		assert.Equal(t, 3, stats.failure)
+	})
 }
 
 func TestListenersForBulkhead(t *testing.T) {
@@ -422,26 +426,28 @@ func TestListenersForCache(t *testing.T) {
 }
 
 func TestListenersForHedgePolicy(t *testing.T) {
-	hpBuilder := hedgepolicy.NewBuilderWithDelay[bool](10 * time.Millisecond).WithMaxHedges(2)
-	stats := &listenerStats{}
-	registerHpListeners(stats, hpBuilder)
-	executor := failsafe.With(hpBuilder.Build())
-	registerExecutorListeners(stats, executor)
+	testutil.SyncTest(t, func(t *testing.T) {
+		hpBuilder := hedgepolicy.NewBuilderWithDelay[bool](10 * time.Millisecond).WithMaxHedges(2)
+		stats := &listenerStats{}
+		registerHpListeners(stats, hpBuilder)
+		executor := failsafe.With(hpBuilder.Build())
+		registerExecutorListeners(stats, executor)
 
-	// When
-	result, err := executor.GetWithExecution(func(exec failsafe.Execution[bool]) (bool, error) {
-		time.Sleep(100 * time.Millisecond)
-		return true, nil
+		// When
+		result, err := executor.GetWithExecution(func(exec failsafe.Execution[bool]) (bool, error) {
+			time.Sleep(100 * time.Millisecond)
+			return true, nil
+		})
+
+		// Then
+		assert.True(t, result)
+		assert.NoError(t, err)
+		assert.Equal(t, 2, stats.hpHedge)
+
+		assert.Equal(t, 1, stats.done)
+		assert.Equal(t, 1, stats.success)
+		assert.Equal(t, 0, stats.failure)
 	})
-
-	// Then
-	assert.True(t, result)
-	assert.NoError(t, err)
-	assert.Equal(t, 2, stats.hpHedge)
-
-	assert.Equal(t, 1, stats.done)
-	assert.Equal(t, 1, stats.success)
-	assert.Equal(t, 0, stats.failure)
 }
 
 // Asserts which listeners are called when a panic occurs.

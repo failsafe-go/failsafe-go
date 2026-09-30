@@ -30,7 +30,7 @@ func TestTimeout(t *testing.T) {
 	})
 
 	// Tests that an inner timeout does not prevent outer retries from being performed when the inner func is blocked.
-	t.Run("RetryPolicy -> Timeout with blocked execution", func(t *testing.T) {
+	testutil.SyncRun(t, "RetryPolicy -> Timeout with blocked execution", func(t *testing.T) {
 		// Given
 		timeoutStats := &policytesting.Stats{}
 		rpStats := &policytesting.Stats{}
@@ -57,7 +57,7 @@ func TestTimeout(t *testing.T) {
 
 	// Tests that when an outer retry is scheduled any inner timeouts are cancelled. This prevents the timeout from accidentally cancelling a
 	// scheduled retry that may be pending.
-	t.Run("RetryPolicy -> Timeout with pending retry", func(t *testing.T) {
+	testutil.SyncRun(t, "RetryPolicy -> Timeout with pending retry", func(t *testing.T) {
 		// Given
 		timeoutStats := &policytesting.Stats{}
 		rpStats := &policytesting.Stats{}
@@ -79,7 +79,7 @@ func TestTimeout(t *testing.T) {
 	// Tests that an outer timeout will cancel inner retries when the inner func is blocked. The flow should be:
 	//   - Execution that retries a few times, blocking each time
 	//   - Timeout
-	t.Run("Timeout -> RetryPolicy with blocked execution", func(t *testing.T) {
+	testutil.SyncRun(t, "Timeout -> RetryPolicy with blocked execution", func(t *testing.T) {
 		// Given
 		timeoutStats := &policytesting.Stats{}
 		to := policytesting.WithTimeoutStatsAndLogs(timeout.NewBuilder[any](150*time.Millisecond), timeoutStats).Build()
@@ -102,7 +102,7 @@ func TestTimeout(t *testing.T) {
 	//   - Execution
 	//   - Retry sleep/scheduled that blocks
 	//   - Timeout
-	t.Run("Timeout -> RetryPolicy with pending retry", func(t *testing.T) {
+	testutil.SyncRun(t, "Timeout -> RetryPolicy with pending retry", func(t *testing.T) {
 		// Given
 		timeoutStats := &policytesting.Stats{}
 		rpStats := &policytesting.Stats{}
@@ -123,7 +123,7 @@ func TestTimeout(t *testing.T) {
 	// Tests that an outer timeout will cancel inner hedge when the inner func is blocked. The flow should be:
 	//   - Execution a hedge
 	//   - Timeout
-	t.Run("Timeout -> HedgePolicy with blocked execution", func(t *testing.T) {
+	testutil.SyncRun(t, "Timeout -> HedgePolicy with blocked execution", func(t *testing.T) {
 		// Given
 		stats := &policytesting.Stats{}
 		to := policytesting.WithTimeoutStatsAndLogs(timeout.NewBuilder[any](100*time.Millisecond), stats).Build()
@@ -144,7 +144,7 @@ func TestTimeout(t *testing.T) {
 	})
 
 	// Tests an inner timeout that fires while the func is blocked.
-	t.Run("Fallback -> Timeout with blocked execution", func(t *testing.T) {
+	testutil.SyncRun(t, "Fallback -> Timeout with blocked execution", func(t *testing.T) {
 		// Given
 		timeoutStats := &policytesting.Stats{}
 		fbStats := &policytesting.Stats{}
@@ -186,7 +186,7 @@ func TestTimeout(t *testing.T) {
 	})
 
 	// Tests that an outer timeout will interrupt an inner func that is blocked, skipping the inner fallback.
-	t.Run("Timeout -> Fallback with blocked execution", func(t *testing.T) {
+	testutil.SyncRun(t, "Timeout -> Fallback with blocked execution", func(t *testing.T) {
 		// Given
 		timeoutStats := &policytesting.Stats{}
 		fbStats := &policytesting.Stats{}
@@ -208,7 +208,7 @@ func TestTimeout(t *testing.T) {
 	})
 
 	// Tests that an outer timeout will interrupt an inner fallback that is blocked.
-	t.Run("Timeout -> Fallback with blocked fallback func", func(t *testing.T) {
+	testutil.SyncRun(t, "Timeout -> Fallback with blocked fallback func", func(t *testing.T) {
 		// Given
 		timeoutStats := &policytesting.Stats{}
 		fbStats := &policytesting.Stats{}

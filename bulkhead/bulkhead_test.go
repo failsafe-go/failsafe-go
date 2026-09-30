@@ -12,26 +12,30 @@ import (
 var _ Bulkhead[any] = &bulkhead[any]{}
 
 func TestAcquirePermit(t *testing.T) {
-	bulkhead := New[any](2)
+	testutil.SyncTest(t, func(t *testing.T) {
+		bulkhead := New[any](2)
 
-	go func() {
-		time.Sleep(200 * time.Millisecond)
-		bulkhead.ReleasePermit()
-	}()
-	elapsed := testutil.Timed(func() {
-		assert.Nil(t, bulkhead.AcquirePermit(nil)) // waits 0
-		assert.Nil(t, bulkhead.AcquirePermit(nil)) // waits 100
-		assert.Nil(t, bulkhead.AcquirePermit(nil)) // waits 200
+		go func() {
+			time.Sleep(200 * time.Millisecond)
+			bulkhead.ReleasePermit()
+		}()
+		elapsed := testutil.Timed(func() {
+			assert.Nil(t, bulkhead.AcquirePermit(nil)) // waits 0
+			assert.Nil(t, bulkhead.AcquirePermit(nil)) // waits 100
+			assert.Nil(t, bulkhead.AcquirePermit(nil)) // waits 200
+		})
+		assert.True(t, elapsed.Milliseconds() >= 200 && elapsed.Milliseconds() <= 400)
 	})
-	assert.True(t, elapsed.Milliseconds() >= 200 && elapsed.Milliseconds() <= 400)
 }
 
 func TestAcquirePermitWithMaxWaitTime(t *testing.T) {
-	bulkhead := New[any](1)
+	testutil.SyncTest(t, func(t *testing.T) {
+		bulkhead := New[any](1)
 
-	assert.Nil(t, bulkhead.AcquirePermitWithMaxWait(nil, 100*time.Millisecond)) // waits 0
-	err := bulkhead.AcquirePermitWithMaxWait(nil, 100*time.Millisecond)         // waits 100
-	assert.ErrorIs(t, ErrFull, err)
+		assert.Nil(t, bulkhead.AcquirePermitWithMaxWait(nil, 100*time.Millisecond)) // waits 0
+		err := bulkhead.AcquirePermitWithMaxWait(nil, 100*time.Millisecond)         // waits 100
+		assert.ErrorIs(t, ErrFull, err)
+	})
 }
 
 func TestTryAcquirePermitAndReleasePermit(t *testing.T) {

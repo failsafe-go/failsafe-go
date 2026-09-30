@@ -101,7 +101,7 @@ func TestRetryPolicy(t *testing.T) {
 	})
 
 	// Asserts that an execution is failed when the max duration is exceeded.
-	t.Run("should fail when max duration exceeded", func(t *testing.T) {
+	testutil.SyncRun(t, "should fail when max duration exceeded", func(t *testing.T) {
 		// Given
 		stats := &policytesting.Stats{}
 		rp := policytesting.WithRetryStats(retrypolicy.NewBuilder[bool]().
@@ -152,7 +152,7 @@ func TestRetryPolicy(t *testing.T) {
 	})
 
 	// Asserts that backoff delays are as expected.
-	t.Run("with backoff delay", func(t *testing.T) {
+	testutil.SyncRun(t, "with backoff delay", func(t *testing.T) {
 		var delays []time.Duration
 		rp := retrypolicy.NewBuilder[any]().
 			WithBackoff(time.Millisecond, 10*time.Millisecond).
