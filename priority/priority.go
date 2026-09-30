@@ -3,7 +3,7 @@ package priority
 import (
 	"context"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 )
 
@@ -23,7 +23,7 @@ const totalLevels = 500
 // RandomLevel returns a random level for the Priority.
 func (p Priority) RandomLevel() int {
 	r := priorityLevelRanges[p]
-	return rand.Intn(r.upper-r.lower+1) + r.lower
+	return rand.IntN(r.upper-r.lower+1) + r.lower
 }
 
 // AddTo returns the ctx with the priority added to it as a value with the PriorityKey.
@@ -161,10 +161,7 @@ func (lt *windowedLevelTracker) GetLevel(quantile float64) int {
 
 	if currentSize > 0 {
 		// Determine how many recorded levels we need to find to match the quantile
-		targetLevels := int(math.Ceil(float64(currentSize) * quantile))
-		if targetLevels < 1 {
-			targetLevels = 1
-		}
+		targetLevels := max(1, int(math.Ceil(float64(currentSize)*quantile)))
 
 		// Count the levels until we hit the desired quantile
 		countedLevels := 0

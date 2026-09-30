@@ -2,7 +2,7 @@ package adaptivethrottler
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/internal"

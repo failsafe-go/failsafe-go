@@ -3,7 +3,7 @@ package util
 import (
 	"context"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"reflect"
 	"time"
 )
@@ -14,7 +14,7 @@ type number interface {
 
 func noop(_ error) {}
 
-var errorType = reflect.TypeOf((*error)(nil)).Elem()
+var errorType = reflect.TypeFor[error]()
 
 // ErrorTypesMatch indicates whether the err or any unwrapped causes of the err are assignable to the target type. This is
 // similar to the test that errors.As performs, but does not actually assign a value and allows a non-pointer target.

@@ -3,7 +3,7 @@ package circuitbreaker
 import (
 	"context"
 	"errors"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"time"
 
