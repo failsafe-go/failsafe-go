@@ -135,7 +135,7 @@ func (e *executor[R]) getDelay(exec failsafe.ExecutionAttempt[R]) time.Duration 
 		delay = e.getFixedOrRandomDelay(exec)
 	}
 	if delay != 0 {
-		delay = e.adjustForJitter(delay)
+		delay = util.ApplyJitter(delay, e.jitter, e.jitterFactor)
 	}
 	delay = e.adjustForMaxDuration(delay, exec.ElapsedTime())
 	return delay
@@ -156,15 +156,6 @@ func (e *executor[R]) getFixedOrRandomDelay(exec failsafe.ExecutionAttempt[R]) t
 		return time.Duration(util.RandomDelayInRange(e.delayMin.Nanoseconds(), e.delayMax.Nanoseconds(), rand.Float64()))
 	}
 	return 0
-}
-
-func (e *executor[R]) adjustForJitter(delay time.Duration) time.Duration {
-	if e.jitter != 0 {
-		delay = util.RandomDelay(delay, e.jitter, rand.Float64())
-	} else if e.jitterFactor != 0 {
-		delay = util.RandomDelayFactor(delay, e.jitterFactor, rand.Float64())
-	}
-	return delay
 }
 
 func (e *executor[R]) adjustForMaxDuration(delay time.Duration, elapsed time.Duration) time.Duration {

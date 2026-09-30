@@ -360,25 +360,21 @@ func (cb *circuitBreaker[R]) tryAcquirePermit() bool {
 }
 
 // getDelay returns the delay to wait in the OpenState before transitioning to HalfOpenState. It resolves the base
-// delay from the DelayFunc, else a configured random delay range, else the fixed delay, and then applies any configured
+// delay from the DelayFunc, else the fixed delay, else a configured random delay range, and then applies any configured
 // jitter. Jitter desynchronizes the half-open probes of many breakers that opened at the same time.
 func (cb *circuitBreaker[R]) getDelay(exec failsafe.Execution[R]) time.Duration {
 	var delay time.Duration
 	if computed := cb.ComputeDelay(exec); computed != -1 {
 		delay = computed
+	} else if cb.Delay != 0 {
+		delay = cb.Delay
 	} else if cb.delayMin != 0 && cb.delayMax != 0 {
 		delay = time.Duration(util.RandomDelayInRange(cb.delayMin.Nanoseconds(), cb.delayMax.Nanoseconds(), rand.Float64()))
-	} else {
-		delay = cb.Delay
 	}
 	if delay != 0 {
-		if cb.jitter != 0 {
-			delay = util.RandomDelay(delay, cb.jitter, rand.Float64())
-		} else if cb.jitterFactor != 0 {
-			delay = util.RandomDelayFactor(delay, cb.jitterFactor, rand.Float64())
-		}
+		delay = util.ApplyJitter(delay, cb.jitter, cb.jitterFactor)
 	}
-	return delay
+	return max(0, delay)
 }
 
 // Opens the circuit breaker and considers the execution when computing the delay before the circuit breaker

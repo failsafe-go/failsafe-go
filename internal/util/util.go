@@ -3,6 +3,7 @@ package util
 import (
 	"context"
 	"math"
+	"math/rand/v2"
 	"reflect"
 	"time"
 )
@@ -159,6 +160,15 @@ func RandomDelay[T number](delay T, jitter T, random float64) T {
 func RandomDelayFactor[T number](delay T, jitterFactor float64, random float64) T {
 	randomFactor := 1 + (1-random*2)*jitterFactor
 	return T(float64(delay) * randomFactor)
+}
+
+func ApplyJitter[T number](delay T, jitter T, jitterFactor float64) T {
+	if jitter != 0 {
+		delay = RandomDelay(delay, jitter, rand.Float64())
+	} else if jitterFactor != 0 {
+		delay = RandomDelayFactor(delay, jitterFactor, rand.Float64())
+	}
+	return delay
 }
 
 // Smooth returns a value that is decreased by some portion of the oldValue, and increased by some portion of the

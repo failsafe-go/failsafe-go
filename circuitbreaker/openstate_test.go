@@ -100,6 +100,19 @@ func TestRandomDelay(t *testing.T) {
 	}
 }
 
+// Asserts that a fixed delay configured after a random delay takes precedence, consistent with RetryPolicy.
+func TestFixedDelayAfterRandomDelay(t *testing.T) {
+	clock := testutil.NewTestClock(0)
+	breaker := NewBuilder[any]().
+		WithRandomDelay(50*time.Millisecond, 150*time.Millisecond).
+		WithDelay(time.Second).
+		Build().(*circuitBreaker[any])
+	breaker.clock = clock
+	breaker.open(testutil.TestExecution[any]{})
+
+	assert.Equal(t, time.Second, breaker.RemainingDelay())
+}
+
 func TestNoRemainingDelay(t *testing.T) {
 	clock := testutil.NewTestClock(0)
 	breaker := NewBuilder[any]().WithDelayFunc(func(exec failsafe.ExecutionAttempt[any]) time.Duration {
