@@ -1,6 +1,6 @@
 # Failsafe-go
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/failsafe-go/failsafe-go/test.yml)](https://github.com/failsafe-go/failsafe-go/actions/workflows/test.yml)
+[![Build Status](https://github.com/failsafe-go/failsafe-go/actions/workflows/test.yml/badge.svg)](https://github.com/failsafe-go/failsafe-go/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/failsafe-go/failsafe-go/graph/badge.svg?token=UC2BU7NTJ7)](https://codecov.io/gh/failsafe-go/failsafe-go)
 [![License](http://img.shields.io/:license-mit-brightgreen.svg)](https://opensource.org/licenses/MIT)
 [![Godoc](https://pkg.go.dev/badge/github.com/failsafe-go/failsafe-go)](https://pkg.go.dev/github.com/failsafe-go/failsafe-go)
