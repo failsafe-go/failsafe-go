@@ -73,6 +73,49 @@ func TestClientRetryPolicyWith429ThenSuccess(t *testing.T) {
 		AssertSuccess(3, 3, 200, "foo")
 }
 
+func TestClientRetryPolicyClosesRetriedBodies(t *testing.T) {
+	// Given
+	var bodies []*closeTracker
+	inner := roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		body := &closeTracker{Reader: strings.NewReader("busy")}
+		bodies = append(bodies, body)
+		status := http.StatusServiceUnavailable
+		if len(bodies) == 3 {
+			status = http.StatusOK
+		}
+		return &http.Response{StatusCode: status, Body: body}, nil
+	})
+	rp := NewRetryPolicyBuilder().WithDelay(0).Build()
+	req, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
+
+	// When
+	resp, err := NewRoundTripper(inner, rp).RoundTrip(req)
+
+	// Then
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Len(t, bodies, 3)
+	assert.True(t, bodies[0].closed)
+	assert.True(t, bodies[1].closed)
+	assert.False(t, bodies[2].closed)
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
+type closeTracker struct {
+	io.Reader
+	closed bool
+}
+
+func (c *closeTracker) Close() error {
+	c.closed = true
+	return nil
+}
+
 func TestClientRetryPolicyWithRedirects(t *testing.T) {
 	// Given
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
