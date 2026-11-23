@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"sync/atomic"
 
 	"github.com/failsafe-go/failsafe-go"
 	"github.com/failsafe-go/failsafe-go/internal/util"
@@ -130,6 +131,14 @@ func doRequest(request *http.Request, executor failsafe.Executor[*http.Response]
 	}
 
 	return executor.GetWithExecution(func(exec failsafe.Execution[*http.Response]) (r *http.Response, e error) {
+		// Close the response from the previous attempt, which a policy discarded. A canceled execution's last result
+		// can be the response another execution returns, so leave it alone.
+		if prev := exec.LastResult(); prev != nil && !exec.IsCanceled() {
+			if body, ok := prev.Body.(*bodyWithCancel); ok {
+				body.discard()
+			}
+		}
+
 		// Merge the latest execution context into the request for each attempt
 		ctxInner, cancelInner := util.MergeContexts(request.Context(), exec.Context())
 		defer func() {
@@ -180,6 +189,7 @@ type bodyWithCancel struct {
 	cancelOuter func(error)
 	cancelInner func(error)
 	cancelFn    func()
+	discarded   atomic.Bool
 }
 
 func (b *bodyWithCancel) Close() error {
@@ -191,6 +201,16 @@ func (b *bodyWithCancel) Close() error {
 		}
 	}()
 	return b.ReadCloser.Close()
+}
+
+// discard closes a body that is not returned to the caller. Unlike Close, it leaves the outer context alone, since later
+// attempts still use it.
+func (b *bodyWithCancel) discard() {
+	if !b.discarded.CompareAndSwap(false, true) {
+		return
+	}
+	_ = b.ReadCloser.Close()
+	b.cancelInner(nil)
 }
 
 // bodyReader returns a function that can repeatedly read the untypedBody of an http.Request.
