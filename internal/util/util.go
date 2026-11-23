@@ -88,6 +88,8 @@ func MergeContexts(ctx1, ctx2 context.Context) (context.Context, context.CancelC
 	}
 	go func() {
 		select {
+		case <-ctx.Done():
+			return
 		case <-ctx1.Done():
 			cancel(ctx1.Err())
 		case <-ctx2.Done():
