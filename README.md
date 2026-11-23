@@ -17,8 +17,8 @@ Visit [failsafe-go.dev](https://failsafe-go.dev) for usage info, docs, and addit
 
 ## Contributing
 
-Check out the [contributing guidelines](https://github.com/failsafe-go/failsafe-go/blob/master/CONTRIBUTING.md).
+Check out the [contributing guidelines](https://github.com/failsafe-go/failsafe-go/blob/main/CONTRIBUTING.md).
 
 ## License
 
-&copy; 2023-present Jonathan Halterman and contributors. Released under the [MIT license](https://github.com/failsafe-go/failsafe-go/blob/master/LICENSE).
+&copy; 2023-present Jonathan Halterman and contributors. Released under the [MIT license](https://github.com/failsafe-go/failsafe-go/blob/main/LICENSE).
