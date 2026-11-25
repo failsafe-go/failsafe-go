@@ -195,6 +195,9 @@ func (t *adaptiveThrottler[R]) AcquirePermit() error {
 		return nil
 	}
 	if t.rejectionRate >= 1 || t.rejectionRate >= rand.Float64() {
+		// A rejected request still counts as a request, so rejection keeps rising until the load reaching the
+		// backend fits the success rate threshold, as in the SRE book.
+		t.ExecutionStats.RecordFailure()
 		return ErrExceeded
 	}
 	return nil
