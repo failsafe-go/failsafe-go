@@ -101,6 +101,7 @@ func (t *priorityThrottler[R]) AcquirePermitWithLevel(level int) error {
 		return nil
 	}
 
+	t.RecordFailure()
 	return ErrExceeded
 }
 

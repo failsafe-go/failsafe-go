@@ -72,6 +72,40 @@ func TestAdaptiveThrottler_AcquirePermit(t *testing.T) {
 	})
 }
 
+// Rejected requests must count as requests, as in the SRE book. Against a backend that accepts a fixed number of
+// requests per round, the throttler must then hold the share of requests the backend rejects at the configured failure
+// rate threshold: the backend sees successes / (1 - threshold) requests, so a share of exactly threshold of them fail.
+// Counting only requests that reached the backend leaves the rate at about .51 instead.
+func TestAdaptiveThrottler_BoundsBackendFailureShare(t *testing.T) {
+	const (
+		threshold = .2
+		rounds    = 500
+		offered   = 1000
+		capacity  = 300
+	)
+	throttler := NewBuilder[any]().WithFailureRateThreshold(threshold, 20, time.Minute).Build()
+
+	var sent, rejected int
+	for range rounds {
+		accepted := 0
+		for range offered {
+			if throttler.AcquirePermit() != nil {
+				continue
+			}
+			sent++
+			if accepted < capacity {
+				accepted++
+				throttler.RecordSuccess()
+			} else {
+				rejected++
+				throttler.RecordFailure()
+			}
+		}
+	}
+
+	assert.InDelta(t, threshold, float64(rejected)/float64(sent), .02)
+}
+
 func TestComputeRejectionRate(t *testing.T) {
 	t.Run("with a system performing better than the successRateThreshold", func(t *testing.T) {
 		// System is actually doing better than required
