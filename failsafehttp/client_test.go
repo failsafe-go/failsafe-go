@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -300,6 +301,112 @@ func TestContextCancellation(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Greater(t, len(b), 0)
 	})
+}
+
+type trackedRequestBody struct {
+	io.Reader
+	closeCalls int
+	closeError error
+}
+
+func (b *trackedRequestBody) Close() error {
+	b.closeCalls++
+	return b.closeError
+}
+
+func TestBufferedRequestBodyClosed(t *testing.T) {
+	readError := errors.New("request body read failed")
+	closeError := errors.New("request body close failed")
+	tests := []struct {
+		name       string
+		body       string
+		failures   int
+		readError  error
+		closeError error
+		blocked    bool
+	}{
+		{name: "success", body: "request data"},
+		{name: "retry", body: "request data", failures: 2},
+		{name: "empty body"},
+		{name: "read error", readError: readError, closeError: closeError},
+		{name: "blocked circuit", body: "request data", blocked: true},
+		{name: "close error", body: "request data", closeError: closeError},
+	}
+
+	for _, api := range []string{"request", "round tripper"} {
+		t.Run(api, func(t *testing.T) {
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					requestBodies := make(chan string, 3)
+					server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						body, err := io.ReadAll(r.Body)
+						assert.NoError(t, err)
+						requestBodies <- string(body)
+						if len(requestBodies) <= tc.failures {
+							w.WriteHeader(http.StatusServiceUnavailable)
+						} else {
+							w.WriteHeader(http.StatusOK)
+						}
+						w.Write([]byte("response data"))
+					}))
+					defer server.Close()
+
+					body := &trackedRequestBody{
+						Reader:     strings.NewReader(tc.body),
+						closeError: tc.closeError,
+					}
+					if tc.readError != nil {
+						body.Reader = iotest.ErrReader(tc.readError)
+					}
+					request, err := http.NewRequest(http.MethodPost, server.URL, body)
+					if !assert.NoError(t, err) {
+						return
+					}
+					executor := failsafe.With(NewRetryPolicyBuilder().ReturnLastFailure().Build())
+					if tc.blocked {
+						breaker := circuitbreaker.NewWithDefaults[*http.Response]()
+						breaker.Open()
+						executor = failsafe.With[*http.Response](breaker)
+					}
+					client := server.Client()
+					defer client.CloseIdleConnections()
+
+					var response *http.Response
+					if api == "request" {
+						response, err = NewRequestWithExecutor(request, client, executor).Do()
+					} else {
+						client.Transport = NewRoundTripperWithExecutor(client.Transport, executor)
+						response, err = client.Do(request)
+					}
+					assert.Equal(t, 1, body.closeCalls)
+					switch {
+					case tc.readError != nil:
+						assert.ErrorIs(t, err, tc.readError)
+						assert.Nil(t, response)
+						assert.Empty(t, requestBodies)
+					case tc.blocked:
+						assert.ErrorIs(t, err, circuitbreaker.ErrOpen)
+						assert.Nil(t, response)
+						assert.Empty(t, requestBodies)
+					default:
+						if !assert.NoError(t, err) || !assert.NotNil(t, response) {
+							return
+						}
+						responseBody, err := io.ReadAll(response.Body)
+						assert.NoError(t, err)
+						assert.NoError(t, response.Body.Close())
+						assert.Equal(t, http.StatusOK, response.StatusCode)
+						assert.Equal(t, "response data", string(responseBody))
+						assert.Len(t, requestBodies, tc.failures+1)
+						for len(requestBodies) > 0 {
+							assert.Equal(t, tc.body, <-requestBodies)
+						}
+					}
+					assert.Equal(t, 1, body.closeCalls)
+				})
+			}
+		})
+	}
 }
 
 func TestBodyReader(t *testing.T) {

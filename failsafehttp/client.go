@@ -221,6 +221,9 @@ func bodyReader(untypedBody any) (func() (io.Reader, error), error) {
 		}, nil
 
 	case io.Reader:
+		if closer, ok := body.(io.Closer); ok {
+			defer closer.Close()
+		}
 		buf, err := io.ReadAll(body)
 		if err != nil {
 			return nil, err
